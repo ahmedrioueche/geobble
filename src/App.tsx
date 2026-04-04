@@ -178,6 +178,7 @@ function App() {
   );
 
   const handleFinalStart = useCallback(() => {
+    setClickedCountry(null);
     setShowModeSelect(false);
     startGame();
   }, [startGame]);
@@ -268,8 +269,8 @@ function App() {
           <WorldMap
             onCountryClick={handleCountryClick}
             selectedCountryCode={
-              (revealed || mode === "reverse") && gameStatus === "playing"
-                ? currentCountry?.cca3
+              gameStatus === "playing"
+                ? (revealed || mode === "reverse" ? currentCountry?.cca3 : null)
                 : clickedCountry?.cca3
             }
             countries={countries}
