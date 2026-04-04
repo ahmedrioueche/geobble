@@ -1,0 +1,23 @@
+:root {
+  /* Primary Palette */
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-accent: #38bdf8;
+  --color-accent-hover: #0ea5e9;
+
+  /* Map Colors */
+  --color-map-land: #334155;
+  --color-map-hover: #475569;
+  --color-map-selected: #38bdf8;
+  --color-map-stroke: #1e293b;
+
+  /* Game Colors */
+  --color-correct: #22c55e;
+  --color-wrong: #ef4444;
+  --color-streak: #fbbf24;
+
+  /* Transitions */
+  --transition-standard: all 0.2s ease-in-out;
+}

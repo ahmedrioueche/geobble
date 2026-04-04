@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "./styles/theme.css";
+
+@theme {
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-map-land: var(--color-map-land);
+  --color-map-hover: var(--color-map-hover);
+  --color-map-selected: var(--color-map-selected);
+  --color-map-stroke: var(--color-map-stroke);
+  --color-correct: var(--color-correct);
+  --color-wrong: var(--color-wrong);
+  --color-streak: var(--color-streak);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+button, 
+[role="button"],
+.cursor-pointer {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
