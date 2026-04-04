@@ -25,7 +25,7 @@ export const CountryPopup: React.FC<CountryPopupProps> = ({
       {/* Header: Flag, Name, ISO */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img 
+          <img
             src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
             alt={country.name}
             className="h-5 w-auto rounded shadow-sm border border-white/5"
@@ -46,7 +46,7 @@ export const CountryPopup: React.FC<CountryPopupProps> = ({
         <h3 className="text-xl font-black text-white leading-none uppercase tracking-tight mb-1">
           {country.name}
         </h3>
-        
+
         <div className="flex items-center gap-3 border-t border-white/5 pt-3 mt-1">
           <div className="flex flex-col">
             <span className="text-[8px] font-bold text-white/20 uppercase tracking-wide">
@@ -56,9 +56,9 @@ export const CountryPopup: React.FC<CountryPopupProps> = ({
               {country.capital[0] || "N/A"}
             </span>
           </div>
-          
+
           <div className="w-[1px] h-6 bg-white/5"></div>
-          
+
           <div className="flex flex-col">
             <span className="text-[8px] font-bold text-white/20 uppercase tracking-wide">
               Region

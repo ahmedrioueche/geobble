@@ -45,6 +45,15 @@ function App() {
     null,
   );
   const [showModeSelect, setShowModeSelect] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
 
   useEffect(() => {
     if (clickedCountry) {
@@ -188,15 +197,27 @@ function App() {
         )}
       </AnimatePresence>
 
-      <GameHUD onStart={() => setShowModeSelect(true)} />
+      <GameHUD 
+        onStart={() => setShowModeSelect(true)} 
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch((err) => {
+              console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
+          } else {
+            document.exitFullscreen();
+          }
+        }}
+      />
 
       <main className="relative w-full h-full">
         {/* Deep Field Ambient Background */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,#020617_100%)]"></div>
 
         {/* HUD Prompt & Choice Area (Floating Overlay) */}
-        <div className="absolute top-28 md:top-24 right-4 left-4 md:left-auto md:right-8 z-40 pointer-events-none">
-          <div className="flex flex-col-reverse md:flex-col items-center md:items-end gap-3 max-w-full">
+        <div className="absolute top-28 md:top-24 right-4 z-40 pointer-events-none">
+          <div className="flex flex-col items-end gap-3 max-w-[calc(100vw-2rem)] md:max-w-full">
             <AnimatePresence mode="wait">
               {gameStatus === "playing" && currentCountry ? (
                 <motion.div
@@ -204,9 +225,9 @@ function App() {
                   initial={{ opacity: 0, scale: 0.9, x: 20 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                  className="pointer-events-auto flex flex-col-reverse md:flex-col items-center md:items-end gap-3"
+                  className="pointer-events-auto flex flex-col items-end gap-3"
                 >
-                  <div className="w-full flex flex-col items-center md:items-end gap-3">
+                  <div className="w-full flex flex-col items-end gap-3">
                     <TargetPanel
                       country={currentCountry}
                       feedback={feedback}
@@ -216,7 +237,7 @@ function App() {
                   </div>
 
                   {mode === "reverse" && (
-                    <div className="shadow-2xl rounded-3xl overflow-hidden bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit md:self-end">
+                    <div className="shadow-2xl rounded-3xl overflow-hidden bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit">
                       <ChoicePanel
                         choices={choices}
                         onChoice={handleChoiceSelect}
