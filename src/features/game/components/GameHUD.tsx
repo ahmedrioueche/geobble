@@ -2,7 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
-import { useGameStore, type GameMode } from "../../../store/useGameStore";
+import { useGameStore, type SubMode } from "../../../store/useGameStore";
 
 interface GameHUDProps {
   onStart: () => void;
@@ -10,33 +10,32 @@ interface GameHUDProps {
 
 export const GameHUD: React.FC<GameHUDProps> = ({ onStart }) => {
   const { t } = useTranslation();
-  const { score, streak, gameStatus, mode, setMode } = useGameStore();
+  const { score, streak, gameStatus, subMode, setSubMode } = useGameStore();
 
-  const modes: GameMode[] = ["name", "flag", "capital"];
+  const modes: SubMode[] = ["name", "flag", "capital"];
 
   return (
-    <header className="p-3 md:p-4 flex flex-wrap justify-between items-center bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 shadow-2xl z-50">
+    <header
+      className={`px-6 py-6 ${gameStatus != "playing" ? "md:px-8 md:py-8" : ""} flex justify-between items-center bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 shadow-2xl z-50`}
+    >
       <div className="flex items-center gap-4 md:gap-10">
         <div className="flex flex-col">
           <h1 className="text-xl md:text-3xl font-black text-white drop-shadow-sm tracking-tight leading-none">
             {t("app.title").toUpperCase()}
           </h1>
-          <p className="hidden md:block text-white/40 text-[9px] font-bold uppercase tracking-tight mt-1 ml-0.5">
-            {t("app.tagline")}
-          </p>
         </div>
 
-        {gameStatus === "playing" && (mode === 'name' || mode === 'flag' || mode === 'capital') && (
+        {gameStatus === "playing" && (
           <div className="flex items-center gap-2">
             <div className="flex bg-slate-950/60 p-1 rounded-xl border border-white/5">
               {modes.map((m) => (
                 <button
                   key={m}
-                  onClick={() => setMode(m)}
+                  onClick={() => setSubMode(m)}
                   className={`
                     px-3 md:px-5 py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase transition-all duration-200
                     ${
-                      mode === m
+                      subMode === m
                         ? "bg-white text-slate-950 shadow-lg"
                         : "text-white/40 hover:text-white/80 hover:bg-white/5"
                     }

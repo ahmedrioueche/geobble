@@ -11,7 +11,7 @@ interface ModeSelectionProps {
 
 const MODES_CONFIG = [
   {
-    id: "name" as GameMode, // Using 'name' as the default identify mode
+    id: "identify" as GameMode,
     icon: "🎯",
     title: "IDENTIFY MISSION",
     description: "Identify territory from multiple-choice intel. Switch between Name, Flag, and Capital sub-modes during active gameplay.",
@@ -31,7 +31,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
   onStart,
   onClose,
 }) => {
-  const [selected, setSelected] = React.useState<GameMode>("name");
+  const [selected, setSelected] = React.useState<GameMode>("identify");
 
   const handleSelect = (mode: GameMode) => {
     setSelected(mode);

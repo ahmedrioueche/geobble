@@ -1,29 +1,27 @@
 import * as d3 from 'd3';
 import React, { useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useWorldMap, type CountryFeature } from './useWorldMap';
 import type { CountryData } from '../../data/country-data';
 import { useGameStore } from '../../store/useGameStore';
 
 interface MapProps {
-  onCountryClick?: (name: string) => void;
+  onCountryClick?: (name: string, code: string) => void;
   selectedCountry?: string;
   selectedCountryCode?: string | null;
+  selectedCountryName?: string | null;
   countries?: CountryData[];
+  missionId?: string | null;
 }
 
-const REGION_COLORS: Record<string, string> = {
-  'Africa': '#f59e0b', // Amber
-  'Americas': '#38bdf8', // Sky
-  'Asia': '#ef4444', // Red
-  'Europe': '#8b5cf6', // Violet
-  'Oceania': '#10b981', // Emerald
-  'Antarctic': '#94a3b8', // Slate
-};
+
 
 export const WorldMap: React.FC<MapProps> = ({ 
   onCountryClick, 
   selectedCountry,
   selectedCountryCode,
+  selectedCountryName,
+  missionId,
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
@@ -88,14 +86,15 @@ export const WorldMap: React.FC<MapProps> = ({
     const map: Record<string, string> = {};
     countries.forEach((c) => {
       map[c.cca3] = c.region;
+      if (c.ccn3) map[c.ccn3] = c.region;
     });
     return map;
   }, [countries]);
 
   const handleCountryClick = React.useCallback(
-    (name: string) => {
+    (name: string, code: string) => {
       if (onCountryClick) {
-        onCountryClick(name);
+        onCountryClick(name, code);
       }
     },
     [onCountryClick],
@@ -109,34 +108,35 @@ export const WorldMap: React.FC<MapProps> = ({
         const code = feature.id;
         const path = pathGenerator(feature as any);
         const region = regionLookup[code] || "Unknown";
-        const regionColor = REGION_COLORS[region] || "var(--color-map-land)";
+        const mapColor = "var(--color-map-land)";
 
         const isSelected =
           (selectedCountry &&
             name.toLowerCase() === selectedCountry.toLowerCase()) ||
-          (selectedCountryCode && code === selectedCountryCode);
+          (selectedCountryCode && code === selectedCountryCode) ||
+          (selectedCountryName && name.toLowerCase() === selectedCountryName.toLowerCase());
 
         return (
           <path
             key={`${name}-${index}`}
             d={path || ""}
             style={{
-              fill: isSelected ? "#22d3ee" : regionColor,
+              fill: isSelected ? "#22c55e" : mapColor,
               fillOpacity: isSelected ? 1 : 0.6,
               strokeWidth: isSelected
                 ? "var(--map-selected-stroke-width)"
                 : "var(--map-stroke-width)",
             }}
             className={`
-            stroke-[var(--color-map-stroke)] 
+            stroke-white/20 
             transition-all 
             duration-500 
             hover:fill-opacity-100
             hover:stroke-white/60
             cursor-pointer
-            ${isSelected ? "stroke-[#22d3ee] drop-shadow-[0_0_20px_rgba(34,211,238,0.8)] z-50" : ""}
+            ${isSelected ? "stroke-[#22c55e] drop-shadow-[0_0_25px_rgba(34,197,94,0.9)] z-50 animate-pulse" : ""}
           `}
-            onClick={() => handleCountryClick(name)}
+            onClick={() => handleCountryClick(name, code)}
           >
             {gameStatus !== "playing" && (
               <title>
@@ -158,6 +158,19 @@ export const WorldMap: React.FC<MapProps> = ({
     mode,
   ]);
 
+  // Find centroid of the selected country for the sonar effect
+  const sonarPoint = useMemo(() => {
+    if (!geoData || !pathGenerator || (!selectedCountryCode && !selectedCountryName)) return null;
+    
+    const feature = (geoData.features as unknown as CountryFeature[]).find(f => 
+      (selectedCountryCode && f.id === selectedCountryCode) ||
+      (selectedCountryName && f.properties.name.toLowerCase() === selectedCountryName.toLowerCase())
+    );
+    
+    if (!feature) return null;
+    return pathGenerator.centroid(feature as any);
+  }, [geoData, pathGenerator, selectedCountryCode, selectedCountryName]);
+
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-950">
       {loading || !pathGenerator ? (
@@ -174,6 +187,50 @@ export const WorldMap: React.FC<MapProps> = ({
           >
             <g ref={gRef} className="map-features">
               {mapElements}
+
+              {/* Tactical Sonar Animation */}
+              <AnimatePresence>
+                {sonarPoint && gameStatus === 'playing' && (
+                  <motion.g
+                    key={missionId || `${selectedCountryCode}-${selectedCountryName}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    {[0, 1, 2].map((i) => (
+                      <motion.circle
+                        key={i}
+                        cx={sonarPoint[0]}
+                        cy={sonarPoint[1]}
+                        r={20}
+                        fill="none"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        initial={{ scale: 3, opacity: 0 }}
+                        animate={{ 
+                          scale: 0.5, 
+                          opacity: [0, 0.8, 0],
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          delay: i * 0.4,
+                          repeat: 2,
+                          ease: "easeOut"
+                        }}
+                      />
+                    ))}
+                    <motion.circle
+                      cx={sonarPoint[0]}
+                      cy={sonarPoint[1]}
+                      r={4}
+                      fill="#22c55e"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.5 }}
+                    />
+                  </motion.g>
+                )}
+              </AnimatePresence>
             </g>
           </svg>
 

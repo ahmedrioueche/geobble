@@ -1,44 +1,63 @@
 import { motion } from "framer-motion";
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
+import type { CountryData } from "../../../data/country-data";
+import { useGameStore } from "../../../store/useGameStore";
 
 interface ChoicePanelProps {
   choices: string[];
   onChoice: (choice: string) => void;
   disabled?: boolean;
+  countries: CountryData[];
 }
 
 export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   choices,
   onChoice,
   disabled,
+  countries,
 }) => {
+  const { subMode } = useGameStore();
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 50 }}
-      className="fixed bottom-0 left-0 right-0 p-4 pb-8 md:pb-4 md:relative md:bottom-auto md:p-0 z-50 bg-slate-950/80 backdrop-blur-3xl md:bg-transparent border-t border-white/5 md:border-0"
-    >
-      <div className="max-w-md mx-auto grid grid-cols-2 gap-3 md:grid-cols-1 md:gap-4">
-        {choices.map((choice, i) => (
+    <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-3 w-max max-w-[280px] md:max-w-[240px] mx-auto">
+      {choices.map((choice, i) => {
+        const country = countries.find((c) =>
+          subMode === "flag"
+            ? c.cca2 === choice
+            : subMode === "capital"
+              ? c.capital[0] === choice
+              : c.name === choice,
+        );
+
+        return (
           <motion.div
             key={choice}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05 }}
           >
             <Button
               variant="outline"
               onClick={() => onChoice(choice)}
               disabled={disabled}
-              className="w-full h-14 md:h-16 text-xs md:text-sm font-black tracking-widest uppercase border-white/10 hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/5 transition-all text-white/80 hover:text-white"
+              className="w-full h-12 md:h-14 border-white/10 hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/5 transition-all group/choice flex items-center justify-center p-2"
             >
-              {choice}
+              {subMode === "flag" && country ? (
+                <img
+                  src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
+                  alt="Choice"
+                  className="h-6 md:h-8 w-auto rounded shadow-sm border border-white/5"
+                />
+              ) : (
+                <span className="text-[10px] md:text-[11px] font-black tracking-widest uppercase text-white/80 group-hover/choice:text-white truncate px-2">
+                  {choice}
+                </span>
+              )}
             </Button>
           </motion.div>
-        ))}
-      </div>
-    </motion.div>
+        );
+      })}
+    </div>
   );
 };

@@ -5,6 +5,7 @@ export interface CountryData {
   officialName: string;
   cca2: string;
   cca3: string;
+  ccn3: string;
   capital: string[];
   region: string;
   subregion: string;
@@ -19,6 +20,7 @@ interface RestCountry {
   };
   cca2: string;
   cca3: string;
+  ccn3?: string;
   capital?: string[];
   region: string;
   subregion?: string;
@@ -33,12 +35,13 @@ interface RestCountry {
 
 export const fetchCountries = async (): Promise<CountryData[]> => {
   try {
-    const response = await axios.get('https://restcountries.com/v3.1/all?fields=name,cca2,cca3,capital,region,subregion,flags,population,flag');
+    const response = await axios.get('https://restcountries.com/v3.1/all?fields=name,cca2,cca3,ccn3,capital,region,subregion,flags,population,flag');
     return response.data.map((c: RestCountry) => ({
       name: c.name.common,
       officialName: c.name.official,
       cca2: c.cca2,
       cca3: c.cca3,
+      ccn3: c.ccn3 || '',
       capital: c.capital || [],
       region: c.region,
       subregion: c.subregion || '',
