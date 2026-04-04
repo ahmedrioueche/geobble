@@ -16,7 +16,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onSkip,
   onReveal,
 }) => {
-  const { mode, subMode } = useGameStore();
+  const { mode, subMode, triggerPulse } = useGameStore();
 
   if (!country) return null;
 
@@ -33,9 +33,13 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
         {/* Data Point: Flag or Text */}
         <div className="flex items-center gap-3">
           {mode === "reverse" ? (
-            <span className="text-sm font-black text-white uppercase tracking-tight">
+            <button
+              onClick={triggerPulse}
+              disabled={!!feedback}
+              className="text-sm font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
+            >
               IDENTIFY TERRITORY
-            </span>
+            </button>
           ) : subMode === "flag" ? (
             <img
               src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
@@ -43,17 +47,25 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               className="h-5 w-auto rounded shadow-sm border border-white/5"
             />
           ) : (
-            <span className="text-sm font-black text-white uppercase tracking-tight">
+            <button
+              onClick={triggerPulse}
+              disabled={!!feedback}
+              className="text-sm font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
+            >
               {subMode === "capital" ? country.capital[0] : country.name}
-            </span>
+            </button>
           )}
 
           <div className="w-[1px] h-4 bg-white/10"></div>
 
           {mode === "reverse" ? (
-            <span className="text-[10px] font-black uppercase text-white/40 tracking-wide">
+            <button 
+              onClick={triggerPulse}
+              disabled={!!feedback}
+              className="text-[10px] font-black uppercase text-white/40 tracking-wide hover:text-sky-400 transition-colors"
+            >
               TARGET
-            </span>
+            </button>
           ) : (
             <button
               onClick={onReveal}

@@ -219,7 +219,7 @@ function App() {
         <div className="absolute top-28 md:top-24 right-4 z-40 pointer-events-none">
           <div className="flex flex-col items-end gap-3 max-w-[calc(100vw-2rem)] md:max-w-full">
             <AnimatePresence mode="wait">
-              {gameStatus === "playing" && currentCountry ? (
+              {gameStatus === "playing" && currentCountry && (
                 <motion.div
                   key={currentCountry.cca3}
                   initial={{ opacity: 0, scale: 0.9, x: 20 }}
@@ -249,20 +249,7 @@ function App() {
 
                   <FeedbackPill feedback={feedback} clickedName={clickedName} />
                 </motion.div>
-              ) : clickedCountry ? (
-                <motion.div
-                  key="country-popup"
-                  initial={{ opacity: 0, scale: 0.9, x: 20 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                  className="pointer-events-auto shadow-2xl"
-                >
-                  <CountryPopup
-                    country={clickedCountry}
-                    onClose={() => setClickedCountry(null)}
-                  />
-                </motion.div>
-              ) : null}
+              )}
             </AnimatePresence>
           </div>
         </div>
@@ -280,20 +267,30 @@ function App() {
             selectedCountryCode={
               (revealed || mode === "reverse") && gameStatus === "playing"
                 ? currentCountry?.cca3
-                : null
-            }
-            selectedCountryName={
-              (revealed || mode === "reverse") && gameStatus === "playing"
-                ? currentCountry?.name
-                : null
+                : clickedCountry?.cca3
             }
             countries={countries}
             missionId={missionId}
           />
         </div>
 
-        {/* Ambient Overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_40%,transparent_0%,rgba(15,23,42,0.4)_80%,rgba(15,23,42,0.8)_100%)]"></div>
+        {/* Global Overlays (Popups & Ambient) */}
+        <div className="absolute inset-0 pointer-events-none z-50">
+          {/* Ambient Map Glow */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_0%,rgba(15,23,42,0.4)_80%,rgba(15,23,42,0.8)_100%)]"></div>
+          
+          {/* Country Info Popup */}
+          <div className="absolute top-28 md:top-20 right-4 md:right-8">
+            <AnimatePresence>
+              {clickedCountry && gameStatus !== "playing" && (
+                <CountryPopup
+                  country={clickedCountry}
+                  onClose={() => setClickedCountry(null)}
+                />
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </main>
     </div>
   );

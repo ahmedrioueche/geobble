@@ -15,6 +15,7 @@ interface GameState {
   feedback: 'correct' | 'wrong' | null;
   clickedName: string | null;
   revealed: boolean;
+  pulseKey: number;
   
   // Actions
   setScore: (score: number) => void;
@@ -28,6 +29,7 @@ interface GameState {
   setFeedback: (feedback: 'correct' | 'wrong' | null, clickedName?: string | null) => void;
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
+  triggerPulse: () => void;
   resetGame: () => void;
 }
 
@@ -43,6 +45,7 @@ export const useGameStore = create<GameState>((set) => ({
   feedback: null,
   clickedName: null,
   revealed: false,
+  pulseKey: 0,
 
   setScore: (score) => set({ score }),
   setStreak: (streak) => set({ streak }),
@@ -57,7 +60,11 @@ export const useGameStore = create<GameState>((set) => ({
     set({ streak: 0, revealed: false });
     next();
   },
-  setRevealed: (revealed) => set({ revealed }),
+  setRevealed: (revealed) => set((state) => ({ 
+    revealed, 
+    pulseKey: revealed ? state.pulseKey + 1 : state.pulseKey 
+  })),
+  triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
   resetGame: () => set({ 
     score: 0, 
     streak: 0, 
@@ -67,6 +74,7 @@ export const useGameStore = create<GameState>((set) => ({
     missionId: null,
     feedback: null,
     clickedName: null,
-    revealed: false
+    revealed: false,
+    pulseKey: 0
   }),
 }));

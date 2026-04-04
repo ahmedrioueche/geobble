@@ -21,9 +21,37 @@ export const useGameLogic = () => {
 
   useEffect(() => {
     const initData = async () => {
-      const data = await fetchCountries();
-      setCountries(data);
-      setLoading(false);
+      try {
+        const [countryResponse, mapResponse] = await Promise.all([
+          fetchCountries(),
+          fetch("/data/world.json")
+        ]);
+
+        if (!mapResponse.ok) throw new Error("Failed to load map data");
+        const mapData = await mapResponse.json();
+        
+        // Extract available numeric/id codes from TopoJSON
+        const availableMapIds = new Set(
+          (mapData.objects.countries.geometries as any[]).map(g => g.id?.toString())
+        );
+
+        // Filter countries to only those that can be resolved on the map
+        const filtered = countryResponse.filter(c => 
+          availableMapIds.has(c.cca3) || 
+          availableMapIds.has(c.cca2) ||
+          availableMapIds.has(c.ccn3) ||
+          availableMapIds.has(parseInt(c.ccn3 || "0", 10)?.toString())
+        );
+
+        setCountries(filtered);
+      } catch (err) {
+        console.error("Error setting up tactical data:", err);
+        // Fallback to all if map fails
+        const data = await fetchCountries();
+        setCountries(data);
+      } finally {
+        setLoading(false);
+      }
     };
     initData();
   }, []);

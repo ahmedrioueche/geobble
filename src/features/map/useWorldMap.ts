@@ -17,6 +17,11 @@ export const useWorldMap = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const availableCodes = useMemo(() => {
+    if (!geoData) return [];
+    return (geoData.features as any[]).map(f => f.id);
+  }, [geoData]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -25,7 +30,7 @@ export const useWorldMap = () => {
         const data = await response.json();
 
         // Convert topojson back to geojson
-        // In countries-110m.json, the key is usually 'countries'
+        // world-atlas v2 uses 'countries' key
         const geojson = feature(
           data,
           data.objects.countries,
@@ -49,5 +54,5 @@ export const useWorldMap = () => {
     return d3.geoPath().projection(projection);
   }, [projection]);
 
-  return { geoData, projection, pathGenerator, loading, error };
+  return { geoData, projection, pathGenerator, loading, error, availableCodes };
 };

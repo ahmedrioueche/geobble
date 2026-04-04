@@ -25,7 +25,7 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const { gameStatus, mode } = useGameStore();
+  const { gameStatus, pulseKey } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,15 +81,34 @@ export const WorldMap: React.FC<MapProps> = ({
     g.style("--map-selected-stroke-width", "1.2px");
   }, [pathGenerator]);
 
-  // Create a quick lookup for region by code
-  const regionLookup = useMemo(() => {
+  // Create a robust lookup mapping all possible country codes to the map's feature ID
+  const featureIdLookup = useMemo(() => {
+    if (!geoData || countries.length === 0) return {};
     const map: Record<string, string> = {};
-    countries.forEach((c) => {
-      map[c.cca3] = c.region;
-      if (c.ccn3) map[c.ccn3] = c.region;
+    
+    // Map geometry features to their own IDs and names for fallback
+    (geoData.features as any[]).forEach(f => {
+      const id = f.id?.toString();
+      if (id) {
+        // Find the country in our dataset that matches this map ID
+        const country = countries.find(c => 
+          c.cca3 === id || 
+          c.cca2 === id || 
+          c.ccn3 === id ||
+          parseInt(c.ccn3 || "0", 10).toString() === id
+        );
+
+        if (country) {
+          map[country.cca3] = id;
+          map[country.cca2] = id;
+          map[country.ccn3] = id;
+          map[country.name.toLowerCase()] = id;
+        }
+      }
     });
+
     return map;
-  }, [countries]);
+  }, [geoData, countries]);
 
   const handleCountryClick = React.useCallback(
     (name: string, code: string) => {
@@ -102,46 +121,46 @@ export const WorldMap: React.FC<MapProps> = ({
 
   const mapElements = useMemo(() => {
     if (!geoData || !pathGenerator) return null;
+    
+    // Resolve the map's internal ID for the currently selected country
+    const targetMapId = selectedCountryCode ? (featureIdLookup[selectedCountryCode] || selectedCountryCode) : null;
+    const targetMapIdByName = selectedCountryName ? featureIdLookup[selectedCountryName.toLowerCase()] : null;
+
     return (geoData.features as unknown as CountryFeature[]).map(
       (feature, index: number) => {
         const name = feature.properties.name;
-        const code = feature.id;
+        const code = feature.id?.toString() || "";
         const path = pathGenerator(feature as any);
-        const region = regionLookup[code] || "Unknown";
-        const mapColor = "var(--color-map-land)";
-
-        const isSelected =
-          (selectedCountry &&
-            name.toLowerCase() === selectedCountry.toLowerCase()) ||
-          (selectedCountryCode && code === selectedCountryCode) ||
-          (selectedCountryName && name.toLowerCase() === selectedCountryName.toLowerCase());
+        
+        const isSelected = 
+          (targetMapId && code === targetMapId) ||
+          (targetMapIdByName && code === targetMapIdByName) ||
+          (selectedCountry && name.toLowerCase() === selectedCountry.toLowerCase());
 
         return (
           <path
             key={`${name}-${index}`}
             d={path || ""}
             style={{
-              fill: isSelected ? "#22c55e" : mapColor,
+              fill: isSelected ? "#22c55e" : "var(--color-map-land)",
               fillOpacity: isSelected ? 1 : 0.6,
               strokeWidth: isSelected
                 ? "var(--map-selected-stroke-width)"
                 : "var(--map-stroke-width)",
             }}
             className={`
-            stroke-white/20 
-            transition-all 
-            duration-500 
-            hover:fill-opacity-100
-            hover:stroke-white/60
-            cursor-pointer
-            ${isSelected ? "stroke-[#22c55e] drop-shadow-[0_0_25px_rgba(34,197,94,0.9)] z-50 animate-pulse" : ""}
-          `}
+              stroke-white/20 
+              transition-all 
+              duration-500 
+              hover:fill-opacity-100
+              hover:stroke-white/60
+              cursor-pointer
+              ${isSelected ? "stroke-[#22c55e] drop-shadow-[0_0_25px_rgba(34,197,94,0.9)] z-50 animate-pulse" : ""}
+            `}
             onClick={() => handleCountryClick(name, code)}
           >
             {gameStatus !== "playing" && (
-              <title>
-                {name} ({region})
-              </title>
+              <title>{name}</title>
             )}
           </path>
         );
@@ -152,24 +171,27 @@ export const WorldMap: React.FC<MapProps> = ({
     pathGenerator,
     selectedCountry,
     selectedCountryCode,
+    selectedCountryName,
+    featureIdLookup,
     handleCountryClick,
-    regionLookup,
     gameStatus,
-    mode,
   ]);
 
   // Find centroid of the selected country for the sonar effect
   const sonarPoint = useMemo(() => {
     if (!geoData || !pathGenerator || (!selectedCountryCode && !selectedCountryName)) return null;
     
-    const feature = (geoData.features as unknown as CountryFeature[]).find(f => 
-      (selectedCountryCode && f.id === selectedCountryCode) ||
-      (selectedCountryName && f.properties.name.toLowerCase() === selectedCountryName.toLowerCase())
-    );
+    const targetMapId = selectedCountryCode ? (featureIdLookup[selectedCountryCode] || selectedCountryCode) : null;
+    const targetMapIdByName = selectedCountryName ? featureIdLookup[selectedCountryName.toLowerCase()] : null;
+
+    const feature = (geoData.features as unknown as CountryFeature[]).find(f => {
+      const code = f.id?.toString() || "";
+      return (targetMapId && code === targetMapId) || (targetMapIdByName && code === targetMapIdByName);
+    });
     
     if (!feature) return null;
     return pathGenerator.centroid(feature as any);
-  }, [geoData, pathGenerator, selectedCountryCode, selectedCountryName]);
+  }, [geoData, pathGenerator, selectedCountryCode, selectedCountryName, featureIdLookup]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-950">
@@ -192,7 +214,7 @@ export const WorldMap: React.FC<MapProps> = ({
               <AnimatePresence>
                 {sonarPoint && gameStatus === 'playing' && (
                   <motion.g
-                    key={missionId || `${selectedCountryCode}-${selectedCountryName}`}
+                    key={`${missionId}-${pulseKey}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -219,16 +241,7 @@ export const WorldMap: React.FC<MapProps> = ({
                         }}
                       />
                     ))}
-                    <motion.circle
-                      cx={sonarPoint[0]}
-                      cy={sonarPoint[1]}
-                      r={4}
-                      fill="#22c55e"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.5 }}
-                    />
-                  </motion.g>
+                    </motion.g>
                 )}
               </AnimatePresence>
             </g>
