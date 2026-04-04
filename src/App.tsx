@@ -1,25 +1,25 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState, useCallback } from "react";
-import type { CountryData } from "./data/country-data";
+import { useCallback, useEffect, useState } from "react";
 import { LoadingScreen } from "./components/organisms/LoadingScreen";
+import type { CountryData } from "./data/country-data";
+import { nameMapping } from "./data/name-mapping";
 import { ChoicePanel } from "./features/game/components/ChoicePanel";
 import { CountryPopup } from "./features/game/components/CountryPopup";
+import { FeedbackPill } from "./features/game/components/FeedbackPill";
 import { GameHUD } from "./features/game/components/GameHUD";
 import { ModeSelection } from "./features/game/components/ModeSelection";
 import { TargetPanel } from "./features/game/components/TargetPanel";
 import { useGameLogic } from "./features/game/useGameLogic";
 import { WorldMap } from "./features/map/WorldMap";
 import { useGameStore } from "./store/useGameStore";
-import { FeedbackPill } from "./features/game/components/FeedbackPill";
-import { nameMapping } from "./data/name-mapping";
 
 function App() {
-  const { 
-    gameStatus, 
-    mode, 
-    subMode, 
-    setMode, 
-    choices, 
+  const {
+    gameStatus,
+    mode,
+    subMode,
+    setMode,
+    choices,
     missionId,
     feedback,
     clickedName,
@@ -30,18 +30,20 @@ function App() {
     score,
     setScore,
     streak,
-    setStreak
+    setStreak,
   } = useGameStore();
 
-  const { 
-    countries, 
+  const {
+    countries,
     loading: dataLoading,
-    startGame, 
-    nextQuestion, 
-    currentCountry 
+    startGame,
+    nextQuestion,
+    currentCountry,
   } = useGameLogic();
 
-  const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
+  const [clickedCountry, setClickedCountry] = useState<CountryData | null>(
+    null,
+  );
   const [showModeSelect, setShowModeSelect] = useState(false);
 
   useEffect(() => {
@@ -53,82 +55,117 @@ function App() {
     }
   }, [clickedCountry]);
 
-  const handleCountryClick = useCallback((name: string, code: string) => {
-    if (mode !== "identify" || feedback) return;
-    
-    // Multi-tiered lookup: cca3 -> ccn3 (numeric) -> name mapping -> raw name
-    let countryData = countries.find(c => c.cca3 === code) || null;
-    if (!countryData) {
-      countryData = countries.find(c => c.ccn3 === code) || null;
-    }
-    if (!countryData) {
-      const mappedName = nameMapping[name] || name;
-      countryData = countries.find(c => c.name.toLowerCase() === mappedName.toLowerCase()) || null;
-    }
+  const handleCountryClick = useCallback(
+    (name: string, code: string) => {
+      if (mode !== "identify" || feedback) return;
 
-    if (gameStatus === 'playing') {
-      const targetCountry = currentCountry;
-      if (!targetCountry) return;
+      // Multi-tiered lookup: cca3 -> ccn3 (numeric) -> name mapping -> raw name
+      let countryData = countries.find((c) => c.cca3 === code) || null;
+      if (!countryData) {
+        countryData = countries.find((c) => c.ccn3 === code) || null;
+      }
+      if (!countryData) {
+        const mappedName = nameMapping[name] || name;
+        countryData =
+          countries.find(
+            (c) => c.name.toLowerCase() === mappedName.toLowerCase(),
+          ) || null;
+      }
 
-      const mappedClickedName = nameMapping[name] || name;
-      const isCorrect = mappedClickedName.toLowerCase() === targetCountry.name.toLowerCase();
+      if (gameStatus === "playing") {
+        const targetCountry = currentCountry;
+        if (!targetCountry) return;
+
+        const mappedClickedName = nameMapping[name] || name;
+        const isCorrect =
+          mappedClickedName.toLowerCase() === targetCountry.name.toLowerCase();
+
+        if (isCorrect) {
+          if (revealed) {
+            nextQuestion();
+            return;
+          }
+
+          setFeedback("correct", name);
+          setScore(score + 10 * (streak + 1));
+          setStreak(streak + 1);
+          setTimeout(() => {
+            nextQuestion();
+          }, 1500);
+        } else {
+          setFeedback("wrong", name);
+          setStreak(0);
+          setTimeout(() => {
+            setFeedback(null, null);
+          }, 1500);
+        }
+      } else {
+        setClickedCountry(countryData);
+      }
+    },
+    [
+      mode,
+      feedback,
+      nextQuestion,
+      countries,
+      gameStatus,
+      currentCountry,
+      setFeedback,
+      score,
+      setScore,
+      streak,
+      setStreak,
+      revealed,
+    ],
+  );
+
+  const handleChoiceSelect = useCallback(
+    (choice: string) => {
+      if (feedback || !currentCountry) return;
+
+      let isCorrect = false;
+      if (subMode === "flag") {
+        isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();
+      } else if (subMode === "capital") {
+        isCorrect =
+          choice.toLowerCase() === currentCountry.capital[0].toLowerCase();
+      } else {
+        isCorrect = choice.toLowerCase() === currentCountry.name.toLowerCase();
+      }
 
       if (isCorrect) {
         if (revealed) {
           nextQuestion();
           return;
         }
-        
-        setFeedback("correct", name);
+
+        setFeedback("correct", choice);
         setScore(score + 10 * (streak + 1));
         setStreak(streak + 1);
         setTimeout(() => {
           nextQuestion();
         }, 1500);
       } else {
-        setFeedback("wrong", name);
+        setFeedback("wrong", choice);
         setStreak(0);
         setTimeout(() => {
           setFeedback(null, null);
         }, 1500);
       }
-    } else {
-      setClickedCountry(countryData);
-    }
-  }, [mode, feedback, nextQuestion, countries, gameStatus, currentCountry, setFeedback, score, setScore, streak, setStreak, revealed]);
-
-  const handleChoiceSelect = useCallback((choice: string) => {
-    if (feedback || !currentCountry) return;
-
-    let isCorrect = false;
-    if (subMode === 'flag') {
-      isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();
-    } else if (subMode === 'capital') {
-      isCorrect = choice.toLowerCase() === currentCountry.capital[0].toLowerCase();
-    } else {
-      isCorrect = choice.toLowerCase() === currentCountry.name.toLowerCase();
-    }
-
-    if (isCorrect) {
-      if (revealed) {
-        nextQuestion();
-        return;
-      }
-      
-      setFeedback("correct", choice);
-      setScore(score + 10 * (streak + 1));
-      setStreak(streak + 1);
-      setTimeout(() => {
-        nextQuestion();
-      }, 1500);
-    } else {
-      setFeedback("wrong", choice);
-      setStreak(0);
-      setTimeout(() => {
-        setFeedback(null, null);
-      }, 1500);
-    }
-  }, [feedback, currentCountry, subMode, nextQuestion, setFeedback, score, setScore, streak, setStreak, revealed]);
+    },
+    [
+      feedback,
+      currentCountry,
+      subMode,
+      nextQuestion,
+      setFeedback,
+      score,
+      setScore,
+      streak,
+      setStreak,
+      revealed,
+    ],
+  );
 
   const handleFinalStart = useCallback(() => {
     setShowModeSelect(false);
@@ -152,14 +189,14 @@ function App() {
       </AnimatePresence>
 
       <GameHUD onStart={() => setShowModeSelect(true)} />
-      
+
       <main className="relative w-full h-full">
         {/* Deep Field Ambient Background */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,#020617_100%)]"></div>
 
         {/* HUD Prompt & Choice Area (Floating Overlay) */}
-        <div className="absolute top-4 right-4 left-4 md:left-auto z-40 pointer-events-none">
-          <div className="flex flex-col items-center md:items-end gap-3 max-w-full">
+        <div className="absolute top-28 md:top-24 right-4 left-4 md:left-auto md:right-8 z-40 pointer-events-none">
+          <div className="flex flex-col-reverse md:flex-col items-center md:items-end gap-3 max-w-full">
             <AnimatePresence mode="wait">
               {gameStatus === "playing" && currentCountry ? (
                 <motion.div
@@ -167,16 +204,18 @@ function App() {
                   initial={{ opacity: 0, scale: 0.9, x: 20 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                  className="pointer-events-auto flex flex-col items-center md:items-end gap-3"
+                  className="pointer-events-auto flex flex-col-reverse md:flex-col items-center md:items-end gap-3"
                 >
-                  <TargetPanel 
-                    country={currentCountry} 
-                    feedback={feedback} 
-                    onSkip={() => skipQuestion(nextQuestion)}
-                    onReveal={() => setRevealed(true)}
-                  />
+                  <div className="w-full flex flex-col items-center md:items-end gap-3">
+                    <TargetPanel
+                      country={currentCountry}
+                      feedback={feedback}
+                      onSkip={() => skipQuestion(nextQuestion)}
+                      onReveal={() => setRevealed(true)}
+                    />
+                  </div>
 
-                  {mode === 'reverse' && (
+                  {mode === "reverse" && (
                     <div className="shadow-2xl rounded-3xl overflow-hidden bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit md:self-end">
                       <ChoicePanel
                         choices={choices}
@@ -187,10 +226,7 @@ function App() {
                     </div>
                   )}
 
-                  <FeedbackPill 
-                    feedback={feedback} 
-                    clickedName={clickedName} 
-                  />
+                  <FeedbackPill feedback={feedback} clickedName={clickedName} />
                 </motion.div>
               ) : clickedCountry ? (
                 <motion.div

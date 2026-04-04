@@ -20,7 +20,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   const { subMode } = useGameStore();
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-3 w-max max-w-[280px] md:max-w-[240px] mx-auto">
+    <div className="grid grid-cols-1 gap-2 md:gap-3 w-max max-w-[300px] md:max-w-[240px] md:ml-auto md:mr-0 mx-auto">
       {choices.map((choice, i) => {
         const country = countries.find((c) =>
           subMode === "flag"
@@ -50,7 +50,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                   className="h-6 md:h-8 w-auto rounded shadow-sm border border-white/5"
                 />
               ) : (
-                <span className="text-[10px] md:text-[11px] font-black tracking-widest uppercase text-white/80 group-hover/choice:text-white truncate px-2">
+                <span className="text-[10px] md:text-[11px] font-black tracking-widest uppercase text-white/80 group-hover/choice:text-white whitespace-normal leading-[1.1] px-2 text-center">
                   {choice}
                 </span>
               )}
