@@ -52,7 +52,8 @@ function App() {
       setIsFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -95,17 +96,17 @@ function App() {
             return;
           }
 
-          setFeedback("correct", name);
+          setFeedback("correct", name, code);
           setScore(score + 10 * (streak + 1));
           setStreak(streak + 1);
           setTimeout(() => {
             nextQuestion();
           }, 1500);
         } else {
-          setFeedback("wrong", name);
+          setFeedback("wrong", name, code);
           setStreak(0);
           setTimeout(() => {
-            setFeedback(null, null);
+            setFeedback(null, null, null);
           }, 1500);
         }
       } else {
@@ -197,13 +198,15 @@ function App() {
         )}
       </AnimatePresence>
 
-      <GameHUD 
-        onStart={() => setShowModeSelect(true)} 
+      <GameHUD
+        onStart={() => setShowModeSelect(true)}
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => {
           if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch((err) => {
-              console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+              console.error(
+                `Error attempting to enable full-screen mode: ${err.message}`,
+              );
             });
           } else {
             document.exitFullscreen();
@@ -278,9 +281,9 @@ function App() {
         <div className="absolute inset-0 pointer-events-none z-50">
           {/* Ambient Map Glow */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_0%,rgba(15,23,42,0.4)_80%,rgba(15,23,42,0.8)_100%)]"></div>
-          
+
           {/* Country Info Popup */}
-          <div className="absolute top-28 md:top-20 right-4 md:right-8">
+          <div className="absolute top-14 md:top-18 right-4 md:right-8 pointer-events-auto">
             <AnimatePresence>
               {clickedCountry && gameStatus !== "playing" && (
                 <CountryPopup

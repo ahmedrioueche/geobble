@@ -25,7 +25,7 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const { gameStatus, pulseKey } = useGameStore();
+  const { gameStatus, pulseKey, feedback, clickedCode } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +125,7 @@ export const WorldMap: React.FC<MapProps> = ({
     // Resolve the map's internal ID for the currently selected country
     const targetMapId = selectedCountryCode ? (featureIdLookup[selectedCountryCode] || selectedCountryCode) : null;
     const targetMapIdByName = selectedCountryName ? featureIdLookup[selectedCountryName.toLowerCase()] : null;
+    const feedbackMapId = clickedCode ? (featureIdLookup[clickedCode] || clickedCode) : null;
 
     return (geoData.features as unknown as CountryFeature[]).map(
       (feature, index: number) => {
@@ -137,14 +138,25 @@ export const WorldMap: React.FC<MapProps> = ({
           (targetMapIdByName && code === targetMapIdByName) ||
           (selectedCountry && name.toLowerCase() === selectedCountry.toLowerCase());
 
+        const isFeedbackItem = feedbackMapId && code === feedbackMapId;
+        
+        let fillColor = "var(--color-map-land)";
+        if (isFeedbackItem && feedback) {
+          fillColor = feedback === "correct" ? "#22c55e" : "#ef4444";
+        } else if (isSelected) {
+          fillColor = "#22c55e";
+        }
+
+        const isHighlighted = isSelected || (isFeedbackItem && feedback);
+
         return (
           <path
             key={`${name}-${index}`}
             d={path || ""}
             style={{
-              fill: isSelected ? "#22c55e" : "var(--color-map-land)",
-              fillOpacity: isSelected ? 1 : 0.6,
-              strokeWidth: isSelected
+              fill: fillColor,
+              fillOpacity: isHighlighted ? 1 : 0.6,
+              strokeWidth: isHighlighted
                 ? "var(--map-selected-stroke-width)"
                 : "var(--map-stroke-width)",
             }}
@@ -155,7 +167,7 @@ export const WorldMap: React.FC<MapProps> = ({
               hover:fill-opacity-100
               hover:stroke-white/60
               cursor-pointer
-              ${isSelected ? "stroke-[#22c55e] drop-shadow-[0_0_25px_rgba(34,197,94,0.9)] z-50 animate-pulse" : ""}
+              ${isHighlighted ? `stroke-${isFeedbackItem && feedback === 'wrong' ? '[#ef4444]' : '[#22c55e]'} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === 'wrong' ? '239,68,68' : '34,197,94'},0.9)] z-50 animate-pulse` : ""}
             `}
             onClick={() => handleCountryClick(name, code)}
           >
@@ -175,6 +187,8 @@ export const WorldMap: React.FC<MapProps> = ({
     featureIdLookup,
     handleCountryClick,
     gameStatus,
+    feedback,
+    clickedCode,
   ]);
 
   // Find centroid of the selected country for the sonar effect

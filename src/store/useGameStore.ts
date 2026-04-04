@@ -14,6 +14,7 @@ interface GameState {
   missionId: string | null;
   feedback: 'correct' | 'wrong' | null;
   clickedName: string | null;
+  clickedCode: string | null;
   revealed: boolean;
   pulseKey: number;
   
@@ -26,7 +27,7 @@ interface GameState {
   setCurrentCountry: (code: string | null) => void;
   setChoices: (choices: string[]) => void;
   setMissionId: (id: string | null) => void;
-  setFeedback: (feedback: 'correct' | 'wrong' | null, clickedName?: string | null) => void;
+  setFeedback: (feedback: 'correct' | 'wrong' | null, clickedName?: string | null, clickedCode?: string | null) => void;
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
   triggerPulse: () => void;
@@ -44,6 +45,7 @@ export const useGameStore = create<GameState>((set) => ({
   missionId: null,
   feedback: null,
   clickedName: null,
+  clickedCode: null,
   revealed: false,
   pulseKey: 0,
 
@@ -55,9 +57,9 @@ export const useGameStore = create<GameState>((set) => ({
   setCurrentCountry: (code) => set({ currentCountryCode: code }),
   setChoices: (choices) => set({ choices }),
   setMissionId: (id) => set({ missionId: id }),
-  setFeedback: (feedback, clickedName = null) => set({ feedback, clickedName }),
+  setFeedback: (feedback, clickedName = null, clickedCode = null) => set({ feedback, clickedName, clickedCode }),
   skipQuestion: (next) => {
-    set({ streak: 0, revealed: false });
+    set({ streak: 0, revealed: false, feedback: null, clickedName: null, clickedCode: null });
     next();
   },
   setRevealed: (revealed) => set((state) => ({ 
@@ -74,6 +76,7 @@ export const useGameStore = create<GameState>((set) => ({
     missionId: null,
     feedback: null,
     clickedName: null,
+    clickedCode: null,
     revealed: false,
     pulseKey: 0
   }),
