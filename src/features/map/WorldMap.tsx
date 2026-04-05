@@ -198,8 +198,12 @@ export const WorldMap: React.FC<MapProps> = ({
       ),
     );
 
+    const isMobile = dimensions.width < 768;
+    const targetCenterX = isMobile ? dimensions.width * 0.35 : dimensions.width / 2;
+    const targetCenterY = isMobile ? dimensions.height * 0.65 : dimensions.height / 2;
+
     const transform = d3.zoomIdentity
-      .translate(dimensions.width / 2, dimensions.height / 2)
+      .translate(targetCenterX, targetCenterY)
       .scale(scale)
       .translate(-x, -y);
 

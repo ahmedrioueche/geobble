@@ -24,7 +24,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   const { gameStatus, mode, feedback, clickedName, choices } = useGameStore();
 
   return (
-    <div className="absolute top-28 md:top-24 right-4 z-40 pointer-events-none">
+    <div className="absolute top-28 md:top-24 landscape:top-16 landscape:md:top-24 right-4 z-40 pointer-events-none">
       <div className="flex flex-col items-end gap-3 max-w-[calc(100vw-2rem)] md:max-w-full">
         <AnimatePresence mode="wait">
           {gameStatus === "playing" && currentCountry && (
