@@ -92,30 +92,52 @@ export const WorldMap: React.FC<MapProps> = ({
     
     (geoData.features as any[]).forEach(f => {
       const id = f.id?.toString();
-      const name = f.properties?.name;
-      if (id) {
-        const mappedName = nameMapping[name] || name;
-        const country = countries.find(c => 
-          c.cca3 === id || 
-          c.cca2 === id || 
-          c.ccn3 === id ||
-          parseInt(c.ccn3 || "0", 10).toString() === id ||
-          c.name.toLowerCase() === mappedName.toLowerCase()
-        );
+      const name = f.properties?.name || "";
+      
+      const findMappedName = (n: string) => {
+        if (!n) return "";
+        if (nameMapping[n]) return nameMapping[n];
+        const titleCase = n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        if (nameMapping[titleCase]) return nameMapping[titleCase];
+        const entry = Object.entries(nameMapping).find(([k]) => k.toLowerCase() === n.toLowerCase());
+        return entry ? entry[1] : n;
+      };
 
-        if (country) {
-          if (id) {
-            map[id] = country.cca3;
-          }
-          if (name) {
-            map[name.toLowerCase()] = country.cca3;
-          }
+      const mappedName = findMappedName(name);
+
+      const country = countries.find(c => 
+        (id && (c.cca3 === id || c.cca2 === id || c.ccn3 === id || parseInt(c.ccn3 || "0", 10).toString() === id)) || 
+        (mappedName && c.name.toLowerCase() === mappedName.toLowerCase())
+      );
+
+      if (country) {
+        if (id) {
+          map[id] = country.cca3;
+        }
+        if (name) {
+          map[name.toLowerCase()] = country.cca3;
         }
       }
     });
 
     return map;
   }, [geoData, countries]);
+
+  // Handle Home View for Desktop/Mobile
+  const homeTransform = useMemo(() => {
+    if (dimensions.width === 0) return d3.zoomIdentity;
+    const isMobile = dimensions.width < 768;
+    
+    if (isMobile) {
+      // On mobile, a flat 1x zoom is too small due to vertical screen aspect ratio.
+      // 1.5x zoom provides a much better tactical feel while keeping the context.
+      return d3.zoomIdentity
+        .translate(dimensions.width / 2, dimensions.height / 2)
+        .scale(1.5)
+        .translate(-dimensions.width / 2, -dimensions.height / 2);
+    }
+    return d3.zoomIdentity;
+  }, [dimensions]);
 
   // Camera Animation for Missions (Smart Transitions)
   useEffect(() => {
@@ -132,13 +154,16 @@ export const WorldMap: React.FC<MapProps> = ({
     const svg = d3.select(svgRef.current);
     const currentTransform = d3.zoomTransform(svgRef.current);
 
-    // Case 1: Start of a new Identify mission - Reset to full world to avoid context clues
-    if (mode === "identify" && !revealed && currentTransform.k > 1.1) {
-      svg
-        .transition()
-        .duration(1200)
-        .ease(d3.easeCubicInOut)
-        .call(zoomRef.current.transform, d3.zoomIdentity);
+    // Case 1: Start of a new Identify mission - Reset to 'Home' view
+    if (mode === "identify" && !revealed) {
+      const isAtHome = Math.abs(currentTransform.k - homeTransform.k) < 0.1;
+      if (!isAtHome) {
+        svg
+          .transition()
+          .duration(1200)
+          .ease(d3.easeCubicInOut)
+          .call(zoomRef.current.transform, homeTransform);
+      }
       return;
     }
 
@@ -209,6 +234,7 @@ export const WorldMap: React.FC<MapProps> = ({
     pathGenerator,
     dimensions,
     idToCodeLookup,
+    homeTransform,
   ]);
 
   const handleCountryClick = React.useCallback(

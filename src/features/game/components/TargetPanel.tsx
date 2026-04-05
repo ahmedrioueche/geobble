@@ -59,7 +59,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
           <div className="w-[1px] h-4 bg-white/10"></div>
 
           {mode === "reverse" ? (
-            <button 
+            <button
               onClick={triggerPulse}
               disabled={!!feedback}
               className="text-[10px] font-black uppercase text-white/40 tracking-wide hover:text-sky-400 transition-colors"
@@ -71,11 +71,13 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               onClick={onReveal}
               disabled={!!feedback}
               className={`text-[10px] font-black uppercase tracking-wide transition-colors ${
-                feedback ? "text-white/20 cursor-default" : "text-white/40 hover:text-blue-400 cursor-pointer"
+                feedback
+                  ? "text-white/20 cursor-default"
+                  : "text-white/40 hover:text-blue-400 cursor-pointer"
               }`}
               title="Reveal Answer"
             >
-              IDENTIFY
+              REVEAL
             </button>
           )}
         </div>

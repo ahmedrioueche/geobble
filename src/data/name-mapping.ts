@@ -4,6 +4,7 @@
  */
 export const nameMapping: Record<string, string> = {
   "United States of America": "United States",
+  "Congo": "Republic of the Congo",
   "Dem. Rep. Congo": "DR Congo",
   "W. Sahara": "Western Sahara",
   "Dominican Rep.": "Dominican Republic",

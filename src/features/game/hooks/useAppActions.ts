@@ -11,6 +11,7 @@ export const useAppActions = () => {
     subMode,
     choices,
     feedback,
+    missionId,
     revealed,
     setFeedback,
     setRevealed,
@@ -29,6 +30,12 @@ export const useAppActions = () => {
   } = useGameLogic();
 
   const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
+
+  const playAudio = useCallback((path: string) => {
+    const audio = new Audio(path);
+    audio.volume = 0.4; // Tactile, not overwhelming
+    audio.play().catch(() => {}); // Ignore silent playback blocks
+  }, []);
 
   useEffect(() => {
     if (clickedCountry) {
@@ -60,7 +67,18 @@ export const useAppActions = () => {
         const targetCountry = currentCountry;
         if (!targetCountry) return;
 
-        const mappedClickedName = nameMapping[name] || name;
+        // Case-insensitive name mapping (to handle 'SOMALILAND' or 'Congo' correctly)
+        const findMappedName = (n: string) => {
+          if (nameMapping[n]) return nameMapping[n];
+          // Try Title case fallback (e.g. SOMALILAND -> Somaliland)
+          const titleCase = n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+          if (nameMapping[titleCase]) return nameMapping[titleCase];
+          // Try direct lowercase match in mapping
+          const entry = Object.entries(nameMapping).find(([k]) => k.toLowerCase() === n.toLowerCase());
+          return entry ? entry[1] : n;
+        };
+
+        const mappedClickedName = findMappedName(name);
         const isCorrect =
           mappedClickedName.toLowerCase() === targetCountry.name.toLowerCase();
 
@@ -70,6 +88,7 @@ export const useAppActions = () => {
             return;
           }
 
+          playAudio("/audio/correct.mp3");
           setFeedback("correct", name, code);
           setScore(score + 10 * (streak + 1));
           setStreak(streak + 1);
@@ -77,6 +96,7 @@ export const useAppActions = () => {
             nextQuestion();
           }, 1500);
         } else {
+          playAudio("/audio/wrong.mp3");
           setFeedback("wrong", name, code);
           setStreak(0);
           setTimeout(() => {
@@ -100,6 +120,7 @@ export const useAppActions = () => {
       streak,
       setStreak,
       revealed,
+      playAudio,
     ],
   );
 
@@ -123,6 +144,7 @@ export const useAppActions = () => {
           return;
         }
 
+        playAudio("/audio/correct.mp3");
         setFeedback("correct", choice);
         setScore(score + 10 * (streak + 1));
         setStreak(streak + 1);
@@ -130,6 +152,7 @@ export const useAppActions = () => {
           nextQuestion();
         }, 1500);
       } else {
+        playAudio("/audio/wrong.mp3");
         setFeedback("wrong", choice);
         setStreak(0);
         setTimeout(() => {
@@ -148,6 +171,7 @@ export const useAppActions = () => {
       streak,
       setStreak,
       revealed,
+      playAudio,
     ],
   );
 
@@ -166,6 +190,7 @@ export const useAppActions = () => {
     mode,
     choices,
     feedback,
+    missionId,
     revealed,
     setRevealed,
     skipQuestion,

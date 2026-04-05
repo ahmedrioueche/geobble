@@ -7,8 +7,8 @@ import { ModeSelection } from "./features/game/components/ModeSelection";
 import { TacticalInterface } from "./features/game/components/TacticalInterface";
 import { useAppActions } from "./features/game/hooks/useAppActions";
 import { useGameLogic } from "./features/game/useGameLogic";
-import { useFullscreen } from "./hooks/useFullscreen";
 import { WorldMap } from "./features/map/WorldMap";
+import { useFullscreen } from "./hooks/useFullscreen";
 import { useGameStore } from "./store/useGameStore";
 
 function App() {
@@ -29,6 +29,7 @@ function App() {
     skipQuestion,
     currentCountry,
     countries,
+    missionId,
   } = useAppActions();
 
   if (dataLoading) {
@@ -80,10 +81,13 @@ function App() {
             onCountryClick={handleCountryClick}
             selectedCountryCode={
               gameStatus === "playing"
-                ? revealed || mode === "reverse" ? currentCountry?.cca3 : null
+                ? revealed || mode === "reverse"
+                  ? currentCountry?.cca3
+                  : null
                 : clickedCountry?.cca3
             }
             countries={countries}
+            missionId={missionId}
           />
         </div>
 
