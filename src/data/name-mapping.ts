@@ -39,4 +39,13 @@ export const nameMapping: Record<string, string> = {
   "Curaçao": "Curacao",
   "St. Vincent and the Grenadines": "Saint Vincent and the Grenadines",
   "Wallis and Futuna Is.": "Wallis and Futuna",
+  "Cayman Is.": "Cayman Islands",
+  "Marshall Is.": "Marshall Islands",
+  "Cook Is.": "Cook Islands",
+  "Virgin Is.": "British Virgin Islands", // world.json often uses Virgin Is. for British ones
+  "U.S. Virgin Is.": "United States Virgin Islands",
+  "British Virgin Is.": "British Virgin Islands",
+  "St. Kitts and Nevis": "Saint Kitts and Nevis",
+  "St. Lucia": "Saint Lucia",
+  "St. Vincent": "Saint Vincent and the Grenadines",
 };

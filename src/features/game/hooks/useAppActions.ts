@@ -70,12 +70,29 @@ export const useAppActions = () => {
         // Case-insensitive name mapping (to handle 'SOMALILAND' or 'Congo' correctly)
         const findMappedName = (n: string) => {
           if (nameMapping[n]) return nameMapping[n];
-          // Try Title case fallback (e.g. SOMALILAND -> Somaliland)
-          const titleCase = n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+          // Generic Normalization for Fallback (Islands, Republics, and Case shifts)
+          const normalized = n
+            .replace(/\s+Is\.$/i, " Islands")
+            .replace(/\s+Rep\.$/i, " Republic")
+            .trim();
+
+          if (nameMapping[normalized]) return nameMapping[normalized];
+
+          const titleCase = n
+            .split(" ")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+
           if (nameMapping[titleCase]) return nameMapping[titleCase];
-          // Try direct lowercase match in mapping
-          const entry = Object.entries(nameMapping).find(([k]) => k.toLowerCase() === n.toLowerCase());
-          return entry ? entry[1] : n;
+
+          const entry = Object.entries(nameMapping).find(
+            ([k]) => k.toLowerCase() === n.toLowerCase(),
+          );
+          if (entry) return entry[1];
+
+          // Final Fallback for direct matches after normalization
+          return normalized;
         };
 
         const mappedClickedName = findMappedName(name);
@@ -180,6 +197,31 @@ export const useAppActions = () => {
     startGame();
   }, [startGame]);
 
+  const skipQuestionInternal = skipQuestion;
+
+  const handleSkip = useCallback(() => {
+    if (mode === "reverse" && currentCountry) {
+      // Highlight the correct choice using revealed state
+      // This provides visual feedback without triggering success messages/score
+      setRevealed(true);
+      setStreak(0);
+
+      // Wait a bit before skipping
+      setTimeout(() => {
+        nextQuestion();
+      }, 1000);
+    } else {
+      skipQuestionInternal();
+    }
+  }, [
+    mode,
+    currentCountry,
+    setRevealed,
+    setStreak,
+    nextQuestion,
+    skipQuestionInternal,
+  ]);
+
   return {
     clickedCountry,
     setClickedCountry,
@@ -193,7 +235,7 @@ export const useAppActions = () => {
     missionId,
     revealed,
     setRevealed,
-    skipQuestion,
+    skipQuestion: handleSkip,
     nextQuestion,
     currentCountry,
     countries,

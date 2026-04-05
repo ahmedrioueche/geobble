@@ -41,6 +41,7 @@ function App() {
       <AnimatePresence>
         {showModeSelect && (
           <ModeSelection
+            currentMode={mode}
             onSelect={(m) => setMode(m)}
             onStart={() => {
               handleFinalStart();

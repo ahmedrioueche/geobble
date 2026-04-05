@@ -70,6 +70,8 @@ export const useGameStore = create<GameState>((set) => ({
   resetGame: () => set({ 
     score: 0, 
     streak: 0, 
+    mode: 'identify',
+    subMode: 'name',
     gameStatus: 'idle', 
     currentCountryCode: null, 
     choices: [], 

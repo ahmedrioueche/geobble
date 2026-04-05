@@ -7,6 +7,7 @@ interface ModeSelectionProps {
   onSelect: (mode: GameMode) => void;
   onStart: () => void;
   onClose: () => void;
+  currentMode: GameMode;
 }
 
 const MODES_CONFIG = [
@@ -30,8 +31,9 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
   onSelect,
   onStart,
   onClose,
+  currentMode,
 }) => {
-  const [selected, setSelected] = React.useState<GameMode>("identify");
+  const [selected, setSelected] = React.useState<GameMode>(currentMode);
 
   const handleSelect = (mode: GameMode) => {
     setSelected(mode);
