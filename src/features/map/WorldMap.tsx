@@ -71,11 +71,12 @@ export const WorldMap: React.FC<MapProps> = ({
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 12])
+      .scaleExtent([1, 40])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
-        g.style("--map-stroke-width", `${0.5 / event.transform.k}px`);
-        g.style("--map-selected-stroke-width", `${1.2 / event.transform.k}px`);
+        // Ensure strokes stay visible at high zoom levels
+        g.style("--map-stroke-width", `${Math.max(0.12, 0.5 / event.transform.k)}px`);
+        g.style("--map-selected-stroke-width", `${Math.max(0.4, 1.2 / event.transform.k)}px`);
       });
 
     zoomRef.current = zoom;
@@ -192,7 +193,7 @@ export const WorldMap: React.FC<MapProps> = ({
     const scale = Math.max(
       1,
       Math.min(
-        10,
+        25,
         0.5 / Math.max(dx / dimensions.width, dy / dimensions.height),
       ),
     );
