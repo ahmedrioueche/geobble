@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWorldMap, type CountryFeature } from './useWorldMap';
 import type { CountryData } from '../../data/country-data';
 import { useGameStore } from '../../store/useGameStore';
+import { nameMapping } from '../../data/name-mapping';
 
 interface MapProps {
   onCountryClick?: (name: string, code: string) => void;
@@ -25,7 +26,7 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const { gameStatus, pulseKey, feedback, clickedCode } = useGameStore();
+  const { gameStatus, pulseKey, feedback, clickedCode, clickedName } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,28 +82,31 @@ export const WorldMap: React.FC<MapProps> = ({
     g.style("--map-selected-stroke-width", "1.2px");
   }, [pathGenerator]);
 
-  // Create a robust lookup mapping all possible country codes to the map's feature ID
-  const featureIdLookup = useMemo(() => {
+  // Map each feature ID to its logical country code (cca3)
+  const idToCodeLookup = useMemo(() => {
     if (!geoData || countries.length === 0) return {};
     const map: Record<string, string> = {};
     
-    // Map geometry features to their own IDs and names for fallback
     (geoData.features as any[]).forEach(f => {
       const id = f.id?.toString();
+      const name = f.properties?.name;
       if (id) {
-        // Find the country in our dataset that matches this map ID
+        const mappedName = nameMapping[name] || name;
         const country = countries.find(c => 
           c.cca3 === id || 
           c.cca2 === id || 
           c.ccn3 === id ||
-          parseInt(c.ccn3 || "0", 10).toString() === id
+          parseInt(c.ccn3 || "0", 10).toString() === id ||
+          c.name.toLowerCase() === mappedName.toLowerCase()
         );
 
         if (country) {
-          map[country.cca3] = id;
-          map[country.cca2] = id;
-          map[country.ccn3] = id;
-          map[country.name.toLowerCase()] = id;
+          if (id) {
+            map[id] = country.cca3;
+          }
+          if (name) {
+            map[name.toLowerCase()] = country.cca3;
+          }
         }
       }
     });
@@ -122,23 +126,19 @@ export const WorldMap: React.FC<MapProps> = ({
   const mapElements = useMemo(() => {
     if (!geoData || !pathGenerator) return null;
     
-    // Resolve the map's internal ID for the currently selected country
-    const targetMapId = selectedCountryCode ? (featureIdLookup[selectedCountryCode] || selectedCountryCode) : null;
-    const targetMapIdByName = selectedCountryName ? featureIdLookup[selectedCountryName.toLowerCase()] : null;
-    const feedbackMapId = clickedCode ? (featureIdLookup[clickedCode] || clickedCode) : null;
-
     return (geoData.features as unknown as CountryFeature[]).map(
       (feature, index: number) => {
         const name = feature.properties.name;
         const code = feature.id?.toString() || "";
         const path = pathGenerator(feature as any);
         
+        const mappedCode = idToCodeLookup[code] || idToCodeLookup[name.toLowerCase()];
         const isSelected = 
-          (targetMapId && code === targetMapId) ||
-          (targetMapIdByName && code === targetMapIdByName) ||
+          (selectedCountryCode && mappedCode === selectedCountryCode) ||
           (selectedCountry && name.toLowerCase() === selectedCountry.toLowerCase());
 
-        const isFeedbackItem = feedbackMapId && code === feedbackMapId;
+        const isFeedbackItem = (clickedCode && idToCodeLookup[clickedCode] === mappedCode) || 
+                              (clickedName && idToCodeLookup[clickedName.toLowerCase()] === mappedCode);
         
         let fillColor = "var(--color-map-land)";
         if (isFeedbackItem && feedback) {
@@ -184,7 +184,7 @@ export const WorldMap: React.FC<MapProps> = ({
     selectedCountry,
     selectedCountryCode,
     selectedCountryName,
-    featureIdLookup,
+    idToCodeLookup,
     handleCountryClick,
     gameStatus,
     feedback,
@@ -195,17 +195,15 @@ export const WorldMap: React.FC<MapProps> = ({
   const sonarPoint = useMemo(() => {
     if (!geoData || !pathGenerator || (!selectedCountryCode && !selectedCountryName)) return null;
     
-    const targetMapId = selectedCountryCode ? (featureIdLookup[selectedCountryCode] || selectedCountryCode) : null;
-    const targetMapIdByName = selectedCountryName ? featureIdLookup[selectedCountryName.toLowerCase()] : null;
-
     const feature = (geoData.features as unknown as CountryFeature[]).find(f => {
       const code = f.id?.toString() || "";
-      return (targetMapId && code === targetMapId) || (targetMapIdByName && code === targetMapIdByName);
+      const mappedCode = idToCodeLookup[code] || idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
+      return (selectedCountryCode && mappedCode === selectedCountryCode);
     });
     
     if (!feature) return null;
     return pathGenerator.centroid(feature as any);
-  }, [geoData, pathGenerator, selectedCountryCode, selectedCountryName, featureIdLookup]);
+  }, [geoData, pathGenerator, selectedCountryCode, selectedCountryName, idToCodeLookup]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-950">
