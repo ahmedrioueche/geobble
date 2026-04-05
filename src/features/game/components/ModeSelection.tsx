@@ -59,7 +59,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           animate={{ y: 0, opacity: 1 }}
           className="text-center mb-12 md:mb-20"
         >
-          <h2 className="text-4xl md:text-7xl font-black tracking-tighter text-white mb-4 uppercase italic">
+          <h2 className="text-3xl md:text-7xl font-black tracking-tighter text-white mb-4 uppercase italic">
             SELECT <span className="text-[var(--color-accent)]">MISSION</span> MODE
           </h2>
           <p className="text-[var(--color-text-secondary)] text-[10px] md:text-xs font-bold tracking-[0.4em] uppercase opacity-40">
@@ -77,7 +77,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               transition={{ delay: i * 0.05 }}
               onClick={() => handleSelect(mode.id)}
               className={`
-                relative p-8 rounded-[40px] border-2 cursor-pointer transition-all duration-500 overflow-hidden group flex flex-col min-h-[320px]
+                relative p-6 md:p-8 rounded-[40px] border-2 cursor-pointer transition-all duration-500 overflow-hidden group flex flex-col min-h-[300px] md:min-h-[320px]
                 flex-1 min-w-[280px] max-w-[400px]
                 ${
                   selected === mode.id
@@ -87,10 +87,10 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               `}
             >
               <div className="text-5xl md:text-6xl mb-6 transform group-hover:scale-110 transition-transform duration-500">{mode.icon}</div>
-              <h3 className="text-2xl md:text-3xl font-black text-white mb-3 tracking-tighter uppercase leading-tight">
+              <h3 className="text-xl md:text-3xl font-black text-white mb-3 tracking-tighter uppercase leading-tight">
                 {mode.title}
               </h3>
-              <p className="text-[var(--color-text-secondary)] text-sm md:text-base mb-8 font-medium leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
+              <p className="text-[var(--color-text-secondary)] text-xs md:text-base mb-8 font-medium leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
                 {mode.description}
               </p>
 
@@ -122,7 +122,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           <Button 
             size="lg" 
             onClick={onStart} 
-            className="w-full md:px-32 h-20 md:h-24 text-2xl md:text-3xl font-black tracking-widest uppercase rounded-[32px] shadow-[0_20px_80px_-15px_rgba(56,189,248,0.4)] hover:shadow-[0_20px_100px_-10px_rgba(56,189,248,0.6)] transform active:scale-95 transition-all"
+            className="w-full md:px-32 h-20 md:h-24 text-xl md:text-3xl font-black tracking-widest uppercase rounded-[32px] shadow-[0_20px_80px_-15px_rgba(56,189,248,0.4)] hover:shadow-[0_20px_100px_-10px_rgba(56,189,248,0.6)] transform active:scale-95 transition-all"
           >
             EXECUTE MISSION
           </Button>

@@ -18,7 +18,7 @@ export const CountryPopup: React.FC<CountryPopupProps> = ({
       initial={{ opacity: 0, scale: 0.95, y: -20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -20 }}
-      className="bg-slate-900/95 backdrop-blur-3xl px-5 py-4 rounded-3xl border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] flex flex-col gap-3 min-w-[280px] max-w-[320px] relative overflow-hidden group"
+      className="bg-slate-900/95 backdrop-blur-3xl px-5 py-4 rounded-3xl border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] flex flex-col gap-3 w-fit min-w-[160px] max-w-[calc(100vw-32px)] md:min-w-[260px] md:max-w-[300px] relative overflow-hidden group"
     >
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500/50 via-sky-400/20 to-sky-500/50 opacity-50"></div>
 
