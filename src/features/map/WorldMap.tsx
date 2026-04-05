@@ -26,7 +26,7 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const { gameStatus, pulseKey, feedback, clickedCode, clickedName } = useGameStore();
+  const { gameStatus, pulseKey, feedback, clickedCode, clickedName, mode } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +60,8 @@ export const WorldMap: React.FC<MapProps> = ({
     return d3.geoPath().projection(p);
   }, [geoData, dimensions, projection]);
 
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+
   // Initialize Zoom behavior
   useEffect(() => {
     if (!svgRef.current || !gRef.current || !pathGenerator) return;
@@ -76,6 +78,7 @@ export const WorldMap: React.FC<MapProps> = ({
         g.style("--map-selected-stroke-width", `${1.2 / event.transform.k}px`);
       });
 
+    zoomRef.current = zoom;
     svg.call(zoom);
 
     g.style("--map-stroke-width", "0.5px");
@@ -113,6 +116,69 @@ export const WorldMap: React.FC<MapProps> = ({
 
     return map;
   }, [geoData, countries]);
+
+  // Camera Animation for Reverse Mode
+  useEffect(() => {
+    if (
+      !geoData ||
+      !pathGenerator ||
+      !svgRef.current ||
+      !zoomRef.current ||
+      !selectedCountryCode ||
+      mode !== "reverse" ||
+      gameStatus !== "playing" ||
+      dimensions.width === 0
+    )
+      return;
+
+    const feature = (geoData.features as unknown as CountryFeature[]).find(
+      (f) => {
+        const code = f.id?.toString() || "";
+        const mappedCode =
+          idToCodeLookup[code] ||
+          idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
+        return mappedCode === selectedCountryCode;
+      },
+    );
+
+    if (!feature) return;
+
+    const svg = d3.select(svgRef.current);
+    const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
+
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const x = (x0 + x1) / 2;
+    const y = (y0 + y1) / 2;
+
+    const scale = Math.max(
+      1,
+      Math.min(
+        10,
+        0.5 / Math.max(dx / dimensions.width, dy / dimensions.height),
+      ),
+    );
+
+    const transform = d3.zoomIdentity
+      .translate(dimensions.width / 2, dimensions.height / 2)
+      .scale(scale)
+      .translate(-x, -y);
+
+    svg
+      .transition()
+      .duration(1500)
+      .ease(d3.easeCubicInOut)
+      .call(zoomRef.current.transform, transform);
+  }, [
+    missionId,
+    selectedCountryCode,
+    mode,
+    gameStatus,
+    geoData,
+    pathGenerator,
+    dimensions,
+    idToCodeLookup,
+  ]);
 
   const handleCountryClick = React.useCallback(
     (name: string, code: string) => {
