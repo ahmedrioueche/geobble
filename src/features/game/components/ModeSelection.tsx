@@ -21,7 +21,7 @@ const MODES_CONFIG = [
     id: "reverse" as GameMode,
     icon: "⚡",
     title: "REVERSE OPS",
-    description: "Target location highlighted on the map. Identify the territory name from tactical multiple-choice data.",
+    description: "Target location highlighted on the map. Identify the territory's Name, Flag, or Capital from tactical multiple-choice data.",
     tip: "Elite mission. Requires visual recognition of territory shapes and location."
   }
 ];
@@ -118,7 +118,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           ))}
         </div>
 
-        <div className="sticky bottom-6 md:relative md:bottom-auto w-full md:w-auto px-4 md:px-0">
+        <div className="relative w-full md:w-auto px-4 md:px-0 mt-8 mb-12 md:mt-0 md:mb-0">
           <Button 
             size="lg" 
             onClick={onStart} 

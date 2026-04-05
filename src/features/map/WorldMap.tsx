@@ -26,7 +26,7 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = []
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const { gameStatus, pulseKey, feedback, clickedCode, clickedName, mode } = useGameStore();
+  const { gameStatus, pulseKey, feedback, clickedCode, clickedName, mode, revealed } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -117,19 +117,33 @@ export const WorldMap: React.FC<MapProps> = ({
     return map;
   }, [geoData, countries]);
 
-  // Camera Animation for Reverse Mode
+  // Camera Animation for Missions (Smart Transitions)
   useEffect(() => {
     if (
       !geoData ||
       !pathGenerator ||
       !svgRef.current ||
       !zoomRef.current ||
-      !selectedCountryCode ||
-      mode !== "reverse" ||
       gameStatus !== "playing" ||
       dimensions.width === 0
     )
       return;
+
+    const svg = d3.select(svgRef.current);
+    const currentTransform = d3.zoomTransform(svgRef.current);
+
+    // Case 1: Start of a new Identify mission - Reset to full world to avoid context clues
+    if (mode === "identify" && !revealed && currentTransform.k > 1.1) {
+      svg
+        .transition()
+        .duration(1200)
+        .ease(d3.easeCubicInOut)
+        .call(zoomRef.current.transform, d3.zoomIdentity);
+      return;
+    }
+
+    // Case 2: Target Selection (Reverse Ops or Identify Reveal) - Perform Smart Feature Zoom
+    if (!selectedCountryCode) return;
 
     const feature = (geoData.features as unknown as CountryFeature[]).find(
       (f) => {
@@ -143,7 +157,6 @@ export const WorldMap: React.FC<MapProps> = ({
 
     if (!feature) return;
 
-    const svg = d3.select(svgRef.current);
     const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
 
     const dx = x1 - x0;
@@ -164,6 +177,23 @@ export const WorldMap: React.FC<MapProps> = ({
       .scale(scale)
       .translate(-x, -y);
 
+    // Smart View Check: Only animate if the target is significantly out of view or improperly scaled
+    const p0 = currentTransform.apply([x0, y0]);
+    const p1 = currentTransform.apply([x1, y1]);
+    
+    // Check if the country is within the visible viewport with a safety margin
+    const margin = 40; 
+    const isInView = 
+      p0[0] > margin && 
+      p0[1] > margin && 
+      p1[0] < dimensions.width - margin && 
+      p1[1] < dimensions.height - margin;
+
+    // Check if the current zoom level is approximately the same as the target zoom level
+    const isGoodScale = Math.abs(Math.log2(currentTransform.k / scale)) < 1;
+
+    if (isInView && isGoodScale) return;
+
     svg
       .transition()
       .duration(1500)
@@ -172,6 +202,7 @@ export const WorldMap: React.FC<MapProps> = ({
   }, [
     missionId,
     selectedCountryCode,
+    revealed,
     mode,
     gameStatus,
     geoData,
