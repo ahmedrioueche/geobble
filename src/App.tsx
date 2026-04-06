@@ -26,7 +26,6 @@ function App() {
     handleFinalStart,
     gameStatus,
     mode,
-    revealed,
     skipQuestion,
     currentCountry,
     countries,
