@@ -71,7 +71,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             alt="Logo"
             className="w-8 h-8 md:w-12 md:h-12 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
           />
-          <h1 className="text-xl md:text-2xl -mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
+          <h1 className="text-xl md:text-2xl md:-mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
             GEOBBLE
           </h1>
         </button>

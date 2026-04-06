@@ -42,6 +42,7 @@ const STAGES = [
 
 const COUNTS = [10, 20, 50, 100];
 const TIMES = [
+  { label: "30s", value: 30 },
   { label: "1m", value: 60 },
   { label: "2m", value: 120 },
   { label: "5m", value: 300 },
@@ -127,7 +128,8 @@ const SubModeModal: React.FC = () => {
             <button
               onClick={() => {
                 setSelectedType("count");
-                if (selectedValue === 0) setSelectedValue(10);
+                if (selectedValue === 0 || !COUNTS.includes(selectedValue))
+                  setSelectedValue(10);
               }}
               className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
                 selectedType === "count"
@@ -146,7 +148,10 @@ const SubModeModal: React.FC = () => {
             <button
               onClick={() => {
                 setSelectedType("timer");
-                if (selectedValue === 0 || selectedValue > 300)
+                if (
+                  selectedValue === 0 ||
+                  !TIMES.find((t) => t.value === selectedValue)
+                )
                   setSelectedValue(60);
               }}
               className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
