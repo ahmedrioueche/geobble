@@ -194,9 +194,80 @@ export const WorldMap: React.FC<MapProps> = ({
     const svg = d3.select(svgRef.current);
     const currentTransform = d3.zoomTransform(svgRef.current);
 
-    // Case 1: Start of a new Identify mission - Reset to 'Home' view
-    // REMOVED: Automatic zoom out between questions in Identify mode (annoying for flow)
+    // Case 1: Stealth Smart Zoom for Identify search phase
     if (mode === "identify" && !revealed) {
+      if (!selectedCountryCode) return;
+
+      const feature = (geoData.features as unknown as CountryFeature[]).find(
+        (f) => {
+          const code = f.id?.toString() || "";
+          const mappedCode =
+            idToCodeLookup[code] ||
+            idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
+          return mappedCode === selectedCountryCode;
+        },
+      );
+
+      if (!feature) return;
+
+      const [[fx0, fy0], [fx1, fy1]] = pathGenerator.bounds(feature as any);
+      
+      // Feature centroid
+      const fx = (fx0 + fx1) / 2;
+      const fy = (fy0 + fy1) / 2;
+
+      // Visibility check
+      const p0 = currentTransform.apply([fx0, fy0]);
+      const p1 = currentTransform.apply([fx1, fy1]);
+      const margin = 30; 
+      const isInView =
+        p0[0] > margin &&
+        p0[1] > margin &&
+        p1[0] < dimensions.width - margin &&
+        p1[1] < dimensions.height - margin;
+
+      // If already clearly in view at a sane zoom level, don't move
+      if (isInView && currentTransform.k < 6.0) return;
+
+      // --- Stealth Logic: Zoom out to show target relative to previous center ---
+      const isMobile = dimensions.width < 768;
+      const viewCX = isMobile ? dimensions.width * 0.35 : dimensions.width / 2;
+      const viewCY = isMobile ? dimensions.height * 0.65 : dimensions.height / 2;
+
+      // Current center in projection space
+      const curProjCX = (viewCX - currentTransform.x) / currentTransform.k;
+      const curProjCY = (viewCY - currentTransform.y) / currentTransform.k;
+
+      // Build bounding box containing BOTH current center and target country
+      const contextMinX = Math.min(curProjCX, fx0);
+      const contextMaxX = Math.max(curProjCX, fx1);
+      const contextMinY = Math.min(curProjCY, fy0);
+      const contextMaxY = Math.max(curProjCY, fy1);
+
+      const cdx = contextMaxX - contextMinX;
+      const cdy = contextMaxY - contextMinY;
+      const contextMidX = (contextMinX + contextMaxX) / 2;
+      const contextMidY = (contextMinY + contextMaxY) / 2;
+
+      // Calculate context scale to fit the entire movement range
+      const targetContextScale = Math.min(
+        currentTransform.k, // Never zoom in durante the search advance
+        0.65 / Math.max(cdx / dimensions.width, cdy / dimensions.height)
+      );
+
+      // Final scale: Zoom out but don't go beyond world level (homeTransform)
+      const finalScale = Math.max(homeTransform.k, targetContextScale);
+
+      const transform = d3.zoomIdentity
+        .translate(viewCX, viewCY)
+        .scale(finalScale)
+        .translate(-contextMidX, -contextMidY);
+
+      svg
+        .transition()
+        .duration(1400) // Slightly slower for a more 'scouring' feel
+        .ease(d3.easeCubicInOut)
+        .call(zoomRef.current.transform, transform);
       return;
     }
 
@@ -264,7 +335,7 @@ export const WorldMap: React.FC<MapProps> = ({
 
     svg
       .transition()
-      .duration(1500)
+      .duration(1200)
       .ease(d3.easeCubicInOut)
       .call(zoomRef.current.transform, transform);
   }, [
@@ -300,10 +371,12 @@ export const WorldMap: React.FC<MapProps> = ({
 
         const mappedCode =
           idToCodeLookup[code] || idToCodeLookup[name.toLowerCase()];
+        const shouldShowSelection = (mode === "reverse") || (revealed);
         const isSelected =
-          (selectedCountryCode && mappedCode === selectedCountryCode) ||
-          (selectedCountry &&
-            name.toLowerCase() === selectedCountry.toLowerCase());
+          shouldShowSelection &&
+          ((selectedCountryCode && mappedCode === selectedCountryCode) ||
+           (selectedCountry &&
+             name.toLowerCase() === selectedCountry.toLowerCase()));
 
         const isFeedbackItem =
           (clickedCode && idToCodeLookup[clickedCode] === mappedCode) ||
@@ -361,9 +434,13 @@ export const WorldMap: React.FC<MapProps> = ({
 
   // Find centroid of the selected country for the sonar effect
   const sonarPoint = useMemo(() => {
+    // Hide sonar until revealed in Identify mode to prevent cheating
+    const shouldShowSonar = (mode === "reverse") || (revealed);
+    
     if (
       !geoData ||
       !pathGenerator ||
+      !shouldShowSonar ||
       (!selectedCountryCode && !selectedCountryName)
     )
       return null;

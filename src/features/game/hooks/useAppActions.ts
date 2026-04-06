@@ -88,7 +88,7 @@ export const useAppActions = () => {
           setStreak(streak + 1);
           setTimeout(() => {
             nextQuestion();
-          }, 1500);
+          }, 800);
         } else {
           recordAttempt(false);
           playAudio("/audio/wrong.mp3");
@@ -97,7 +97,7 @@ export const useAppActions = () => {
           setStreak(0);
           setTimeout(() => {
             setFeedback(null, null, null);
-          }, 1500);
+          }, 800);
         }
       } else {
         setClickedCountry(countryData);
@@ -151,7 +151,7 @@ export const useAppActions = () => {
         setStreak(streak + 1);
         setTimeout(() => {
           nextQuestion();
-        }, 1500);
+        }, 1000);
       } else {
         recordAttempt(false);
         playAudio("/audio/wrong.mp3");
@@ -160,7 +160,7 @@ export const useAppActions = () => {
         setStreak(0);
         setTimeout(() => {
           setFeedback(null, null);
-        }, 1500);
+        }, 1000);
       }
     },
     [
@@ -199,7 +199,7 @@ export const useAppActions = () => {
       // Wait a bit before skipping
       setTimeout(() => {
         nextQuestion();
-      }, 1000);
+      }, 700);
     } else {
       skipQuestionInternal();
     }

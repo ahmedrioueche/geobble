@@ -13,15 +13,19 @@ export const LoadingScreen: React.FC = () => {
         <motion.div
           animate={{ 
             rotate: 360,
-            scale: [1, 1.1, 1],
+            scale: [1, 1.05, 1],
           }}
           transition={{ 
-            rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-            scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
+            rotate: { duration: 15, repeat: Infinity, ease: "linear" },
+            scale: { duration: 3, repeat: Infinity, ease: "easeInOut" }
           }}
-          className="w-32 h-32 rounded-full border-4 border-[var(--color-accent)] border-t-transparent flex items-center justify-center shadow-[0_0_50px_rgba(56,189,248,0.2)]"
+          className="w-32 h-32 relative flex items-center justify-center p-4"
         >
-          <span className="text-4xl">🌍</span>
+          <img 
+            src="/logo.png" 
+            alt="Geobble Logo" 
+            className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(56,189,248,0.4)]"
+          />
         </motion.div>
         
         {/* Scanning Pulse */}

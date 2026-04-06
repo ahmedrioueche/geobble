@@ -92,9 +92,7 @@ function App() {
             onCountryClick={handleCountryClick}
             selectedCountryCode={
               gameStatus === "playing"
-                ? revealed || mode === "reverse"
-                  ? currentCountry?.cca3
-                  : null
+                ? currentCountry?.cca3
                 : clickedCountry?.cca3
             }
             countries={countries}

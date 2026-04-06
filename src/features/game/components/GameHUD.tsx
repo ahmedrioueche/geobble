@@ -64,9 +64,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       <div className="px-4 py-2 md:px-8 md:py-4 flex justify-between items-center w-full">
         <button
           onClick={resetGame}
-          className="hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 group hover:opacity-90 transition-all active:scale-95"
         >
-          <h1 className="text-xl md:text-2xl font-black text-white drop-shadow-sm tracking-tight leading-none text-left">
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="w-8 h-8 md:w-10 md:h-10 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
+          />
+          <h1 className="text-xl md:text-2xl -mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
             GEOBBLE
           </h1>
         </button>
