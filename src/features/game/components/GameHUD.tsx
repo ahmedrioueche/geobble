@@ -1,5 +1,4 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
@@ -8,32 +7,74 @@ interface GameHUDProps {
   onStart: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  totalCountries?: number;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ 
+const formatTime = (seconds: number) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
+export const GameHUD: React.FC<GameHUDProps> = ({
   onStart,
   isFullscreen,
-  onToggleFullscreen
+  onToggleFullscreen,
+  totalCountries = 0,
 }) => {
-  const { t } = useTranslation();
-  const { score, streak, gameStatus, subMode, setSubMode, resetGame } = useGameStore();
+  const {
+    score,
+    streak,
+    gameStatus,
+    subMode,
+    setSubMode,
+    resetGame,
+    challengeType,
+    challengeValue,
+    timeRemaining,
+    totalQuestions,
+    correctAttempts,
+    totalAttempts,
+  } = useGameStore();
 
   const modes: SubMode[] = ["name", "flag", "capital"];
+
+  const accuracy =
+    totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
+
+  let progressValue = "-";
+  let progressLabel = "MISSION";
+
+  if (gameStatus === "playing") {
+    if (challengeType === "world") {
+      progressValue = `${totalQuestions}/${totalCountries}`;
+      progressLabel = "WORLD PREP";
+    } else if (challengeType === "count") {
+      progressValue = `${totalQuestions}/${challengeValue}`;
+      progressLabel = "TARGETS";
+    } else if (challengeType === "timer") {
+      progressValue = `${correctAttempts}`;
+      progressLabel = "CAPTURED";
+    }
+  }
 
   return (
     <header className="fixed top-0 inset-x-0 flex flex-col items-stretch bg-slate-900/90 backdrop-blur-2xl border-b border-white/10 shadow-2xl z-50">
       {/* Row 1: Logo and Stats/Modes/Start */}
       <div className="px-4 py-2 md:px-8 md:py-4 flex justify-between items-center w-full">
-        <button onClick={resetGame} className="hover:opacity-80 transition-opacity">
+        <button
+          onClick={resetGame}
+          className="hover:opacity-80 transition-opacity"
+        >
           <h1 className="text-xl md:text-2xl font-black text-white drop-shadow-sm tracking-tight leading-none text-left">
-            {t("app.title").toUpperCase()}
+            GEOBBLE
           </h1>
         </button>
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
           {/* Desktop/Tablet Modes Integration */}
           {gameStatus === "playing" && (
-            <div className="hidden sm:flex bg-slate-950/60 p-1 rounded-xl border border-white/5">
+            <div className="hidden lg:flex bg-slate-950/60 p-1 rounded-xl border border-white/5">
               {modes.map((m) => (
                 <button
                   key={m}
@@ -54,22 +95,54 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           )}
 
           {gameStatus === "playing" ? (
-            <div className="flex gap-3 md:gap-8 items-center">
+            <div className="flex gap-4 md:gap-8 items-center">
+              {/* Mission Progress - Hidden on very small screens, visible on md+ */}
+              <div className="hidden md:block">
+                <StatItem
+                  label={progressLabel}
+                  value={progressValue}
+                  color="var(--color-primary)"
+                  size="sm"
+                />
+              </div>
+
+              {/* Timer - Special visibility for timer mode */}
+              {challengeType === "timer" && (
+                <StatItem
+                  label="TIME"
+                  value={formatTime(timeRemaining)}
+                  color={timeRemaining < 10 ? "#ef4444" : "white"}
+                  size="sm"
+                />
+              )}
+
+              {/* Core Stats */}
               <StatItem
-                label={t("game.score")}
+                label="SCORE"
                 value={score.toLocaleString()}
                 color="white"
                 size="sm"
               />
+
+              <div className="hidden sm:block">
+                <StatItem
+                  label="ACCURACY"
+                  value={accuracy}
+                  suffix="%"
+                  color="var(--color-accent)"
+                  size="sm"
+                />
+              </div>
+
               <StatItem
-                label={t("game.streak")}
+                label="STREAK"
                 value={streak}
                 suffix="×"
                 color="var(--color-streak)"
                 size="sm"
               />
-              
-              {/* Fullscreen Toggle (Mobile Only, integrated) */}
+
+              {/* Fullscreen Toggle (Mobile Only) */}
               <button
                 onClick={onToggleFullscreen}
                 className="flex sm:hidden w-8 h-8 rounded-lg bg-white/5 items-center justify-center text-white/40 hover:text-white transition-all active:scale-90"
@@ -112,10 +185,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               >
                 START MISSION
               </Button>
-              
+
               <button
                 onClick={onToggleFullscreen}
-                className="flex sm:hidden w-8 h-8 rounded-lg bg-white/5 items-center justify-center text-white/40 hover:text-white transition-all active:scale-90"
+                className="flex w-8 h-8 rounded-lg bg-white/5 items-center justify-center text-white/40 hover:text-white transition-all active:scale-90"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -150,26 +223,44 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Mobile Only Modes */}
+      {/* Row 2: Tactical Info (Mobile/Tablet Only) */}
       {gameStatus === "playing" && (
-        <div className="flex sm:hidden px-4 pb-3 items-center justify-center">
-          <div className="flex bg-slate-950/60 p-1 rounded-xl border border-white/5 w-full justify-around">
-            {modes.map((m) => (
-              <button
-                key={m}
-                onClick={() => setSubMode(m)}
-                className={`
-                  flex-1 py-1 rounded-lg text-[9px] font-bold uppercase transition-all duration-200
-                  ${
-                    subMode === m
-                      ? "bg-white text-slate-950 shadow-lg"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/5"
-                  }
-                `}
-              >
-                {m}
-              </button>
-            ))}
+        <div className="flex flex-col gap-2 px-4 pb-3 md:hidden">
+          <div className="flex justify-between items-center border-t border-white/5 pt-2">
+            <div className="flex gap-4">
+              <StatItem
+                label={progressLabel}
+                value={progressValue}
+                color="var(--color-primary)"
+                size="sm"
+              />
+              <StatItem
+                label="ACCURACY"
+                value={accuracy}
+                suffix="%"
+                color="var(--color-accent)"
+                size="sm"
+              />
+            </div>
+
+            <div className="flex bg-slate-950/60 p-1 rounded-xl border border-white/5 gap-1">
+              {modes.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setSubMode(m)}
+                  className={`
+                    px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all duration-200
+                    ${
+                      subMode === m
+                        ? "bg-white text-slate-950 shadow-lg"
+                        : "text-white/40 hover:text-white/80 hover:bg-white/5"
+                    }
+                  `}
+                >
+                  {m[0]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

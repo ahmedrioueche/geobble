@@ -48,4 +48,6 @@ export const nameMapping: Record<string, string> = {
   "St. Kitts and Nevis": "Saint Kitts and Nevis",
   "St. Lucia": "Saint Lucia",
   "St. Vincent": "Saint Vincent and the Grenadines",
+  "St-Barthélemy": "Saint Barthélemy",
+  "Saint-Barthélemy": "Saint Barthélemy",
 };

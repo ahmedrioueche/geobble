@@ -499,3 +499,75 @@ EXECUTE sequentially.
 ## Task 17.3 — Precision Clicking
 - Ensure hit testing (clicking) works accurately even at high zoom levels.
 - Allow users to easily select tiny island nations or small European countries.
+
+---
+
+# 🔘 PHASE 18 — GAME SUB-MODES & MODAL SYSTEM
+
+## Task 18.1 — Modal Infrastructure Expansion
+- Expand `useModalStore` to support a `sub-mode` type.
+- Implement `SubModeModal.tsx` using `BaseModal` and integrate it into `src/modals.tsx`.
+
+## Task 18.2 — Sub-Mode Selection Logic
+- Implement options for: **Entire World**, **Set Number of Countries**, and **Timer**.
+- Trigger selection modal when a game mode is clicked in the menu.
+
+---
+
+# 🚀 PHASE 19 — GAMEPLAY MODE INTEGRATION
+
+## Task 19.1 — Identify Mode Sub-modes
+- Integrate "Set Number" and "Timer" sub-modes into the Identification (Guess) mode.
+
+## Task 19.2 — Reverse Mode Sub-modes
+- Integrate "Set Number" and "Timer" sub-modes into the Reverse Identification mode.
+
+---
+
+# 📊 PHASE 20 — 6-STAGE DIFFICULTY PROGRESSION
+
+## Task 20.1 — Stage-Based Country Ranking
+- Define and categorize countries into 6 distinct difficulty stages:
+  1. *Explorer*, 2. *Navigator*, 3. *Voyager*, 4. *Cartographer*, 5. *Globalist*, 6. *Conqueror*.
+- Create a data layer filter to select countries by assigned stage.
+
+## Task 20.2 — Across-Game Progression Logic
+- Implement persistent state tracking to remember the `currentStage` per sub-mode.
+- Automatically increment the stage (e.g., Stage 1 → Stage 2) upon the completion of a game session.
+- Add HUD elements to show the current Stage Name and level progress.
+
+---
+
+# 🗺️ PHASE 21 — INTELLIGENT DISTRACTORS (REVERSE MODE)
+
+## Task 21.1 — Contextual Distractor Generation
+- Refine multiple-choice options to be from the same **area or continent** as the correct answer.
+
+## Task 21.2 — Focused Island Logic
+- Implement specialized filtering: if the target is an island, all distractors must be islands to increase challenge.
+
+---
+
+# 🏆 PHASE 22 — POST-GAME EXPERIENCE
+
+## Task 22.1 — Global Result Modal
+- Implement a final results screen showing session performance and stats.
+
+## Task 22.2 — Loop Completion
+- Add "Play Again" (restart with current config) and "Back to Menu" actions to the result screen.
+
+---
+
+# 🌏 PHASE 23 — GLOBAL MARATHON MODE & SESSION INTEGRITY
+
+## Task 23.1 — Global Session Deduplication
+- Implement a session-wide tracking system to ensure no country is repeated across any mode during a single session.
+
+## Task 23.2 — "Entire World" Marathon Logic
+- Create a specific marathon mode that traverses all countries in the dataset.
+- Sequence countries from **easiest to hardest** using the ranking from Phase 20.
+- Apply randomization within each difficulty tier to keep the experience fresh.
+
+## Task 23.3 — Completion & Victory Condition
+- Trigger the result modal only when the final country of the entire world map is completed.
+- Ensure the game state correctly identifies the "Victory" condition for finishing the entire world.

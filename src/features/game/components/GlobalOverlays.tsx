@@ -3,6 +3,7 @@ import React from "react";
 import { CountryPopup } from "./CountryPopup";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
+import { StreakLostToast } from "./StreakLostToast";
 
 interface GlobalOverlaysProps {
   clickedCountry: CountryData | null;
@@ -30,6 +31,11 @@ export const GlobalOverlays: React.FC<GlobalOverlaysProps> = ({
             />
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Streak Lost Notification */}
+      <div className="pointer-events-auto">
+        <StreakLostToast />
       </div>
     </div>
   );

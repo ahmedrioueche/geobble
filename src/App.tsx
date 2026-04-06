@@ -1,5 +1,5 @@
 import { AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoadingScreen } from "./components/organisms/LoadingScreen";
 import { GameHUD } from "./features/game/components/GameHUD";
 import { GlobalOverlays } from "./features/game/components/GlobalOverlays";
@@ -9,6 +9,7 @@ import { useAppActions } from "./features/game/hooks/useAppActions";
 import { useGameLogic } from "./features/game/useGameLogic";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
+import Modals from "./modals";
 import { useGameStore } from "./store/useGameStore";
 
 function App() {
@@ -32,21 +33,29 @@ function App() {
     missionId,
   } = useAppActions();
 
+  useEffect(() => {
+    const handleMissionStart = () => {
+      handleFinalStart();
+      setShowModeSelect(false);
+    };
+
+    window.addEventListener("game:start-mission", handleMissionStart);
+    return () =>
+      window.removeEventListener("game:start-mission", handleMissionStart);
+  }, [handleFinalStart]);
+
   if (dataLoading) {
     return <LoadingScreen />;
   }
 
   return (
-    <div className="relative w-full h-[100dvh] bg-slate-950 text-white overflow-hidden font-sans">
+    <div className="relative w-full h-[100dvh] -mt-5 bg-slate-950 text-white overflow-hidden font-sans">
+      <Modals />
       <AnimatePresence>
         {showModeSelect && (
           <ModeSelection
             currentMode={mode}
             onSelect={(m) => setMode(m)}
-            onStart={() => {
-              handleFinalStart();
-              setShowModeSelect(false);
-            }}
             onClose={() => setShowModeSelect(false)}
           />
         )}
@@ -56,6 +65,7 @@ function App() {
         onStart={() => setShowModeSelect(true)}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        totalCountries={countries.length}
       />
 
       <main className="relative w-full h-full">

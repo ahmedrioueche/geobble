@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { type GameMode } from "../../../store/useGameStore";
+import { useModalStore } from "../../../store/modal";
 
 interface ModeSelectionProps {
   onSelect: (mode: GameMode) => void;
-  onStart: () => void;
   onClose: () => void;
   currentMode: GameMode;
 }
@@ -29,15 +29,19 @@ const MODES_CONFIG = [
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({
   onSelect,
-  onStart,
   onClose,
   currentMode,
 }) => {
   const [selected, setSelected] = React.useState<GameMode>(currentMode);
+  const openModal = useModalStore((state) => state.openModal);
 
   const handleSelect = (mode: GameMode) => {
     setSelected(mode);
     onSelect(mode);
+  };
+
+  const handleExecute = () => {
+    openModal("sub-mode", { mode: selected });
   };
 
   return (
@@ -132,7 +136,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
       >
         <Button 
           size="lg" 
-          onClick={onStart} 
+          onClick={handleExecute} 
           className="px-8 md:px-12 h-16 md:h-20 text-lg md:text-2xl font-black tracking-widest uppercase rounded-full shadow-[0_20px_80px_-15px_rgba(56,189,248,0.4)] hover:shadow-[0_20px_100px_-10px_rgba(56,189,248,0.6)] transform active:scale-95 transition-all flex items-center gap-4"
         >
           EXECUTE MISSION

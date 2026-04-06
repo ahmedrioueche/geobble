@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CountryData } from "../../../data/country-data";
 import { nameMapping } from "../../../data/name-mapping";
+import { normalizeCountryName } from "../../../utils/name-normalizer";
 import { useGameStore } from "../../../store/useGameStore";
 import { useGameLogic } from "../useGameLogic";
 
@@ -19,6 +20,10 @@ export const useAppActions = () => {
     setScore,
     streak,
     setStreak,
+    startNewMission,
+    recordAttempt,
+    streakLost,
+    setStreakLost,
   } = useGameStore();
 
   const {
@@ -56,10 +61,10 @@ export const useAppActions = () => {
         countryData = countries.find((c) => c.ccn3 === code) || null;
       }
       if (!countryData) {
-        const mappedName = nameMapping[name] || name;
+        const normalizedInput = normalizeCountryName(nameMapping[name] || name);
         countryData =
           countries.find(
-            (c) => c.name.toLowerCase() === mappedName.toLowerCase(),
+            (c) => normalizeCountryName(c.name) === normalizedInput,
           ) || null;
       }
 
@@ -67,37 +72,9 @@ export const useAppActions = () => {
         const targetCountry = currentCountry;
         if (!targetCountry) return;
 
-        // Case-insensitive name mapping (to handle 'SOMALILAND' or 'Congo' correctly)
-        const findMappedName = (n: string) => {
-          if (nameMapping[n]) return nameMapping[n];
-
-          // Generic Normalization for Fallback (Islands, Republics, and Case shifts)
-          const normalized = n
-            .replace(/\s+Is\.$/i, " Islands")
-            .replace(/\s+Rep\.$/i, " Republic")
-            .trim();
-
-          if (nameMapping[normalized]) return nameMapping[normalized];
-
-          const titleCase = n
-            .split(" ")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-            .join(" ");
-
-          if (nameMapping[titleCase]) return nameMapping[titleCase];
-
-          const entry = Object.entries(nameMapping).find(
-            ([k]) => k.toLowerCase() === n.toLowerCase(),
-          );
-          if (entry) return entry[1];
-
-          // Final Fallback for direct matches after normalization
-          return normalized;
-        };
-
-        const mappedClickedName = findMappedName(name);
-        const isCorrect =
-          mappedClickedName.toLowerCase() === targetCountry.name.toLowerCase();
+        const normalizedTarget = normalizeCountryName(targetCountry.name);
+        const normalizedClicked = normalizeCountryName(nameMapping[name] || name);
+        const isCorrect = normalizedTarget === normalizedClicked;
 
         if (isCorrect) {
           if (revealed) {
@@ -105,6 +82,7 @@ export const useAppActions = () => {
             return;
           }
 
+          recordAttempt(true);
           playAudio("/audio/correct.mp3");
           setFeedback("correct", name, code);
           setScore(score + 10 * (streak + 1));
@@ -113,8 +91,10 @@ export const useAppActions = () => {
             nextQuestion();
           }, 1500);
         } else {
+          recordAttempt(false);
           playAudio("/audio/wrong.mp3");
           setFeedback("wrong", name, code);
+          if (streak > 0) setStreakLost(streak);
           setStreak(0);
           setTimeout(() => {
             setFeedback(null, null, null);
@@ -138,6 +118,7 @@ export const useAppActions = () => {
       setStreak,
       revealed,
       playAudio,
+      recordAttempt,
     ],
   );
 
@@ -145,14 +126,17 @@ export const useAppActions = () => {
     (choice: string) => {
       if (feedback || !currentCountry) return;
 
+      const normalizedTarget = normalizeCountryName(currentCountry.name);
+      const normalizedChoice = normalizeCountryName(choice);
       let isCorrect = false;
+
       if (subMode === "flag") {
         isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();
       } else if (subMode === "capital") {
         isCorrect =
           choice.toLowerCase() === currentCountry.capital[0].toLowerCase();
       } else {
-        isCorrect = choice.toLowerCase() === currentCountry.name.toLowerCase();
+        isCorrect = normalizedChoice === normalizedTarget;
       }
 
       if (isCorrect) {
@@ -161,6 +145,7 @@ export const useAppActions = () => {
           return;
         }
 
+        recordAttempt(true);
         playAudio("/audio/correct.mp3");
         setFeedback("correct", choice);
         setScore(score + 10 * (streak + 1));
@@ -169,8 +154,10 @@ export const useAppActions = () => {
           nextQuestion();
         }, 1500);
       } else {
+        recordAttempt(false);
         playAudio("/audio/wrong.mp3");
         setFeedback("wrong", choice);
+        if (streak > 0) setStreakLost(streak);
         setStreak(0);
         setTimeout(() => {
           setFeedback(null, null);
@@ -189,21 +176,25 @@ export const useAppActions = () => {
       setStreak,
       revealed,
       playAudio,
+      recordAttempt,
     ],
   );
 
   const handleFinalStart = useCallback(() => {
     setClickedCountry(null);
+    startNewMission();
     startGame();
-  }, [startGame]);
+  }, [startGame, startNewMission]);
 
   const skipQuestionInternal = skipQuestion;
 
   const handleSkip = useCallback(() => {
     if (mode === "reverse" && currentCountry) {
+      recordAttempt(false);
       // Highlight the correct choice using revealed state
       // This provides visual feedback without triggering success messages/score
       setRevealed(true);
+      if (streak > 0) setStreakLost(streak);
       setStreak(0);
 
       // Wait a bit before skipping

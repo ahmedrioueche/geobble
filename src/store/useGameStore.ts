@@ -1,13 +1,25 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type GameMode = 'identify' | 'reverse';
 export type SubMode = 'name' | 'flag' | 'capital';
+export type ChallengeType = 'world' | 'count' | 'timer';
 
 interface GameState {
   score: number;
   streak: number;
   mode: GameMode;
   subMode: SubMode;
+  challengeType: ChallengeType;
+  challengeValue: number; // For count or timer (seconds)
+  timeRemaining: number;
+  difficultyStage: number; // Current session stage
+  unlockedStage: number; // Highest unlocked stage (persisted)
+  totalQuestions: number;
+  totalAttempts: number; // Answers submitted
+  correctAttempts: number; // Correct answers submitted
+  playedCountryCodes: string[];
+  sessionPlayedCodes: string[];
   gameStatus: 'idle' | 'playing' | 'finished';
   currentCountryCode: string | null;
   choices: string[];
@@ -17,12 +29,21 @@ interface GameState {
   clickedCode: string | null;
   revealed: boolean;
   pulseKey: number;
+  streakLost: number | null;
   
   // Actions
   setScore: (score: number) => void;
   setStreak: (streak: number) => void;
   setMode: (mode: GameMode) => void;
   setSubMode: (subMode: SubMode) => void;
+  setChallenge: (type: ChallengeType, value: number) => void;
+  setTimeRemaining: (time: number) => void;
+  setDifficultyStage: (stage: number) => void;
+  recordPlayedCountry: (code: string) => void;
+  recordSessionCode: (code: string) => void;
+  recordAttempt: (isCorrect: boolean) => void;
+  unlockNextStage: () => void;
+  startNewMission: () => void;
   setGameStatus: (status: 'idle' | 'playing' | 'finished') => void;
   setCurrentCountry: (code: string | null) => void;
   setChoices: (choices: string[]) => void;
@@ -32,54 +53,118 @@ interface GameState {
   setRevealed: (revealed: boolean) => void;
   triggerPulse: () => void;
   resetGame: () => void;
+  setStreakLost: (value: number | null) => void;
 }
 
-export const useGameStore = create<GameState>((set) => ({
-  score: 0,
-  streak: 0,
-  mode: 'identify',
-  subMode: 'name',
-  gameStatus: 'idle',
-  currentCountryCode: null,
-  choices: [],
-  missionId: null,
-  feedback: null,
-  clickedName: null,
-  clickedCode: null,
-  revealed: false,
-  pulseKey: 0,
+export const useGameStore = create<GameState>()(
+  persist(
+    (set) => ({
+      score: 0,
+      streak: 0,
+      mode: 'identify',
+      subMode: 'name',
+      challengeType: 'world',
+      challengeValue: 0,
+      timeRemaining: 0,
+      difficultyStage: 1,
+      unlockedStage: 1,
+      totalQuestions: 0,
+      totalAttempts: 0,
+      correctAttempts: 0,
+      playedCountryCodes: [],
+      sessionPlayedCodes: [],
+      gameStatus: 'idle',
+      currentCountryCode: null,
+      choices: [],
+      missionId: null,
+      feedback: null,
+      clickedName: null,
+      clickedCode: null,
+      revealed: false,
+      pulseKey: 0,
+      streakLost: null,
 
-  setScore: (score) => set({ score }),
-  setStreak: (streak) => set({ streak }),
-  setMode: (mode) => set({ mode }),
-  setSubMode: (subMode) => set({ subMode }),
-  setGameStatus: (status) => set({ gameStatus: status }),
-  setCurrentCountry: (code) => set({ currentCountryCode: code }),
-  setChoices: (choices) => set({ choices }),
-  setMissionId: (id) => set({ missionId: id }),
-  setFeedback: (feedback, clickedName = null, clickedCode = null) => set({ feedback, clickedName, clickedCode }),
-  skipQuestion: (next) => {
-    set({ streak: 0, revealed: false, feedback: null, clickedName: null, clickedCode: null });
-    next();
-  },
-  setRevealed: (revealed) => set((state) => ({ 
-    revealed, 
-    pulseKey: revealed ? state.pulseKey + 1 : state.pulseKey 
-  })),
-  triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
-  resetGame: () => set({ 
-    score: 0, 
-    streak: 0, 
-    mode: 'identify',
-    subMode: 'name',
-    gameStatus: 'idle', 
-    currentCountryCode: null, 
-    choices: [], 
-    missionId: null,
-    feedback: null,
-    clickedName: null,
-    clickedCode: null,
-    revealed: false,
-    pulseKey: 0
-  }),
-}));
+      setScore: (score) => set({ score }),
+      setStreak: (streak) => set({ streak }),
+      setMode: (mode) => set({ mode }),
+      setSubMode: (subMode) => set({ subMode }),
+      setChallenge: (challengeType, challengeValue) => set({ 
+        challengeType, 
+        challengeValue, 
+        timeRemaining: challengeType === 'timer' ? challengeValue : 0 
+      }),
+      setTimeRemaining: (timeRemaining) => set({ timeRemaining }),
+      setDifficultyStage: (difficultyStage) => set({ difficultyStage }),
+      recordPlayedCountry: (code) => set((state) => ({ 
+        playedCountryCodes: [...state.playedCountryCodes, code],
+        sessionPlayedCodes: Array.from(new Set([...state.sessionPlayedCodes, code])),
+        totalQuestions: state.totalQuestions + 1 
+      })),
+      recordSessionCode: (code) => set((state) => ({ 
+        sessionPlayedCodes: Array.from(new Set([...state.sessionPlayedCodes, code])) 
+      })),
+      recordAttempt: (isCorrect) => set((state) => ({
+        totalAttempts: state.totalAttempts + 1,
+        correctAttempts: isCorrect ? state.correctAttempts + 1 : state.correctAttempts
+      })),
+      unlockNextStage: () => set((state) => ({
+        unlockedStage: Math.min(state.unlockedStage + 1, 6)
+      })),
+      startNewMission: () => set((state) => ({
+        score: 0,
+        streak: 0,
+        totalQuestions: 0,
+        totalAttempts: 0,
+        correctAttempts: 0,
+        playedCountryCodes: [],
+        gameStatus: 'playing',
+        timeRemaining: state.challengeType === 'timer' ? state.challengeValue : 0,
+        streakLost: null
+      })),
+      setGameStatus: (status) => set({ gameStatus: status }),
+      setCurrentCountry: (code) => set({ currentCountryCode: code }),
+      setChoices: (choices) => set({ choices }),
+      setMissionId: (id) => set({ missionId: id }),
+      setFeedback: (feedback, clickedName = null, clickedCode = null) => set({ feedback, clickedName, clickedCode }),
+      skipQuestion: (next) => {
+        set({ streak: 0, revealed: false, feedback: null, clickedName: null, clickedCode: null });
+        next();
+      },
+      setRevealed: (revealed) => set((state) => ({ 
+        revealed, 
+        pulseKey: revealed ? state.pulseKey + 1 : state.pulseKey 
+      })),
+      triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
+      resetGame: () => set({ 
+        score: 0, 
+        streak: 0, 
+        mode: 'identify',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        timeRemaining: 0,
+        difficultyStage: 1,
+        totalQuestions: 0,
+        totalAttempts: 0,
+        correctAttempts: 0,
+        playedCountryCodes: [],
+        sessionPlayedCodes: [],
+        gameStatus: 'idle', 
+        currentCountryCode: null, 
+        choices: [], 
+        missionId: null,
+        feedback: null,
+        clickedName: null,
+        clickedCode: null,
+        revealed: false,
+        pulseKey: 0,
+        streakLost: null
+      }),
+      setStreakLost: (streakLost) => set({ streakLost }),
+    }),
+    {
+      name: 'geobble-storage',
+      partialize: (state) => ({ unlockedStage: state.unlockedStage }), // Only persist the unlock progress
+    }
+  )
+);
