@@ -165,13 +165,18 @@ export const WorldMap: React.FC<MapProps> = ({
 
     if (isMobile) {
       // On mobile, a flat 1x zoom is too small due to vertical screen aspect ratio.
-      // 1.5x zoom provides a much better tactical feel while keeping the context.
+      // 1.8x zoom provides a much better tactical feel while keeping the context.
       return d3.zoomIdentity
         .translate(dimensions.width / 2, dimensions.height / 2)
-        .scale(1.5)
+        .scale(1.8)
         .translate(-dimensions.width / 2, -dimensions.height / 2);
     }
-    return d3.zoomIdentity;
+
+    // On desktop, 1.3x zoom feels more tactical for identify missions and reduces context switching.
+    return d3.zoomIdentity
+      .translate(dimensions.width / 2, dimensions.height / 2)
+      .scale(1.3)
+      .translate(-dimensions.width / 2, -dimensions.height / 2);
   }, [dimensions]);
 
   // Camera Animation for Missions (Smart Transitions)
