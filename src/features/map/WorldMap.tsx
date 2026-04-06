@@ -195,15 +195,8 @@ export const WorldMap: React.FC<MapProps> = ({
     const currentTransform = d3.zoomTransform(svgRef.current);
 
     // Case 1: Start of a new Identify mission - Reset to 'Home' view
+    // REMOVED: Automatic zoom out between questions in Identify mode (annoying for flow)
     if (mode === "identify" && !revealed) {
-      const isAtHome = Math.abs(currentTransform.k - homeTransform.k) < 0.1;
-      if (!isAtHome) {
-        svg
-          .transition()
-          .duration(1200)
-          .ease(d3.easeCubicInOut)
-          .call(zoomRef.current.transform, homeTransform);
-      }
       return;
     }
 
