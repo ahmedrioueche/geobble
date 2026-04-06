@@ -34,8 +34,6 @@ export const useGameLogic = () => {
     timeRemaining,
     setTimeRemaining,
     difficultyStage,
-    unlockedStage,
-    unlockNextStage,
     setStreakLost,
   } = useGameStore();
   const { openModal } = useModalStore();

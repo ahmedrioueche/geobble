@@ -22,7 +22,6 @@ export const useAppActions = () => {
     setStreak,
     startNewMission,
     recordAttempt,
-    streakLost,
     setStreakLost,
   } = useGameStore();
 
