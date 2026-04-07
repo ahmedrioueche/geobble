@@ -32,6 +32,7 @@ export const WorldMap: React.FC<MapProps> = ({
     clickedName,
     mode,
     revealed,
+    tempHighlightCode,
   } = useGameStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
@@ -384,36 +385,56 @@ export const WorldMap: React.FC<MapProps> = ({
         let fillColor = "var(--color-map-land)";
         if (isFeedbackItem && feedback) {
           fillColor = feedback === "correct" ? "#22c55e" : "#ef4444";
-        } else if (isSelected) {
+        } else if (isSelected || (tempHighlightCode && mappedCode === tempHighlightCode)) {
           fillColor = "#22c55e";
         }
 
-        const isHighlighted = isSelected || (isFeedbackItem && feedback);
+        const isHighlighted = isSelected || (isFeedbackItem && feedback) || (tempHighlightCode && mappedCode === tempHighlightCode);
+
+        // Island Guide: Show a white circle around small countries when they are the target
+        const SMALL_ISLAND_THRESHOLD = 50; 
+        const area = pathGenerator.area(feature as any);
+        const isSmallIsland = area < SMALL_ISLAND_THRESHOLD;
+        const centroid = isSmallIsland && isSelected ? pathGenerator.centroid(feature as any) : null;
 
         return (
-          <path
-            key={`${name}-${index}`}
-            d={path || ""}
-            style={{
-              fill: fillColor,
-              fillOpacity: isHighlighted ? 1 : 0.6,
-              strokeWidth: isHighlighted
-                ? "var(--map-selected-stroke-width)"
-                : "var(--map-stroke-width)",
-            }}
-            className={`
-              stroke-white/20 
-              transition-all 
-              duration-500 
-              hover:fill-opacity-100
-              hover:stroke-white/60
-              cursor-pointer
-              ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 animate-pulse` : ""}
-            `}
-            onClick={() => handleCountryClick(name, code)}
-          >
-            {gameStatus !== "playing" && <title>{name}</title>}
-          </path>
+          <React.Fragment key={`${name}-${index}`}>
+            <path
+              d={path || ""}
+              style={{
+                fill: fillColor,
+                fillOpacity: isHighlighted ? 1 : 0.6,
+                strokeWidth: isHighlighted
+                  ? "var(--map-selected-stroke-width)"
+                  : "var(--map-stroke-width)",
+              }}
+              className={`
+                stroke-white/20 
+                transition-all 
+                duration-500 
+                hover:fill-opacity-100
+                hover:stroke-white/60
+                cursor-pointer
+                ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 animate-pulse` : ""}
+              `}
+              onClick={() => handleCountryClick(name, code)}
+            >
+              {gameStatus !== "playing" && <title>{name}</title>}
+            </path>
+            {centroid && (
+              <circle
+                cx={centroid[0]}
+                cy={centroid[1]}
+                r={8}
+                fill="none"
+                stroke="white"
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+                className="pointer-events-none animate-[pulse_2s_infinite] drop-shadow-[0_0_5px_white]"
+                style={{ vectorEffect: "non-scaling-stroke" }}
+              />
+            )}
+          </React.Fragment>
         );
       },
     );
@@ -428,6 +449,7 @@ export const WorldMap: React.FC<MapProps> = ({
     gameStatus,
     feedback,
     clickedCode,
+    tempHighlightCode,
   ]);
 
   // Find centroid of the selected country for the sonar effect

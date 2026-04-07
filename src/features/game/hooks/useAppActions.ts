@@ -23,6 +23,7 @@ export const useAppActions = () => {
     startNewMission,
     recordAttempt,
     setStreakLost,
+    setTempHighlightCode,
   } = useGameStore();
 
   const {
@@ -101,6 +102,12 @@ export const useAppActions = () => {
         }
       } else {
         setClickedCountry(countryData);
+        if (countryData?.cca3) {
+          setTempHighlightCode(countryData.cca3);
+          setTimeout(() => {
+            setTempHighlightCode(null);
+          }, 1000);
+        }
       }
     },
     [
@@ -118,8 +125,11 @@ export const useAppActions = () => {
       revealed,
       playAudio,
       recordAttempt,
+      setStreakLost,
+      setTempHighlightCode,
     ],
   );
+
 
   const handleChoiceSelect = useCallback(
     (choice: string) => {
@@ -176,6 +186,7 @@ export const useAppActions = () => {
       revealed,
       playAudio,
       recordAttempt,
+      setStreakLost,
     ],
   );
 
@@ -210,7 +221,18 @@ export const useAppActions = () => {
     setStreak,
     nextQuestion,
     skipQuestionInternal,
+    recordAttempt,
+    streak,
+    setStreakLost,
   ]);
+
+  const handleReveal = useCallback(() => {
+    setRevealed(true);
+    if (mode === "identify" && streak > 0) {
+      setStreakLost(streak);
+      setStreak(0);
+    }
+  }, [mode, streak, setRevealed, setStreak, setStreakLost]);
 
   return {
     clickedCountry,
@@ -225,6 +247,7 @@ export const useAppActions = () => {
     missionId,
     revealed,
     setRevealed,
+    handleReveal,
     skipQuestion: handleSkip,
     nextQuestion,
     currentCountry,

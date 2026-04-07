@@ -1,10 +1,10 @@
 /**
- * Maps country names from the world.json TopoJSON 
+ * Maps country names from the world.json TopoJSON
  * to the common names used by REST Countries API.
  */
 export const nameMapping: Record<string, string> = {
   "United States of America": "United States",
-  "Congo": "Republic of the Congo",
+  Congo: "Republic of the Congo",
   "Dem. Rep. Congo": "DR Congo",
   "W. Samoa": "Samoa",
   "W. Sahara": "Western Sahara",
@@ -14,18 +14,18 @@ export const nameMapping: Record<string, string> = {
   "S. Sudan": "South Sudan",
   "Central African Rep.": "Central African Republic",
   "Eq. Guinea": "Equatorial Guinea",
-  "Swaziland": "Eswatini",
+  Swaziland: "Eswatini",
   "Bosnia and Herz.": "Bosnia and Herzegovina",
-  "Macedonia": "North Macedonia",
-  "Somaliland": "Somalia",
+  Macedonia: "North Macedonia",
+  Somaliland: "Somalia",
   "Northern Cyprus": "Cyprus",
   "Ivory Coast": "Côte d'Ivoire",
   "East Timor": "Timor-Leste",
   "Solomon Is.": "Solomon Islands",
-  "Micronesia": "Federated States of Micronesia",
-  "Macau": "Macao",
-  "Myanmar": "Myanmar",
-  "Kyrgyzstan": "Kyrgyzstan",
+  Micronesia: "Federated States of Micronesia",
+  Macau: "Macao",
+  Myanmar: "Myanmar",
+  Kyrgyzstan: "Kyrgyzstan",
   "Holy See": "Vatican City",
   "North Korea": "North Korea",
   "South Korea": "South Korea",
@@ -36,7 +36,7 @@ export const nameMapping: Record<string, string> = {
   "St. Helena": "Saint Helena, Ascension and Tristan da Cunha",
   "Cape Verde": "Cabo Verde",
   "São Tomé and Principe": "Sao Tome and Principe",
-  "Curaçao": "Curacao",
+  Curaçao: "Curacao",
   "St. Vincent and the Grenadines": "Saint Vincent and the Grenadines",
   "Wallis and Futuna Is.": "Wallis and Futuna",
   "Cayman Is.": "Cayman Islands",
@@ -50,4 +50,8 @@ export const nameMapping: Record<string, string> = {
   "St. Vincent": "Saint Vincent and the Grenadines",
   "St-Barthélemy": "Saint Barthélemy",
   "Saint-Barthélemy": "Saint Barthélemy",
+  "Br. Indian Ocean Ter.": "British Indian Ocean Territory",
+  "S. Geo. and the Is.": "South Georgia",
+  "Heard I. and McDonald Is.": "Heard Island and McDonald Islands",
+  "FR. POLYNESIA": "French Polynesia",
 };

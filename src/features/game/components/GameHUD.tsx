@@ -3,6 +3,7 @@ import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
 import { formatDuration } from "../../../utils/time";
+import { getMaxLevels, getTierRanges } from "../../../data/difficulty-ranking";
 
 interface GameHUDProps {
   onStart: () => void;
@@ -10,8 +11,6 @@ interface GameHUDProps {
   onToggleFullscreen: () => void;
   totalCountries?: number;
 }
-
-
 
 export const GameHUD: React.FC<GameHUDProps> = ({
   onStart,
@@ -33,9 +32,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     correctAttempts,
     totalAttempts,
     startTime,
+    difficultyStage,
   } = useGameStore();
 
   const modes: SubMode[] = ["name", "flag", "capital"];
+
+  const maxLevels = getMaxLevels(challengeType === "count" ? challengeValue : 30);
+  
+  const sliceSize = challengeType === "count" ? (challengeValue || 30) : 30;
+  const currentTierRanges = getTierRanges(sliceSize);
+  const currentRange = currentTierRanges[difficultyStage - 1] || currentTierRanges[0];
+  const currentTierSize = challengeType === "world" ? totalCountries : (currentRange?.size || challengeValue);
 
   const accuracy =
     totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
@@ -67,7 +74,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       progressValue = `${totalQuestions}/${totalCountries}`;
       progressLabel = "WORLD PREP";
     } else if (challengeType === "count") {
-      progressValue = `${totalQuestions}/${challengeValue}`;
+      progressValue = `${totalQuestions}/${currentTierSize}`;
       progressLabel = "TARGETS";
     } else if (challengeType === "timer") {
       progressValue = `${correctAttempts}`;
@@ -79,19 +86,32 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     <header className="fixed top-0 inset-x-0 flex flex-col items-stretch bg-slate-900/90 backdrop-blur-2xl border-b border-white/10 shadow-2xl z-50">
       {/* Row 1: Logo and Stats/Modes/Start */}
       <div className="px-4 py-2 md:px-8 md:py-4 flex justify-between items-center w-full">
-        <button
-          onClick={resetGame}
-          className="flex items-center gap-2 group hover:opacity-90 transition-all active:scale-95"
-        >
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="w-8 h-8 md:w-12 md:h-12 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
-          />
-          <h1 className="text-xl md:text-2xl md:-mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
-            GEOBBLE
-          </h1>
-        </button>
+        <div className="flex items-center gap-3 md:gap-6 lg:gap-8">
+          <button
+            onClick={resetGame}
+            className="flex items-center gap-2 group hover:opacity-90 transition-all active:scale-95"
+          >
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="w-8 h-8 md:w-12 md:h-12 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
+            />
+            <h1 className="text-xl md:text-2xl md:-mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
+              GEOBBLE
+            </h1>
+          </button>
+
+          {gameStatus === "playing" && (
+            <div className="flex lg:hidden items-center bg-slate-950/60 h-7 md:h-8 px-3 rounded-lg border border-white/10 shadow-inner group transition-all hover:border-primary/40">
+              <span className="hidden md:block text-[10px] md:text-xs font-black text-white/40 tracking-[0.25em] uppercase mr-2 last:mr-0 group-hover:text-primary transition-colors">
+                Level
+              </span>
+              <span className="text-sm md:text-md font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                {difficultyStage}/{maxLevels}
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
           {/* Desktop/Tablet Modes Integration */}
@@ -128,7 +148,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 />
               </div>
 
-
               {/* Mission Timer/Stopwatch - Hidden on mobile, visible on tablet+ */}
               <div className="hidden md:block">
                 <StatItem
@@ -137,6 +156,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                   color={
                     isTimerMode && timeRemaining < 10 ? "#ef4444" : "white"
                   }
+                  size="sm"
+                />
+              </div>
+
+              {/* MISSION LEVEL - DESKTOP ONLY */}
+              <div className="hidden lg:flex">
+                <StatItem
+                  label="LEVEL"
+                  value={`${difficultyStage}/${maxLevels}`}
+                  color="var(--color-primary)"
                   size="sm"
                 />
               </div>
@@ -269,9 +298,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <StatItem
                 label="TIME"
                 value={displayTime}
-                color={
-                  isTimerMode && timeRemaining < 10 ? "#ef4444" : "white"
-                }
+                color={isTimerMode && timeRemaining < 10 ? "#ef4444" : "white"}
                 size="sm"
               />
             </div>

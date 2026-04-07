@@ -1,13 +1,56 @@
+import React, { useEffect } from "react";
 import { Trophy, Target, Zap, ChevronRight, Home, Award, Timer } from "lucide-react";
+import confetti from "canvas-confetti";
 import BaseModal from "./BaseModal";
 import { useModalStore } from "../../store/modal";
 import { useGameStore } from "../../store/useGameStore";
 import { formatDuration } from "../../utils/time";
+import { getMaxLevels } from "../../data/difficulty-ranking";
 
 const ResultModal: React.FC = () => {
   const { currentModal, resultProps, closeModal } = useModalStore();
   const { resetGame, startNewMission, setDifficultyStage, unlockedStage } =
     useGameStore();
+
+  const maxLevels = getMaxLevels(resultProps?.challengeValue || 0);
+
+  useEffect(() => {
+    if (resultProps?.isVictory && resultProps?.difficultyStage === maxLevels) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = {
+        startVelocity: 30,
+        spread: 360,
+        ticks: 60,
+        zIndex: 10000,
+      };
+
+      const randomInRange = (min: number, max: number) =>
+        Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 40 * (timeLeft / duration);
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+        });
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+        });
+      }, 250);
+
+      return () => clearInterval(interval);
+    }
+  }, [resultProps?.isVictory, resultProps?.difficultyStage]);
 
   if (currentModal !== "result" || !resultProps) return null;
 
@@ -23,9 +66,10 @@ const ResultModal: React.FC = () => {
   } = resultProps;
 
   const handleRedeploy = () => {
-    // 1. Update difficulty if win
-    if (isVictory && unlockedStage > difficultyStage) {
-      setDifficultyStage(unlockedStage);
+    // 1. Advance difficulty if victory (up to what's unlocked)
+    if (isVictory && difficultyStage < maxLevels) {
+      const nextLevel = Math.min(difficultyStage + 1, unlockedStage);
+      setDifficultyStage(nextLevel);
     }
 
     // 2. Clear status FIRST to avoid App.tsx re-triggering modal on reset
@@ -49,11 +93,15 @@ const ResultModal: React.FC = () => {
       onClose={handleMenu}
       closeOnOutsideClick={false}
       title="MISSION DEBRIEF"
-      subtitle={`STAGE ${difficultyStage} COMPLETE`}
+      subtitle={`Level ${difficultyStage}/${maxLevels} Complete`}
       icon={Award}
       maxWidth="max-w-md"
       primaryButton={{
-        label: isVictory ? "ADVANCE" : "RETRY",
+        label: isVictory
+          ? difficultyStage === maxLevels
+            ? "PLAY AGAIN"
+            : "ADVANCE"
+          : "RETRY",
         onClick: handleRedeploy,
         icon: ChevronRight,
         iconPosition: "right",
@@ -153,6 +201,17 @@ const ResultModal: React.FC = () => {
             </p>
             <p className="text-[10px] text-white/60 font-medium mt-1">
               You have successfully navigated the entire world map.
+            </p>
+          </div>
+        )}
+
+        {isVictory && difficultyStage === maxLevels && (
+          <div className="w-full p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl animate-bounce">
+            <p className="text-yellow-400 font-black text-xs uppercase tracking-widest">
+              🏆 GEOBBLE MASTER STATUS ACHIEVED 🏆
+            </p>
+            <p className="text-[10px] text-white/60 font-medium mt-1">
+              You have completed the final stage. The world is yours.
             </p>
           </div>
         )}

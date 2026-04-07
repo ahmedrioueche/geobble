@@ -29,6 +29,7 @@ export interface ResultModalProps {
   isVictory: boolean;
   difficultyStage: number;
   challengeType?: string;
+  challengeValue?: number;
   isWorldCompletion?: boolean;
   timeElapsed?: number;
 }

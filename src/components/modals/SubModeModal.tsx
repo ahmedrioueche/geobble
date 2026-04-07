@@ -9,38 +9,10 @@ import {
 import React, { useState } from "react";
 import { useModalStore } from "../../store/modal";
 import { useGameStore, type ChallengeType } from "../../store/useGameStore";
+import { getMaxLevels } from "../../data/difficulty-ranking";
 import BaseModal from "./BaseModal";
 
-const STAGES = [
-  {
-    id: 1,
-    name: "Explorer",
-    description: "Most famous nations & large anchors",
-  },
-  {
-    id: 2,
-    name: "Navigator",
-    description: "Regional powers & recognized states",
-  },
-  { id: 3, name: "Voyager", description: "Standard mid-sized countries" },
-  {
-    id: 4,
-    name: "Cartographer",
-    description: "Specialized regions & smaller territories",
-  },
-  {
-    id: 5,
-    name: "Globalist",
-    description: "Obscure countries & autonomous regions",
-  },
-  {
-    id: 6,
-    name: "Conqueror",
-    description: "Tiny island nations & remote dependencies",
-  },
-];
-
-const COUNTS = [10, 20, 50, 100];
+const COUNTS = [10, 20, 30, 40, 50];
 const TIMES = [
   { label: "30s", value: 30 },
   { label: "1m", value: 60 },
@@ -68,6 +40,14 @@ const SubModeModal: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<number>(
     unlockedStage || 1,
   );
+
+  const maxLevels =
+    selectedType === "world" ? 1 : getMaxLevels(selectedValue);
+
+  // If stage is out of bounds for the current count, adjust
+  if (selectedStage > maxLevels && selectedType !== "world") {
+    setSelectedStage(maxLevels);
+  }
 
   if (currentModal !== "sub-mode" || !subModeProps) return null;
 
@@ -222,58 +202,47 @@ const SubModeModal: React.FC = () => {
         {selectedType !== "world" && (
           <div className="animate-in fade-in slide-in-from-top-2">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-              Difficulty: {STAGES.find((s) => s.id === selectedStage)?.name}
+              Selection: Tier {selectedStage}
             </label>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-              {STAGES.map((s) => {
-                const isLocked = s.id > unlockedStage;
-                const isSelected = selectedStage === s.id;
+            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 max-h-[160px] overflow-y-auto p-1 custom-scrollbar">
+              {Array.from({ length: maxLevels }, (_, i) => i + 1).map((id) => {
+                const isLocked = id > unlockedStage;
+                const isSelected = selectedStage === id;
 
                 return (
                   <button
-                    key={s.id}
+                    key={id}
                     disabled={isLocked}
-                    onClick={() => setSelectedStage(s.id)}
-                    className={`relative h-12 rounded-xl border-2 transition-all group flex items-center justify-center ${
+                    onClick={() => setSelectedStage(id)}
+                    className={`relative h-10 md:h-12 rounded-xl border-2 transition-all group flex items-center justify-center ${
                       isSelected
                         ? "border-primary bg-primary/20"
                         : isLocked
                           ? "border-white/5 bg-white/5 opacity-50 cursor-not-allowed"
                           : "border-white/5 bg-white/5 hover:border-white/20"
                     }`}
-                    title={
-                      isLocked
-                        ? "Complete previous missions to unlock"
-                        : s.description
-                    }
                   >
                     {isLocked ? (
-                      <Lock className="w-4 h-4 text-white/20" />
+                      <Lock className="w-3 h-3 text-white/20" />
                     ) : (
                       <span
-                        className={`font-black text-lg ${isSelected ? "text-primary" : "text-white/20"}`}
+                        className={`font-black text-sm md:text-lg ${isSelected ? "text-primary" : "text-white/20"}`}
                       >
-                        {s.id}
+                        {id}
                       </span>
                     )}
 
                     {isSelected && (
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary shadow-[0_0_10px_var(--color-primary)]" />
                     )}
-
-                    {/* Tooltip-like name on hover */}
-                    {!isLocked && (
-                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                        {s.name}
-                      </div>
-                    )}
                   </button>
                 );
               })}
             </div>
             <p className="mt-4 text-xs text-white/40 font-medium italic">
-              &quot;{STAGES.find((s) => s.id === selectedStage)?.description}
-              &quot;
+              {selectedType === "count"
+                ? `Progress through the world in sets of ${selectedValue} targets each.`
+                : "Race against the clock across different difficulty tiers."}
             </p>
           </div>
         )}

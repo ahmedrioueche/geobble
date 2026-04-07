@@ -31,6 +31,7 @@ interface GameState {
   pulseKey: number;
   streakLost: number | null;
   startTime: number | null;
+  tempHighlightCode: string | null;
   
   // Actions
   setScore: (score: number) => void;
@@ -55,6 +56,7 @@ interface GameState {
   triggerPulse: () => void;
   resetGame: () => void;
   setStreakLost: (value: number | null) => void;
+  setTempHighlightCode: (code: string | null) => void;
 }
 
 export const useGameStore = create<GameState>()(
@@ -85,6 +87,7 @@ export const useGameStore = create<GameState>()(
       pulseKey: 0,
       streakLost: null,
       startTime: null,
+      tempHighlightCode: null,
 
       setScore: (score) => set({ score }),
       setStreak: (streak) => set({ streak }),
@@ -109,9 +112,12 @@ export const useGameStore = create<GameState>()(
         totalAttempts: state.totalAttempts + 1,
         correctAttempts: isCorrect ? state.correctAttempts + 1 : state.correctAttempts
       })),
-      unlockNextStage: () => set((state) => ({
-        unlockedStage: Math.min(state.unlockedStage + 1, 6)
-      })),
+      unlockNextStage: () => set((state) => {
+        if (state.difficultyStage === state.unlockedStage) {
+          return { unlockedStage: Math.min(state.unlockedStage + 1, 9) };
+        }
+        return {};
+      }),
       startNewMission: () => set((state) => ({
         score: 0,
         streak: 0,
@@ -165,6 +171,7 @@ export const useGameStore = create<GameState>()(
         startTime: null
       }),
       setStreakLost: (streakLost) => set({ streakLost }),
+      setTempHighlightCode: (tempHighlightCode) => set({ tempHighlightCode }),
     }),
     {
       name: 'geobble-storage',

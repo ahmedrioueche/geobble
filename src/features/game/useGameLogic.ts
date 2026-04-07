@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CountryData } from "../../data/country-data";
 import { fetchCountries } from "../../data/country-data";
-import { getDifficulty } from "../../data/difficulty-ranking";
+import {
+  getDifficulty,
+  getTierRanges,
+  SORTED_POOL,
+} from "../../data/difficulty-ranking";
 import { nameMapping } from "../../data/name-mapping";
-import { normalizeCountryName } from "../../utils/name-normalizer";
 import { useModalStore } from "../../store/modal";
 import { useGameStore, type SubMode } from "../../store/useGameStore";
+import { normalizeCountryName } from "../../utils/name-normalizer";
+
+const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
 
 export const useGameLogic = () => {
   const {
@@ -36,6 +49,9 @@ export const useGameLogic = () => {
     difficultyStage,
     setStreakLost,
     startTime,
+    unlockNextStage,
+    unlockedStage,
+    setChallenge,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -162,17 +178,27 @@ export const useGameLogic = () => {
       isVictory = accuracy >= 0.8;
     }
 
+    if (isVictory) {
+      unlockNextStage();
+    }
+
     const timeElapsed = startTime ? Date.now() - startTime : 0;
-    
+
+    const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
+    const ranges = getTierRanges(sliceSize);
+    const currentRange = ranges[difficultyStage - 1] || ranges[0];
+
     openModal("result", {
       score,
       accuracy,
       streak,
       correctAnswers: correctAttempts,
-      totalQuestions: challengeType === "count" ? challengeValue : totalQuestions,
+      totalQuestions:
+        challengeType === "world" ? countries.length : currentRange.size,
       isVictory,
       difficultyStage,
       challengeType,
+      challengeValue,
       isWorldCompletion:
         challengeType === "world" && totalQuestions >= countries.length,
       timeElapsed,
@@ -201,35 +227,58 @@ export const useGameLogic = () => {
       return;
     }
 
-    // 1. Determine the pool of available countries (Deduplication)
-    let available = countries.filter(
-      (c) => !sessionPlayedCodes.includes(c.cca3),
-    );
+    // 1. Determine the pool of available countries
+    // 2. Define the base target pool based on mode
+    let targetPool: any[] = [];
 
-    // If we've played everything, or it's a world mode, end the game
-    if (available.length === 0) {
-      if (challengeType === "world") {
+    if (challengeType === "world") {
+      // World mode: Filter by current unlocked progression and excluded session-played
+      targetPool = countries.filter(
+        (c) =>
+          getDifficulty(c.cca3) <= unlockedStage &&
+          !sessionPlayedCodes.includes(c.cca3),
+      );
+
+      if (targetPool.length === 0) {
         finishGame();
         return;
       }
-      // Fallback: reset mission memory for count/timer if we ran out of new countries in the session
-      available = countries.filter((c) => !playedCountryCodes.includes(c.cca3));
-      if (available.length === 0) available = countries;
+    } else {
+      // Dynamic Stages for Count/Timer mode
+      const sliceSize = challengeType === "count" ? challengeValue : 30;
+      const ranges = getTierRanges(sliceSize);
+
+      // Ensure stage is within calculated ranges (clamp to last available range)
+      const currentRange =
+        ranges[Math.min(difficultyStage - 1, ranges.length - 1)];
+
+      const levelCodes = shuffleArray(
+        SORTED_POOL.slice(currentRange.start, currentRange.end),
+      );
+
+      const stageCountries = countries.filter((c) =>
+        levelCodes.includes(c.cca3),
+      );
+
+      if (stageCountries.length === 0) {
+        // Fallback for safety if stage is empty/invalid
+        finishGame();
+        return;
+      }
+
+      // Filter out what's already been played IN THE CURRENT MISSION
+      targetPool = stageCountries.filter(
+        (c) => !playedCountryCodes.includes(c.cca3),
+      );
+
+      // If we've played all countries in this stage during this mission,
+      // allow repeats to fulfill the mission requirements (e.g. mission count > pool size)
+      if (targetPool.length === 0) {
+        targetPool = stageCountries;
+      }
     }
 
-    // 2. Application of Difficulty Logic for 'world' mode
-    let targetPool = available;
-    if (challengeType === "world") {
-      // Find the lowest difficulty stage available in the current pending set
-      const minDifficulty = Math.min(
-        ...available.map((c) => getDifficulty(c.cca3)),
-      );
-      targetPool = available.filter(
-        (c) => getDifficulty(c.cca3) === minDifficulty,
-      );
-    }
-
-    // 3. Pick a target
+    // 4. Pick a target
     const randomIndex = Math.floor(Math.random() * targetPool.length);
     const target = targetPool[randomIndex];
 
@@ -261,11 +310,17 @@ export const useGameLogic = () => {
     subMode,
     generateChoices,
     setRevealed,
+    difficultyStage,
+    unlockedStage,
   ]);
 
   // Mission Completion Watcher
   useEffect(() => {
-    if (gameStatus === "playing" && challengeType === "count" && totalAttempts >= challengeValue) {
+    if (
+      gameStatus === "playing" &&
+      challengeType === "count" &&
+      totalAttempts >= challengeValue
+    ) {
       // Small delay to let the final feedback play
       const timer = setTimeout(() => {
         finishGame();
@@ -315,11 +370,36 @@ export const useGameLogic = () => {
   ]);
 
   const startGame = useCallback(() => {
+    // Synchronize mission goal with actual tier size (handles merged remainders)
+    const sliceSize = challengeType === "count" ? challengeValue : 30;
+    const ranges = getTierRanges(sliceSize);
+
+    // Ensure stage is within calculated ranges (clamp to last available range)
+    const currentRange =
+      ranges[Math.min(difficultyStage - 1, ranges.length - 1)];
+
+    if (
+      challengeType === "count" &&
+      currentRange &&
+      currentRange.size !== challengeValue
+    ) {
+      setChallenge("count", currentRange.size);
+    }
+
     setScore(0);
     setStreak(0);
     setGameStatus("playing");
     nextQuestion();
-  }, [setScore, setStreak, setGameStatus, nextQuestion]);
+  }, [
+    setScore,
+    setStreak,
+    setGameStatus,
+    nextQuestion,
+    challengeType,
+    challengeValue,
+    difficultyStage,
+    setChallenge,
+  ]);
 
   const submitAnswer = useCallback(
     (selectedIdentifier: string) => {
@@ -372,6 +452,7 @@ export const useGameLogic = () => {
       setScore,
       streak,
       setStreak,
+      setStreakLost,
       mode,
       subMode,
     ],
