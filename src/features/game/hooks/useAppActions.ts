@@ -228,6 +228,7 @@ export const useAppActions = () => {
 
   const handleReveal = useCallback(() => {
     setRevealed(true);
+    useGameStore.getState().triggerPulse();
     if (mode === "identify" && streak > 0) {
       setStreakLost(streak);
       setStreak(0);

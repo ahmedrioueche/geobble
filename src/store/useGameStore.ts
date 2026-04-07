@@ -139,10 +139,7 @@ export const useGameStore = create<GameState>()(
         set({ streak: 0, revealed: false, feedback: null, clickedName: null, clickedCode: null });
         next();
       },
-      setRevealed: (revealed) => set((state) => ({ 
-        revealed, 
-        pulseKey: revealed ? state.pulseKey + 1 : state.pulseKey 
-      })),
+      setRevealed: (revealed) => set({ revealed }),
       triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
       resetGame: () => set({ 
         score: 0, 

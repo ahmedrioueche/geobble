@@ -390,12 +390,38 @@ export const WorldMap: React.FC<MapProps> = ({
         }
 
         const isHighlighted = isSelected || (isFeedbackItem && feedback) || (tempHighlightCode && mappedCode === tempHighlightCode);
-
-        // Island Guide: Show a white circle around small countries when they are the target
-        const SMALL_ISLAND_THRESHOLD = 50; 
         const area = pathGenerator.area(feature as any);
-        const isSmallIsland = area < SMALL_ISLAND_THRESHOLD;
-        const centroid = isSmallIsland && isSelected ? pathGenerator.centroid(feature as any) : null;
+
+        // Visibility Tresholds
+        const SMALL_COUNTRY_THRESHOLD = 150; // Below this area, we show the pulsing 'Solar' effect
+        const TINY_ISLAND_THRESHOLD = 30;    // Below this area, we show the 'White Circle' guide
+
+        const isSmall = area < SMALL_COUNTRY_THRESHOLD;
+        const isTiny = area < TINY_ISLAND_THRESHOLD;
+
+        // Island Guide: Show a white dashed circle around tiny islands when they are target/feedback
+        let guideCircle = null;
+        if (isTiny && isHighlighted) {
+          const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          // Determine radius that covers the entire extent plus padding
+          const r = Math.max((x1 - x0) / 2, (y1 - y0) / 2) + 12;
+
+          guideCircle = (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="white"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              className="pointer-events-none animate-[pulse_2s_infinite] drop-shadow-[0_0_5px_white]"
+              style={{ vectorEffect: "non-scaling-stroke" }}
+            />
+          );
+        }
 
         return (
           <React.Fragment key={`${name}-${index}`}>
@@ -415,25 +441,13 @@ export const WorldMap: React.FC<MapProps> = ({
                 hover:fill-opacity-100
                 hover:stroke-white/60
                 cursor-pointer
-                ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 animate-pulse` : ""}
+                ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
               `}
               onClick={() => handleCountryClick(name, code)}
             >
               {gameStatus !== "playing" && <title>{name}</title>}
             </path>
-            {centroid && (
-              <circle
-                cx={centroid[0]}
-                cy={centroid[1]}
-                r={8}
-                fill="none"
-                stroke="white"
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                className="pointer-events-none animate-[pulse_2s_infinite] drop-shadow-[0_0_5px_white]"
-                style={{ vectorEffect: "non-scaling-stroke" }}
-              />
-            )}
+            {guideCircle}
           </React.Fragment>
         );
       },
@@ -476,6 +490,11 @@ export const WorldMap: React.FC<MapProps> = ({
     );
 
     if (!feature) return null;
+
+    // Only show the sonar ring effect for smaller countries (below average)
+    const area = pathGenerator.area(feature as any);
+    if (area > 150) return null;
+
     return pathGenerator.centroid(feature as any);
   }, [
     geoData,
@@ -483,6 +502,8 @@ export const WorldMap: React.FC<MapProps> = ({
     selectedCountryCode,
     selectedCountryName,
     idToCodeLookup,
+    revealed,
+    mode,
   ]);
 
   return (
@@ -507,9 +528,9 @@ export const WorldMap: React.FC<MapProps> = ({
 
               {/* Tactical Sonar Animation */}
               <AnimatePresence>
-                {sonarPoint && gameStatus === "playing" && (
+                {sonarPoint && gameStatus === "playing" && pulseKey > 0 && (
                   <motion.g
-                    key={`${missionId}-${pulseKey}`}
+                    key={pulseKey}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
