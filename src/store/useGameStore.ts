@@ -30,6 +30,7 @@ interface GameState {
   revealed: boolean;
   pulseKey: number;
   streakLost: number | null;
+  startTime: number | null;
   
   // Actions
   setScore: (score: number) => void;
@@ -83,6 +84,7 @@ export const useGameStore = create<GameState>()(
       revealed: false,
       pulseKey: 0,
       streakLost: null,
+      startTime: null,
 
       setScore: (score) => set({ score }),
       setStreak: (streak) => set({ streak }),
@@ -119,7 +121,8 @@ export const useGameStore = create<GameState>()(
         playedCountryCodes: [],
         gameStatus: 'playing',
         timeRemaining: state.challengeType === 'timer' ? state.challengeValue : 0,
-        streakLost: null
+        streakLost: null,
+        startTime: Date.now()
       })),
       setGameStatus: (status) => set({ gameStatus: status }),
       setCurrentCountry: (code) => set({ currentCountryCode: code }),
@@ -158,7 +161,8 @@ export const useGameStore = create<GameState>()(
         clickedCode: null,
         revealed: false,
         pulseKey: 0,
-        streakLost: null
+        streakLost: null,
+        startTime: null
       }),
       setStreakLost: (streakLost) => set({ streakLost }),
     }),

@@ -35,6 +35,7 @@ export const useGameLogic = () => {
     setTimeRemaining,
     difficultyStage,
     setStreakLost,
+    startTime,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -161,6 +162,8 @@ export const useGameLogic = () => {
       isVictory = accuracy >= 0.8;
     }
 
+    const timeElapsed = startTime ? Date.now() - startTime : 0;
+    
     openModal("result", {
       score,
       accuracy,
@@ -172,19 +175,21 @@ export const useGameLogic = () => {
       challengeType,
       isWorldCompletion:
         challengeType === "world" && totalQuestions >= countries.length,
+      timeElapsed,
     });
   }, [
     setGameStatus,
-    challengeType,
+    totalQuestions,
     totalAttempts,
     correctAttempts,
+    challengeType,
+    challengeValue,
+    countries.length,
     openModal,
     score,
     streak,
     difficultyStage,
-    challengeValue,
-    totalQuestions,
-    countries.length,
+    startTime,
   ]);
 
   const nextQuestion = useCallback(() => {

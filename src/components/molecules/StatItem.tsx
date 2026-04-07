@@ -36,7 +36,7 @@ export const StatItem: React.FC<StatItemProps> = ({
       </span>
       <div className="flex items-baseline gap-1">
         <span 
-          className={`${valueSizes[size]} font-mono font-black leading-tight tracking-tighter transition-all`}
+          className={`${valueSizes[size]} font-mono font-black border-none leading-tight tracking-tighter transition-all tabular-nums whitespace-nowrap min-w-[3.5ch] text-right`}
           style={{ color }}
         >
           {value}

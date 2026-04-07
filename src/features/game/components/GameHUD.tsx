@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
+import { formatDuration } from "../../../utils/time";
 
 interface GameHUDProps {
   onStart: () => void;
@@ -10,11 +11,7 @@ interface GameHUDProps {
   totalCountries?: number;
 }
 
-const formatTime = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
+
 
 export const GameHUD: React.FC<GameHUDProps> = ({
   onStart,
@@ -35,6 +32,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     totalQuestions,
     correctAttempts,
     totalAttempts,
+    startTime,
   } = useGameStore();
 
   const modes: SubMode[] = ["name", "flag", "capital"];
@@ -44,6 +42,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   let progressValue = "-";
   let progressLabel = "MISSION";
+
+  const [elapsed, setElapsed] = React.useState(0);
+
+  React.useEffect(() => {
+    let interval: any;
+    if (gameStatus === "playing" && startTime) {
+      interval = setInterval(() => {
+        setElapsed(Date.now() - startTime);
+      }, 1000);
+    } else {
+      setElapsed(0);
+    }
+    return () => clearInterval(interval);
+  }, [gameStatus, startTime]);
+
+  const isTimerMode = challengeType === "timer";
+  const displayTime = isTimerMode
+    ? formatDuration(timeRemaining, "s")
+    : formatDuration(elapsed, "ms");
 
   if (gameStatus === "playing") {
     if (challengeType === "world") {
@@ -111,15 +128,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 />
               </div>
 
-              {/* Timer - Special visibility for timer mode */}
-              {challengeType === "timer" && (
+
+              {/* Mission Timer/Stopwatch - Hidden on mobile, visible on tablet+ */}
+              <div className="hidden md:block">
                 <StatItem
                   label="TIME"
-                  value={formatTime(timeRemaining)}
-                  color={timeRemaining < 10 ? "#ef4444" : "white"}
+                  value={displayTime}
+                  color={
+                    isTimerMode && timeRemaining < 10 ? "#ef4444" : "white"
+                  }
                   size="sm"
                 />
-              )}
+              </div>
 
               {/* Core Stats */}
               <StatItem
@@ -244,6 +264,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 value={accuracy}
                 suffix="%"
                 color="var(--color-accent)"
+                size="sm"
+              />
+              <StatItem
+                label="TIME"
+                value={displayTime}
+                color={
+                  isTimerMode && timeRemaining < 10 ? "#ef4444" : "white"
+                }
                 size="sm"
               />
             </div>
