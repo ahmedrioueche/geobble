@@ -399,9 +399,12 @@ export const WorldMap: React.FC<MapProps> = ({
         const isSmall = area < SMALL_COUNTRY_THRESHOLD;
         const isTiny = area < TINY_ISLAND_THRESHOLD;
 
-        // Island Guide: Show a white dashed circle around tiny islands when they are target/feedback
+        // Island Guide: Show a white dashed circle around tiny islands
+        // Only active in Reverse Mode or when the Reveal helper is used
         let guideCircle = null;
-        if (isTiny && isHighlighted) {
+        const isGuideActive = isSelected || (isFeedbackItem && mode === "reverse");
+
+        if (isTiny && isGuideActive) {
           const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
           const cx = (x0 + x1) / 2;
           const cy = (y0 + y1) / 2;

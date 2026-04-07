@@ -114,7 +114,7 @@ export const useGameStore = create<GameState>()(
       })),
       unlockNextStage: () => set((state) => {
         if (state.difficultyStage === state.unlockedStage) {
-          return { unlockedStage: Math.min(state.unlockedStage + 1, 9) };
+          return { unlockedStage: Math.min(state.unlockedStage + 1, 225) };
         }
         return {};
       }),
