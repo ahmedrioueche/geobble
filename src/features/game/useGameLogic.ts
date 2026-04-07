@@ -230,12 +230,13 @@ export const useGameLogic = () => {
     // 1. Determine the pool of available countries
     // 2. Define the base target pool based on mode
     let targetPool: any[] = [];
+    const state = useGameStore.getState();
 
-    if (challengeType === "world") {
+    if (state.challengeType === "world") {
       // World mode: Filter by current unlocked progression and excluded session-played
       targetPool = countries.filter(
         (c) =>
-          getDifficulty(c.cca3) <= unlockedStage &&
+          getDifficulty(c.cca3) <= state.unlockedStage &&
           !sessionPlayedCodes.includes(c.cca3),
       );
 
@@ -245,12 +246,12 @@ export const useGameLogic = () => {
       }
     } else {
       // Dynamic Stages for Count/Timer mode
-      const sliceSize = challengeType === "count" ? challengeValue : 30;
+      const sliceSize = state.challengeType === "count" ? state.challengeValue : 30;
       const ranges = getTierRanges(sliceSize);
 
       // Ensure stage is within calculated ranges (clamp to last available range)
       const currentRange =
-        ranges[Math.min(difficultyStage - 1, ranges.length - 1)];
+        ranges[Math.min(state.difficultyStage - 1, ranges.length - 1)];
 
       const levelCodes = shuffleArray(
         SORTED_POOL.slice(currentRange.start, currentRange.end),
@@ -370,18 +371,19 @@ export const useGameLogic = () => {
   ]);
 
   const startGame = useCallback(() => {
+    const state = useGameStore.getState();
     // Synchronize mission goal with actual tier size (handles merged remainders)
-    const sliceSize = challengeType === "count" ? challengeValue : 30;
+    const sliceSize = state.challengeType === "count" ? state.challengeValue : 30;
     const ranges = getTierRanges(sliceSize);
 
     // Ensure stage is within calculated ranges (clamp to last available range)
     const currentRange =
-      ranges[Math.min(difficultyStage - 1, ranges.length - 1)];
+      ranges[Math.min(state.difficultyStage - 1, ranges.length - 1)];
 
     if (
-      challengeType === "count" &&
+      state.challengeType === "count" &&
       currentRange &&
-      currentRange.size !== challengeValue
+      currentRange.size !== state.challengeValue
     ) {
       setChallenge("count", currentRange.size);
     }
