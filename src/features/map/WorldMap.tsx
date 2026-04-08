@@ -408,8 +408,8 @@ export const WorldMap: React.FC<MapProps> = ({
           const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
           const cx = (x0 + x1) / 2;
           const cy = (y0 + y1) / 2;
-          // Determine radius that covers the entire extent plus padding
-          const r = Math.max((x1 - x0) / 2, (y1 - y0) / 2) + 12;
+          // Determine radius that covers the entire extent plus thin padding
+          const r = Math.max((x1 - x0) / 2, (y1 - y0) / 2) + 4;
 
           guideCircle = (
             <circle

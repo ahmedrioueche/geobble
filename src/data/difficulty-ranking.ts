@@ -79,7 +79,7 @@ export interface TierRange {
 }
 
 export const getTierRanges = (count: number): TierRange[] => {
-  if (!count) return [];
+  if (!count || count <= 0) return [];
 
   const total = SORTED_POOL.length;
   const numLevels = Math.floor(total / count);
@@ -96,8 +96,9 @@ export const getTierRanges = (count: number): TierRange[] => {
   }
 
   if (remainder > 0) {
-    // If remainder is less than half of the target count, merge it with the last level
-    if (remainder < count / 2 && ranges.length > 0) {
+    // If remainder is half or less of the target count, merge it with the last level
+    // This handles the "last level has to have more than the required number" requirement
+    if (remainder <= count / 2 && ranges.length > 0) {
       const lastRange = ranges[ranges.length - 1];
       lastRange.end = total;
       lastRange.size = total - lastRange.start;

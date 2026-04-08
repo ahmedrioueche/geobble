@@ -250,8 +250,14 @@ export const useGameLogic = () => {
       const ranges = getTierRanges(sliceSize);
 
       // Ensure stage is within calculated ranges (clamp to last available range)
-      const currentRange =
-        ranges[Math.min(state.difficultyStage - 1, ranges.length - 1)];
+      // Safety: fallback to the first range if ranges are somehow empty, or last range if overflow
+      const rangeIdx = Math.max(0, Math.min(state.difficultyStage - 1, ranges.length - 1));
+      const currentRange = ranges[rangeIdx];
+
+      if (!currentRange) {
+        finishGame();
+        return;
+      }
 
       const levelCodes = shuffleArray(
         SORTED_POOL.slice(currentRange.start, currentRange.end),
@@ -377,8 +383,8 @@ export const useGameLogic = () => {
     const ranges = getTierRanges(sliceSize);
 
     // Ensure stage is within calculated ranges (clamp to last available range)
-    const currentRange =
-      ranges[Math.min(state.difficultyStage - 1, ranges.length - 1)];
+    const rangeIdx = Math.max(0, Math.min(state.difficultyStage - 1, ranges.length - 1));
+    const currentRange = ranges[rangeIdx];
 
     if (
       state.challengeType === "count" &&

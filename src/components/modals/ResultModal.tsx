@@ -68,7 +68,7 @@ const ResultModal: React.FC = () => {
   const handleRedeploy = () => {
     // 1. Advance difficulty if victory (up to what's unlocked)
     if (isVictory && difficultyStage < maxLevels) {
-      const nextLevel = Math.min(difficultyStage + 1, unlockedStage);
+      const nextLevel = difficultyStage + 1;
       setDifficultyStage(nextLevel);
     }
 
