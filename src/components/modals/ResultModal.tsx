@@ -5,14 +5,27 @@ import BaseModal from "./BaseModal";
 import { useModalStore } from "../../store/modal";
 import { useGameStore } from "../../store/useGameStore";
 import { formatDuration } from "../../utils/time";
-import { getMaxLevels } from "../../data/difficulty-ranking";
 
 const ResultModal: React.FC = () => {
   const { currentModal, resultProps, closeModal } = useModalStore();
   const { resetGame, startNewMission, setDifficultyStage } =
     useGameStore();
 
-  const maxLevels = getMaxLevels(resultProps?.challengeValue || 0);
+  if (currentModal !== "result" || !resultProps) return null;
+
+  const {
+    score = 0,
+    accuracy = 0,
+    streak = 0,
+    correctAnswers = 0,
+    isVictory = false,
+    difficultyStage = 1,
+    isWorldCompletion = false,
+    timeElapsed = 0,
+    totalLevels = 1,
+  } = resultProps;
+
+  const maxLevels = totalLevels;
 
   useEffect(() => {
     if (resultProps?.isVictory && resultProps?.difficultyStage === maxLevels) {
@@ -50,20 +63,9 @@ const ResultModal: React.FC = () => {
 
       return () => clearInterval(interval);
     }
-  }, [resultProps?.isVictory, resultProps?.difficultyStage]);
+  }, [isVictory, difficultyStage]);
 
   if (currentModal !== "result" || !resultProps) return null;
-
-  const {
-    score,
-    accuracy,
-    streak,
-    correctAnswers,
-    isVictory,
-    difficultyStage,
-    isWorldCompletion,
-    timeElapsed,
-  } = resultProps;
 
   const handleRedeploy = () => {
     // 1. Advance difficulty if victory (up to what's unlocked)

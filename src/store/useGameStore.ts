@@ -14,6 +14,7 @@ interface GameState {
   challengeValue: number; // For count or timer (seconds)
   timeRemaining: number;
   difficultyStage: number; // Current session stage
+  totalLevels: number; // Total levels in the current mission series
   unlockedStage: number; // Highest unlocked stage (persisted)
   totalQuestions: number;
   totalAttempts: number; // Answers submitted
@@ -41,6 +42,7 @@ interface GameState {
   setChallenge: (type: ChallengeType, value: number) => void;
   setTimeRemaining: (time: number) => void;
   setDifficultyStage: (stage: number) => void;
+  setTotalLevels: (total: number) => void;
   recordPlayedCountry: (code: string) => void;
   recordSessionCode: (code: string) => void;
   recordAttempt: (isCorrect: boolean) => void;
@@ -70,6 +72,7 @@ export const useGameStore = create<GameState>()(
       challengeValue: 0,
       timeRemaining: 0,
       difficultyStage: 1,
+      totalLevels: 0,
       unlockedStage: 1,
       totalQuestions: 0,
       totalAttempts: 0,
@@ -100,6 +103,7 @@ export const useGameStore = create<GameState>()(
       }),
       setTimeRemaining: (timeRemaining) => set({ timeRemaining }),
       setDifficultyStage: (difficultyStage) => set({ difficultyStage }),
+      setTotalLevels: (totalLevels) => set({ totalLevels }),
       recordPlayedCountry: (code) => set((state) => ({ 
         playedCountryCodes: [...state.playedCountryCodes, code],
         sessionPlayedCodes: Array.from(new Set([...state.sessionPlayedCodes, code])),
@@ -150,6 +154,7 @@ export const useGameStore = create<GameState>()(
         challengeValue: 0,
         timeRemaining: 0,
         difficultyStage: 1,
+        totalLevels: 0,
         totalQuestions: 0,
         totalAttempts: 0,
         correctAttempts: 0,

@@ -44,6 +44,8 @@ export const useGameLogic = () => {
     unlockNextStage,
     unlockedStage: _unusedUnlocked,
     setChallenge,
+    setTotalLevels,
+    totalLevels,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -194,6 +196,7 @@ export const useGameLogic = () => {
       isWorldCompletion:
         challengeType === "world" && totalQuestions >= countries.length,
       timeElapsed,
+      totalLevels,
     });
   }, [
     setGameStatus,
@@ -208,6 +211,7 @@ export const useGameLogic = () => {
     streak,
     difficultyStage,
     startTime,
+    totalLevels,
   ]);
 
   const nextQuestion = useCallback(() => {
@@ -363,6 +367,10 @@ export const useGameLogic = () => {
     // Synchronize mission goal with actual tier size (handles merged remainders)
     const sliceSize = state.challengeType === "count" ? state.challengeValue : 30;
     const ranges = getTierRanges(sliceSize);
+    const calculatedMaxLevels = ranges.length;
+
+    // Set stable totalLevels once at start
+    setTotalLevels(calculatedMaxLevels);
 
     // Ensure stage is within calculated ranges (clamp to last available range)
     const rangeIdx = Math.max(0, Math.min(state.difficultyStage - 1, ranges.length - 1));

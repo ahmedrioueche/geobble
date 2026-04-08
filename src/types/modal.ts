@@ -32,4 +32,5 @@ export interface ResultModalProps {
   challengeValue?: number;
   isWorldCompletion?: boolean;
   timeElapsed?: number;
+  totalLevels?: number;
 }

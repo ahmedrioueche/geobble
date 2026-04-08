@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
-import { getMaxLevels, getTierRanges } from "../../../data/difficulty-ranking";
+import { getTierRanges } from "../../../data/difficulty-ranking";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
 import { formatDuration } from "../../../utils/time";
 
@@ -33,13 +33,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     totalAttempts,
     startTime,
     difficultyStage,
+    totalLevels,
   } = useGameStore();
 
   const modes: SubMode[] = ["name", "flag", "capital"];
 
-  const maxLevels = getMaxLevels(
-    challengeType === "count" ? challengeValue : 30,
-  );
+  // Note: maxLevels is now provided by totalLevels in the store for mission stability
 
   const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
   const currentTierRanges = getTierRanges(sliceSize);
@@ -159,7 +158,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <div className="flex">
                 <StatItem
                   label="LEVEL"
-                  value={`${difficultyStage}/${maxLevels}`}
+                  value={`${difficultyStage}/${totalLevels || 1}`}
                   color="var(--color-primary)"
                   size="sm"
                 />
