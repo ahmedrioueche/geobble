@@ -11,8 +11,6 @@ const ResultModal: React.FC = () => {
   const { resetGame, startNewMission, setDifficultyStage } =
     useGameStore();
 
-  if (currentModal !== "result" || !resultProps) return null;
-
   const {
     score = 0,
     accuracy = 0,
@@ -23,7 +21,7 @@ const ResultModal: React.FC = () => {
     isWorldCompletion = false,
     timeElapsed = 0,
     totalLevels = 1,
-  } = resultProps;
+  } = resultProps || {};
 
   const maxLevels = totalLevels;
 
@@ -63,7 +61,7 @@ const ResultModal: React.FC = () => {
 
       return () => clearInterval(interval);
     }
-  }, [isVictory, difficultyStage]);
+  }, [isVictory, difficultyStage, maxLevels, resultProps]);
 
   if (currentModal !== "result" || !resultProps) return null;
 
@@ -99,11 +97,13 @@ const ResultModal: React.FC = () => {
       icon={Award}
       maxWidth="max-w-md"
       primaryButton={{
-        label: isVictory
-          ? difficultyStage === maxLevels
-            ? "PLAY AGAIN"
-            : "ADVANCE"
-          : "RETRY",
+        label: isWorldCompletion
+          ? "MISSION COMPLETE"
+          : isVictory
+            ? difficultyStage === maxLevels
+              ? "PLAY AGAIN"
+              : "ADVANCE"
+            : "RETRY",
         onClick: handleRedeploy,
         icon: ChevronRight,
         iconPosition: "right",
@@ -135,7 +135,7 @@ const ResultModal: React.FC = () => {
             className={`text-2xl font-black tracking-tighter uppercase ${isVictory || isWorldCompletion ? "text-emerald-400" : "text-white"}`}
           >
             {isWorldCompletion
-              ? "World Conquered"
+              ? "Mission Master"
               : isVictory
                 ? "Mission Success"
                 : "Mission Concluded"}
@@ -144,7 +144,7 @@ const ResultModal: React.FC = () => {
             {isWorldCompletion
               ? "Legendary Navigator Status Achieved"
               : isVictory
-                ? "New Difficulty Unlocked"
+                ? "Tactical Objectives Secured"
                 : "Maintain 80% accuracy to advance"}
           </p>
         </div>

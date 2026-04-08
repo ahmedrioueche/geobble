@@ -194,7 +194,8 @@ export const useGameLogic = () => {
       challengeType,
       challengeValue,
       isWorldCompletion:
-        challengeType === "world" && totalQuestions >= countries.length,
+        (challengeType === "world" && totalQuestions >= countries.length) ||
+        (challengeType === "count" && difficultyStage === totalLevels && isVictory),
       timeElapsed,
       totalLevels,
     });
