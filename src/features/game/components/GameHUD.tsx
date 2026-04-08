@@ -101,16 +101,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </h1>
           </button>
 
-          {gameStatus === "playing" && (
-            <div className="flex lg:hidden items-center bg-slate-950/60 h-7 md:h-8 px-3 rounded-lg border border-white/10 shadow-inner group transition-all hover:border-primary/40">
-              <span className="hidden md:block text-[10px] md:text-xs font-black text-white/40 tracking-[0.25em] uppercase mr-2 last:mr-0 group-hover:text-primary transition-colors">
-                Level
-              </span>
-              <span className="text-sm md:text-md font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
-                {difficultyStage}/{maxLevels}
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
@@ -160,8 +150,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 />
               </div>
 
-              {/* MISSION LEVEL - DESKTOP ONLY */}
-              <div className="hidden lg:flex">
+              {/* MISSION LEVEL */}
+              <div className="flex">
                 <StatItem
                   label="LEVEL"
                   value={`${difficultyStage}/${maxLevels}`}

@@ -9,7 +9,7 @@ import { getMaxLevels } from "../../data/difficulty-ranking";
 
 const ResultModal: React.FC = () => {
   const { currentModal, resultProps, closeModal } = useModalStore();
-  const { resetGame, startNewMission, setDifficultyStage, unlockedStage } =
+  const { resetGame, startNewMission, setDifficultyStage } =
     useGameStore();
 
   const maxLevels = getMaxLevels(resultProps?.challengeValue || 0);
