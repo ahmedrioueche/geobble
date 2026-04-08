@@ -88,8 +88,8 @@ export const WorldMap: React.FC<MapProps> = ({
         [dimensions.width, dimensions.height],
       ])
       .translateExtent([
-        [0, 0],
-        [dimensions.width, dimensions.height],
+        [-dimensions.width * 0.15, -dimensions.height * 0.15],
+        [dimensions.width * 1.15, dimensions.height * 1.15],
       ])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
@@ -432,13 +432,13 @@ export const WorldMap: React.FC<MapProps> = ({
               d={path || ""}
               style={{
                 fill: fillColor,
-                fillOpacity: isHighlighted ? 1 : 0.6,
+                fillOpacity: isHighlighted ? 1 : 0.85,
                 strokeWidth: isHighlighted
                   ? "var(--map-selected-stroke-width)"
                   : "var(--map-stroke-width)",
               }}
               className={`
-                stroke-white/20 
+                stroke-white/30 
                 transition-all 
                 duration-500 
                 hover:fill-opacity-100
