@@ -11,14 +11,6 @@ import { useModalStore } from "../../store/modal";
 import { useGameStore, type SubMode } from "../../store/useGameStore";
 import { normalizeCountryName } from "../../utils/name-normalizer";
 
-const shuffleArray = <T>(array: T[]): T[] => {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
 
 export const useGameLogic = () => {
   const {
@@ -41,8 +33,8 @@ export const useGameLogic = () => {
     totalQuestions,
     totalAttempts,
     correctAttempts,
-    playedCountryCodes,
-    sessionPlayedCodes,
+    playedCountryCodes: _unusedPlayed,
+    sessionPlayedCodes: _unusedSession,
     recordPlayedCountry,
     timeRemaining,
     setTimeRemaining,
@@ -50,7 +42,7 @@ export const useGameLogic = () => {
     setStreakLost,
     startTime,
     unlockNextStage,
-    unlockedStage,
+    unlockedStage: _unusedUnlocked,
     setChallenge,
   } = useGameStore();
   const { openModal } = useModalStore();
@@ -219,25 +211,24 @@ export const useGameLogic = () => {
   ]);
 
   const nextQuestion = useCallback(() => {
+    const freshState = useGameStore.getState();
     if (countries.length === 0) return;
 
     // 0. Check if world mode should end
-    if (challengeType === "world" && totalQuestions >= countries.length) {
+    if (freshState.challengeType === "world" && freshState.totalQuestions >= countries.length) {
       finishGame();
       return;
     }
 
     // 1. Determine the pool of available countries
-    // 2. Define the base target pool based on mode
-    let targetPool: any[] = [];
-    const state = useGameStore.getState();
+    let targetPool: CountryData[] = [];
 
-    if (state.challengeType === "world") {
+    if (freshState.challengeType === "world") {
       // World mode: Filter by current unlocked progression and excluded session-played
       targetPool = countries.filter(
         (c) =>
-          getDifficulty(c.cca3) <= state.unlockedStage &&
-          !sessionPlayedCodes.includes(c.cca3),
+          getDifficulty(c.cca3) <= freshState.unlockedStage &&
+          !freshState.sessionPlayedCodes.includes(c.cca3),
       );
 
       if (targetPool.length === 0) {
@@ -246,12 +237,11 @@ export const useGameLogic = () => {
       }
     } else {
       // Dynamic Stages for Count/Timer mode
-      const sliceSize = state.challengeType === "count" ? state.challengeValue : 30;
+      const sliceSize = freshState.challengeType === "count" ? freshState.challengeValue : 30;
       const ranges = getTierRanges(sliceSize);
 
-      // Ensure stage is within calculated ranges (clamp to last available range)
-      // Safety: fallback to the first range if ranges are somehow empty, or last range if overflow
-      const rangeIdx = Math.max(0, Math.min(state.difficultyStage - 1, ranges.length - 1));
+      // Ensure stage is within calculated ranges
+      const rangeIdx = Math.max(0, Math.min(freshState.difficultyStage - 1, ranges.length - 1));
       const currentRange = ranges[rangeIdx];
 
       if (!currentRange) {
@@ -259,66 +249,58 @@ export const useGameLogic = () => {
         return;
       }
 
-      const levelCodes = shuffleArray(
-        SORTED_POOL.slice(currentRange.start, currentRange.end),
-      );
+      // Codes defined for THIS level
+      const levelCodes = SORTED_POOL.slice(currentRange.start, currentRange.end);
 
+      // Filter countries from the master list that are in THIS level
       const stageCountries = countries.filter((c) =>
         levelCodes.includes(c.cca3),
       );
 
       if (stageCountries.length === 0) {
-        // Fallback for safety if stage is empty/invalid
         finishGame();
         return;
       }
 
-      // Filter out what's already been played IN THE CURRENT MISSION
+      // Filter out what's already been played IN THE CURRENT MISSION (playedCountryCodes)
+      // Use freshState to ensure we have the absolute latest record
       targetPool = stageCountries.filter(
-        (c) => !playedCountryCodes.includes(c.cca3),
+        (c) => !freshState.playedCountryCodes.includes(c.cca3),
       );
 
-      // If we've played all countries in this stage during this mission,
-      // allow repeats to fulfill the mission requirements (e.g. mission count > pool size)
+      // If we've played all unique countries in this tier, the mission for this tier is done
       if (targetPool.length === 0) {
-        targetPool = stageCountries;
+        finishGame();
+        return;
       }
     }
 
-    // 4. Pick a target
+    // 2. Pick a target
     const randomIndex = Math.floor(Math.random() * targetPool.length);
     const target = targetPool[randomIndex];
 
-    // 4. Reset feedback and revealed state
+    // 3. Reset feedback and revealed state
     setFeedback(null);
     setRevealed(false);
 
-    // 5. Set new target and record it
+    // 4. Set new target and record it
     setCurrentCountry(target.cca3);
     recordPlayedCountry(target.cca3);
     setMissionId(Date.now().toString());
 
-    // 6. If reverse mode, generate 4 unique choices based on SUBMODE
-    if (mode === "reverse") {
-      generateChoices(target, subMode);
+    // 5. If reverse mode, generate choices
+    if (freshState.mode === "reverse") {
+      generateChoices(target, freshState.subMode);
     }
   }, [
     countries,
-    playedCountryCodes,
-    sessionPlayedCodes,
-    challengeType,
-    totalQuestions,
     finishGame,
     setCurrentCountry,
     recordPlayedCountry,
     setMissionId,
     setFeedback,
-    mode,
-    subMode,
     generateChoices,
     setRevealed,
-    difficultyStage,
-    unlockedStage,
   ]);
 
   // Mission Completion Watcher
@@ -401,12 +383,9 @@ export const useGameLogic = () => {
   }, [
     setScore,
     setStreak,
-    setGameStatus,
-    nextQuestion,
-    challengeType,
-    challengeValue,
-    difficultyStage,
-    setChallenge,
+    setFeedback,
+    generateChoices,
+    setRevealed,
   ]);
 
   const submitAnswer = useCallback(

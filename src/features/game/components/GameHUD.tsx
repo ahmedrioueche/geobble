@@ -1,9 +1,9 @@
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { StatItem } from "../../../components/molecules/StatItem";
+import { getMaxLevels, getTierRanges } from "../../../data/difficulty-ranking";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
 import { formatDuration } from "../../../utils/time";
-import { getMaxLevels, getTierRanges } from "../../../data/difficulty-ranking";
 
 interface GameHUDProps {
   onStart: () => void;
@@ -37,12 +37,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   const modes: SubMode[] = ["name", "flag", "capital"];
 
-  const maxLevels = getMaxLevels(challengeType === "count" ? challengeValue : 30);
-  
-  const sliceSize = challengeType === "count" ? (challengeValue || 30) : 30;
+  const maxLevels = getMaxLevels(
+    challengeType === "count" ? challengeValue : 30,
+  );
+
+  const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
   const currentTierRanges = getTierRanges(sliceSize);
-  const currentRange = currentTierRanges[difficultyStage - 1] || currentTierRanges[0];
-  const currentTierSize = challengeType === "world" ? totalCountries : (currentRange?.size || challengeValue);
+  const currentRange =
+    currentTierRanges[difficultyStage - 1] || currentTierRanges[0];
+  const currentTierSize =
+    challengeType === "world"
+      ? totalCountries
+      : currentRange?.size || challengeValue;
 
   const accuracy =
     totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
@@ -94,13 +100,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <img
               src="/logo.png"
               alt="Logo"
-              className="w-8 h-8 md:w-12 md:h-12 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
+              className="hidden md:block w-8 h-8 md:w-12 md:h-12 mt-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]"
             />
             <h1 className="text-xl md:text-2xl md:-mt-1 font-black text-white drop-shadow-sm tracking-tighter leading-none text-left">
               GEOBBLE
             </h1>
           </button>
-
         </div>
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
@@ -127,7 +132,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           )}
 
           {gameStatus === "playing" ? (
-            <div className="flex gap-4 md:gap-8 items-center">
+            <div className="flex gap-3 md:gap-8 items-center">
               {/* Mission Progress - Hidden on very small screens, visible on md+ */}
               <div className="hidden md:block">
                 <StatItem
