@@ -54,4 +54,5 @@ export const nameMapping: Record<string, string> = {
   "S. Geo. and the Is.": "South Georgia",
   "Heard I. and McDonald Is.": "Heard Island and McDonald Islands",
   "FR. POLYNESIA": "French Polynesia",
+  Vatican: "Vatican City",
 };
