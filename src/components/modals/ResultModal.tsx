@@ -21,6 +21,8 @@ const ResultModal: React.FC = () => {
     isWorldCompletion = false,
     timeElapsed = 0,
     totalLevels = 1,
+    challengeType = "world",
+    challengeValue = 0,
   } = resultProps || {};
 
   const maxLevels = totalLevels;
@@ -161,10 +163,12 @@ const ResultModal: React.FC = () => {
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 group hover:bg-white/10 transition-colors">
             <div className="text-[10px] font-black text-yellow-400 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 justify-center">
-              <Timer className="w-3 h-3" /> Time Taken
+              <Timer className="w-3 h-3" /> {challengeType === 'timer' ? 'Session Duration' : 'Time Taken'}
             </div>
             <div className="text-3xl font-black text-white tracking-tighter tabular-nums">
-              {formatDuration(timeElapsed || 0, 'ms')}
+              {challengeType === 'timer' 
+                ? formatDuration(challengeValue, 's')
+                : formatDuration(timeElapsed || 0, 'ms')}
             </div>
           </div>
         </div>

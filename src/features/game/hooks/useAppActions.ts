@@ -28,10 +28,10 @@ export const useAppActions = () => {
 
   const {
     countries,
+    loading,
     nextQuestion,
     currentCountry,
     startGame,
-    skipQuestion,
   } = useGameLogic();
 
   const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
@@ -89,16 +89,17 @@ export const useAppActions = () => {
           setStreak(streak + 1);
           setTimeout(() => {
             nextQuestion();
-          }, 800);
+          }, 1200);
         } else {
           recordAttempt(false);
           playAudio("/audio/wrong.mp3");
           setFeedback("wrong", name, code);
+          setRevealed(true);
           if (streak > 0) setStreakLost(streak);
           setStreak(0);
           setTimeout(() => {
-            setFeedback(null, null, null);
-          }, 800);
+            nextQuestion();
+          }, 2000);
         }
       } else {
         setClickedCountry(countryData);
@@ -161,16 +162,17 @@ export const useAppActions = () => {
         setStreak(streak + 1);
         setTimeout(() => {
           nextQuestion();
-        }, 1000);
+        }, 1200);
       } else {
         recordAttempt(false);
         playAudio("/audio/wrong.mp3");
         setFeedback("wrong", choice);
+        setRevealed(true);
         if (streak > 0) setStreakLost(streak);
         setStreak(0);
         setTimeout(() => {
-          setFeedback(null, null);
-        }, 1000);
+          nextQuestion();
+        }, 2000);
       }
     },
     [
@@ -196,31 +198,24 @@ export const useAppActions = () => {
     startGame();
   }, [startGame, startNewMission]);
 
-  const skipQuestionInternal = skipQuestion;
-
   const handleSkip = useCallback(() => {
-    if (mode === "reverse" && currentCountry) {
+    if (currentCountry) {
       recordAttempt(false);
-      // Highlight the correct choice using revealed state
-      // This provides visual feedback without triggering success messages/score
       setRevealed(true);
       if (streak > 0) setStreakLost(streak);
       setStreak(0);
 
-      // Wait a bit before skipping
       setTimeout(() => {
         nextQuestion();
-      }, 700);
+      }, 1500);
     } else {
-      skipQuestionInternal();
+      nextQuestion();
     }
   }, [
-    mode,
     currentCountry,
     setRevealed,
     setStreak,
     nextQuestion,
-    skipQuestionInternal,
     recordAttempt,
     streak,
     setStreakLost,
@@ -253,5 +248,6 @@ export const useAppActions = () => {
     nextQuestion,
     currentCountry,
     countries,
+    loading,
   };
 };

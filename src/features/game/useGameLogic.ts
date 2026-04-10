@@ -23,6 +23,7 @@ export const useGameLogic = () => {
     mode,
     subMode,
     setChoices,
+    setChoiceCodes,
     gameStatus,
     setGameStatus,
     setMissionId,
@@ -36,7 +37,6 @@ export const useGameLogic = () => {
     playedCountryCodes: _unusedPlayed,
     sessionPlayedCodes: _unusedSession,
     recordPlayedCountry,
-    timeRemaining,
     setTimeRemaining,
     difficultyStage,
     setStreakLost,
@@ -96,14 +96,7 @@ export const useGameLogic = () => {
     (target: CountryData, currentSubMode: SubMode) => {
       if (countries.length === 0) return;
 
-      const getChoiceValue = (c: CountryData) => {
-        if (currentSubMode === "flag") return c.cca2;
-        if (currentSubMode === "capital") return c.capital[0];
-        return c.name;
-      };
-
-      const targetValue = getChoiceValue(target);
-      const distractors: string[] = [];
+      const distractorCodes: string[] = [];
 
       // 1. Prioritize same SUBREGION
       const subregionPool = countries
@@ -113,49 +106,58 @@ export const useGameLogic = () => {
         .sort(() => Math.random() - 0.5);
 
       for (const c of subregionPool) {
-        if (distractors.length >= 3) break;
-        const val = getChoiceValue(c);
-        if (!distractors.includes(val) && val !== targetValue) {
-          distractors.push(val);
+        if (distractorCodes.length >= 3) break;
+        if (!distractorCodes.includes(c.cca3)) {
+          distractorCodes.push(c.cca3);
         }
       }
 
       // 2. Fallback to same REGION (Continent)
-      if (distractors.length < 3) {
+      if (distractorCodes.length < 3) {
         const regionPool = countries
           .filter((c) => c.region === target.region && c.cca3 !== target.cca3)
           .sort(() => Math.random() - 0.5);
 
         for (const c of regionPool) {
-          if (distractors.length >= 3) break;
-          const val = getChoiceValue(c);
-          if (!distractors.includes(val) && val !== targetValue) {
-            distractors.push(val);
+          if (distractorCodes.length >= 3) break;
+          if (!distractorCodes.includes(c.cca3)) {
+            distractorCodes.push(c.cca3);
           }
         }
       }
 
       // 3. Last resort fallback: GLOBAL
-      if (distractors.length < 3) {
+      if (distractorCodes.length < 3) {
         const globalPool = [...countries]
           .filter((c) => c.cca3 !== target.cca3)
           .sort(() => Math.random() - 0.5);
 
         for (const c of globalPool) {
-          if (distractors.length >= 3) break;
-          const val = getChoiceValue(c);
-          if (!distractors.includes(val) && val !== targetValue) {
-            distractors.push(val);
+          if (distractorCodes.length >= 3) break;
+          if (!distractorCodes.includes(c.cca3)) {
+            distractorCodes.push(c.cca3);
           }
         }
       }
 
-      const finalChoices = [targetValue, ...distractors].sort(
-        () => Math.random() - 0.5,
-      );
+      const finalCodes = [target.cca3, ...distractorCodes];
+      setChoiceCodes(finalCodes);
+
+      // Now map to display values based on current subMode and SORT them
+      const getChoiceValue = (code: string) => {
+        const c = countries.find((x) => x.cca3 === code);
+        if (!c) return "";
+        if (currentSubMode === "flag") return c.cca2;
+        if (currentSubMode === "capital") return c.capital[0];
+        return c.name;
+      };
+
+      const finalChoices = finalCodes
+        .map(getChoiceValue)
+        .sort((a, b) => a.localeCompare(b));
       setChoices(finalChoices);
     },
-    [countries, setChoices],
+    [countries, setChoices, setChoiceCodes],
   );
 
   const finishGame = useCallback(() => {
@@ -323,12 +325,24 @@ export const useGameLogic = () => {
     }
   }, [gameStatus, challengeType, totalAttempts, challengeValue, finishGame]);
 
-  // Effect to regenerate choices INSTANTLY when subMode changes in Reverse mode
+  // Effect to update labels (and sort them) when subMode changes in Reverse mode
+  // This keeps the countries stable but rearranges them alphabetically based on the current DISPLAY value
   useEffect(() => {
     if (mode === "reverse" && gameStatus === "playing" && currentCountryCode) {
-      const target = countries.find((c) => c.cca3 === currentCountryCode);
-      if (target) {
-        generateChoices(target, subMode);
+      const state = useGameStore.getState();
+      if (state.choiceCodes.length > 0) {
+        const getChoiceValue = (code: string) => {
+          const c = countries.find((x) => x.cca3 === code);
+          if (!c) return "";
+          if (subMode === "flag") return c.cca2;
+          if (subMode === "capital") return c.capital[0];
+          return c.name;
+        };
+
+        const updatedChoices = [...state.choiceCodes]
+          .map(getChoiceValue)
+          .sort((a, b) => a.localeCompare(b));
+        setChoices(updatedChoices);
       }
     }
   }, [
@@ -337,7 +351,7 @@ export const useGameLogic = () => {
     gameStatus,
     currentCountryCode,
     countries,
-    generateChoices,
+    setChoices,
   ]);
 
   // Timer Engine
@@ -345,11 +359,12 @@ export const useGameLogic = () => {
     let timer: any;
     if (gameStatus === "playing" && challengeType === "timer") {
       timer = setInterval(() => {
-        if (timeRemaining <= 0) {
+        const { timeRemaining: currentRemaining } = useGameStore.getState();
+        if (currentRemaining <= 0) {
           finishGame();
           clearInterval(timer);
         } else {
-          setTimeRemaining(timeRemaining - 1);
+          setTimeRemaining(currentRemaining - 1);
         }
       }, 1000);
     }
@@ -357,10 +372,8 @@ export const useGameLogic = () => {
   }, [
     gameStatus,
     challengeType,
-    timeRemaining,
-    setGameStatus,
-    setTimeRemaining,
     finishGame,
+    setTimeRemaining,
   ]);
 
   const startGame = useCallback(() => {

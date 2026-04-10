@@ -24,6 +24,7 @@ interface GameState {
   gameStatus: "idle" | "playing" | "finished";
   currentCountryCode: string | null;
   choices: string[];
+  choiceCodes: string[];
   missionId: string | null;
   feedback: "correct" | "wrong" | null;
   clickedName: string | null;
@@ -51,6 +52,7 @@ interface GameState {
   setGameStatus: (status: "idle" | "playing" | "finished") => void;
   setCurrentCountry: (code: string | null) => void;
   setChoices: (choices: string[]) => void;
+  setChoiceCodes: (codes: string[]) => void;
   setMissionId: (id: string | null) => void;
   setFeedback: (
     feedback: "correct" | "wrong" | null,
@@ -86,6 +88,7 @@ export const useGameStore = create<GameState>()(
       gameStatus: "idle",
       currentCountryCode: null,
       choices: [],
+      choiceCodes: [],
       missionId: null,
       feedback: null,
       clickedName: null,
@@ -154,6 +157,7 @@ export const useGameStore = create<GameState>()(
       setGameStatus: (status) => set({ gameStatus: status }),
       setCurrentCountry: (code) => set({ currentCountryCode: code }),
       setChoices: (choices) => set({ choices }),
+      setChoiceCodes: (choiceCodes) => set({ choiceCodes }),
       setMissionId: (id) => set({ missionId: id }),
       setFeedback: (feedback, clickedName = null, clickedCode = null) =>
         set({ feedback, clickedName, clickedCode }),
@@ -188,6 +192,7 @@ export const useGameStore = create<GameState>()(
           gameStatus: "idle",
           currentCountryCode: null,
           choices: [],
+          choiceCodes: [],
           missionId: null,
           feedback: null,
           clickedName: null,

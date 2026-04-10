@@ -6,7 +6,6 @@ import { GlobalOverlays } from "./features/game/components/GlobalOverlays";
 import { ModeSelection } from "./features/game/components/ModeSelection";
 import { TacticalInterface } from "./features/game/components/TacticalInterface";
 import { useAppActions } from "./features/game/hooks/useAppActions";
-import { useGameLogic } from "./features/game/useGameLogic";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
 import Modals from "./modals";
@@ -14,7 +13,6 @@ import { useGameStore } from "./store/useGameStore";
 
 function App() {
   const { setMode } = useGameStore();
-  const { loading: dataLoading } = useGameLogic();
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [showModeSelect, setShowModeSelect] = useState(false);
 
@@ -31,6 +29,7 @@ function App() {
     currentCountry,
     countries,
     missionId,
+    loading: dataLoading,
   } = useAppActions();
 
   useEffect(() => {
