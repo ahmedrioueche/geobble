@@ -51,7 +51,24 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05 }}
+            className="relative flex items-center"
           >
+            {/* Educational Hint: Reveal names after choice or skip */}
+            {(subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
+              <motion.div
+                initial={{ opacity: 0, x: -15, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                className="absolute right-[110%] top-1/2 -translate-y-1/2 pointer-events-none whitespace-nowrap bg-emerald-500/10 backdrop-blur-xl px-3 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50"
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isCorrect ? 'bg-emerald-400 animate-pulse' : 'bg-white/40'}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${isCorrect ? 'text-emerald-400' : 'text-white/70'}`}>
+                    {country?.name || choice}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+
             <Button
               variant="outline"
               onClick={() => onChoice(choice)}

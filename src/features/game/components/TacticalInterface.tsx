@@ -21,7 +21,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   onSkip,
   onReveal,
 }) => {
-  const { gameStatus, mode, feedback, clickedName, choices } = useGameStore();
+  const { gameStatus, mode, subMode, feedback, clickedName, choices } = useGameStore();
 
   return (
     <div className="absolute top-28 md:top-24 landscape:top-16 landscape:md:top-24 right-4 z-40 pointer-events-none">
@@ -45,7 +45,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
               </div>
 
               {mode === "reverse" && (
-                <div className="shadow-2xl rounded-3xl overflow-hidden bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit">
+                <div className="shadow-2xl rounded-3xl bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit">
                   <ChoicePanel
                     choices={choices}
                     onChoice={onChoiceSelect}
@@ -55,7 +55,12 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                 </div>
               )}
 
-              <FeedbackPill feedback={feedback} clickedName={clickedName} />
+              <FeedbackPill 
+                feedback={feedback} 
+                clickedName={clickedName} 
+                subMode={subMode}
+                countries={countries}
+              />
             </motion.div>
           )}
         </AnimatePresence>

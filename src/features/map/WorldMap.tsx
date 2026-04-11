@@ -5,6 +5,7 @@ import type { CountryData } from "../../data/country-data";
 import { nameMapping } from "../../data/name-mapping";
 import { useGameStore } from "../../store/useGameStore";
 import { useWorldMap, type CountryFeature } from "./useWorldMap";
+import { normalizeCountryName } from "../../utils/name-normalizer";
 
 interface MapProps {
   onCountryClick?: (name: string, code: string) => void;
@@ -135,6 +136,7 @@ export const WorldMap: React.FC<MapProps> = ({
       };
 
       const mappedName = findMappedName(name);
+      const normalizedMapped = normalizeCountryName(mappedName);
 
       const country = countries.find(
         (c) =>
@@ -143,7 +145,7 @@ export const WorldMap: React.FC<MapProps> = ({
               c.cca2 === id ||
               c.ccn3 === id ||
               parseInt(c.ccn3 || "0", 10).toString() === id)) ||
-          (mappedName && c.name.toLowerCase() === mappedName.toLowerCase()),
+          (normalizedMapped && normalizeCountryName(c.name) === normalizedMapped),
       );
 
       if (country) {
@@ -372,15 +374,17 @@ export const WorldMap: React.FC<MapProps> = ({
           idToCodeLookup[code] || idToCodeLookup[name.toLowerCase()];
         const shouldShowSelection = mode === "reverse" || revealed;
         const isSelected =
-          shouldShowSelection &&
+          shouldShowSelection && mappedCode &&
           ((selectedCountryCode && mappedCode === selectedCountryCode) ||
             (selectedCountry &&
               name.toLowerCase() === selectedCountry.toLowerCase()));
 
         const isFeedbackItem =
-          (clickedCode && idToCodeLookup[clickedCode] === mappedCode) ||
-          (clickedName &&
-            idToCodeLookup[clickedName.toLowerCase()] === mappedCode);
+          mappedCode && (
+            (clickedCode && idToCodeLookup[clickedCode] === mappedCode) ||
+            (clickedName &&
+              idToCodeLookup[clickedName.toLowerCase()] === mappedCode)
+          );
 
         let fillColor = "var(--color-map-land)";
         if (isFeedbackItem && feedback) {

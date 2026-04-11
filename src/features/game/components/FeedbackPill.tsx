@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 interface FeedbackPillProps {
   feedback: "correct" | "wrong" | null;
   clickedName: string | null;
+  subMode?: string;
+  countries?: any[];
 }
 
 const PRAISE_MESSAGES = [
@@ -15,7 +17,16 @@ const PRAISE_MESSAGES = [
   "PERFECT INTEL!"
 ];
 
-export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedName }) => {
+export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedName, subMode, countries }) => {
+  const displayClickedName = React.useMemo(() => {
+    if (!clickedName) return "";
+    if (subMode === 'flag' && countries) {
+      const country = countries.find(c => c.cca2.toLowerCase() === clickedName.toLowerCase());
+      return country ? country.name : clickedName;
+    }
+    return clickedName;
+  }, [clickedName, subMode, countries]);
+
   const praise = React.useMemo(() => 
     PRAISE_MESSAGES[Math.floor(Math.random() * PRAISE_MESSAGES.length)], 
     [feedback]
@@ -33,7 +44,7 @@ export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedNam
         >
           <div className="bg-red-500/20 border border-red-500/40 px-5 py-2 rounded-2xl backdrop-blur-xl shadow-2xl mt-2">
             <span className="text-xs font-black text-red-200 uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
-              <span className="text-sm">⚠️</span> INCORRECT: {clickedName.toUpperCase()} — TRY AGAIN
+              <span className="text-sm">⚠️</span> INCORRECT: {displayClickedName.toUpperCase()}
             </span>
           </div>
         </motion.div>
