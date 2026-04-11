@@ -25,14 +25,15 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   );
 
   const isCorrectChoice = (choice: string) => {
-    if (!targetCountry) return false;
-    if (subMode === 'flag') return choice.toLowerCase() === targetCountry.cca2.toLowerCase();
-    if (subMode === 'capital') return choice.toLowerCase() === targetCountry.capital[0].toLowerCase();
-    return choice.toLowerCase() === targetCountry.name.toLowerCase();
+    if (!targetCountry || !choice) return false;
+    const c = choice.toLowerCase();
+    if (subMode === 'flag') return c === targetCountry.cca2?.toLowerCase();
+    if (subMode === 'capital') return c === targetCountry.capital?.[0]?.toLowerCase();
+    return c === targetCountry.name?.toLowerCase();
   };
 
   return (
-    <div className="grid grid-cols-1 gap-2 md:gap-3 w-max max-w-[300px] md:max-w-[240px] md:ml-auto md:mr-0 mx-auto">
+    <div className="grid grid-cols-1 gap-2 md:gap-3 w-max max-w-[220px] md:max-w-[240px] md:ml-auto md:mr-0 mx-auto">
       {choices.map((choice, i) => {
         const country = countries.find((c) =>
           subMode === "flag"
@@ -58,11 +59,11 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               <motion.div
                 initial={{ opacity: 0, x: -15, scale: 0.9 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                className="absolute right-[110%] top-1/2 -translate-y-1/2 pointer-events-none whitespace-nowrap bg-emerald-500/10 backdrop-blur-xl px-3 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50"
+                className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 max-w-[150px] sm:max-w-[200px] md:max-w-none overflow-hidden"
               >
-                <div className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isCorrect ? 'bg-emerald-400 animate-pulse' : 'bg-white/40'}`} />
-                  <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${isCorrect ? 'text-emerald-400' : 'text-white/70'}`}>
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <div className={`shrink-0 w-1.5 h-1.5 rounded-full ${isCorrect ? 'bg-emerald-400 animate-pulse' : 'bg-white/40'}`} />
+                  <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] truncate ${isCorrect ? 'text-emerald-400' : 'text-white/70'}`}>
                     {country?.name || choice}
                   </span>
                 </div>

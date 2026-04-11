@@ -158,7 +158,7 @@ const ResultModal: React.FC = () => {
               Tactical Score
             </div>
             <div className="text-3xl font-black text-white tracking-tighter tabular-nums">
-              {score.toLocaleString()}
+              {(score || 0).toLocaleString()}
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 group hover:bg-white/10 transition-colors">
@@ -167,7 +167,7 @@ const ResultModal: React.FC = () => {
             </div>
             <div className="text-3xl font-black text-white tracking-tighter tabular-nums">
               {challengeType === 'timer' 
-                ? formatDuration(challengeValue, 's')
+                ? formatDuration(challengeValue || 60, 's')
                 : formatDuration(timeElapsed || 0, 'ms')}
             </div>
           </div>

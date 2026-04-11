@@ -146,10 +146,10 @@ export const useGameLogic = () => {
       // Now map to display values based on current subMode and SORT them
       const getChoiceValue = (code: string) => {
         const c = countries.find((x) => x.cca3 === code);
-        if (!c) return "";
-        if (currentSubMode === "flag") return c.cca2;
-        if (currentSubMode === "capital") return c.capital[0];
-        return c.name;
+        if (!c) return "Unknown";
+        if (currentSubMode === "flag") return c.cca2 || "??";
+        if (currentSubMode === "capital") return (c.capital && c.capital.length > 0) ? c.capital[0] : "No Capital";
+        return c.name || "Unknown";
       };
 
       const finalChoices = finalCodes
@@ -182,7 +182,8 @@ export const useGameLogic = () => {
 
     const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
     const ranges = getTierRanges(sliceSize);
-    const currentRange = ranges[difficultyStage - 1] || ranges[0];
+    const rangeIdx = Math.max(0, Math.min(difficultyStage - 1, ranges.length - 1));
+    const currentRange = ranges[rangeIdx] || { size: sliceSize };
 
     openModal("result", {
       score,
@@ -190,13 +191,13 @@ export const useGameLogic = () => {
       streak,
       correctAnswers: correctAttempts,
       totalQuestions:
-        challengeType === "world" ? countries.length : currentRange.size,
+        challengeType === "world" ? (countries.length || 240) : currentRange.size,
       isVictory,
       difficultyStage,
       challengeType,
       challengeValue,
       isWorldCompletion:
-        (challengeType === "world" && totalQuestions >= countries.length) ||
+        (challengeType === "world" && totalQuestions >= countries.length && countries.length > 0) ||
         (challengeType === "count" && difficultyStage === totalLevels && isVictory),
       timeElapsed,
       totalLevels,
@@ -333,10 +334,10 @@ export const useGameLogic = () => {
       if (state.choiceCodes.length > 0) {
         const getChoiceValue = (code: string) => {
           const c = countries.find((x) => x.cca3 === code);
-          if (!c) return "";
-          if (subMode === "flag") return c.cca2;
-          if (subMode === "capital") return c.capital[0];
-          return c.name;
+          if (!c) return "Unknown";
+          if (subMode === "flag") return c.cca2 || "??";
+          if (subMode === "capital") return (c.capital && c.capital.length > 0) ? c.capital[0] : "No Capital";
+          return c.name || "Unknown";
         };
 
         const updatedChoices = [...state.choiceCodes]

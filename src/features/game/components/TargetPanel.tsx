@@ -16,7 +16,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onSkip,
   onReveal,
 }) => {
-  const { mode, subMode, triggerPulse } = useGameStore();
+  const { mode, subMode, triggerPulse, revealed } = useGameStore();
 
   if (!country) return null;
 
@@ -28,8 +28,23 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
             ? { scale: [1, 1.05, 1], transition: { duration: 0.3 } }
             : {}
         }
-        className="px-4 py-2 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
+        className="relative px-4 py-2 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
       >
+        {/* Educational Hint: Reveal official country name for Flags/Capitals (Standard Modes only) */}
+        {mode !== 'reverse' && (subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
+          <motion.div
+            initial={{ opacity: 0, x: -15, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 max-w-[150px] sm:max-w-[200px] md:max-w-none overflow-hidden"
+          >
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] truncate text-emerald-400">
+                {country.name}
+              </span>
+            </div>
+          </motion.div>
+        )}
         {/* Data Point: Flag or Text */}
         <div className="flex items-center gap-3">
           {mode === "reverse" ? (
