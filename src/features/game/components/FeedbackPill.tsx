@@ -42,8 +42,8 @@ export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedNam
           exit={{ opacity: 0, scale: 0.9, height: 0 }}
           className="w-full flex justify-center"
         >
-          <div className="bg-red-500/20 border border-red-500/40 px-5 py-2 rounded-2xl backdrop-blur-xl shadow-2xl mt-2 max-w-[90vw]">
-            <span className="text-xs font-black text-red-200 uppercase tracking-widest flex items-center gap-2 whitespace-normal text-center justify-center">
+          <div className="bg-red-500/20 border border-red-500/40 px-5 py-2 rounded-2xl backdrop-blur-xl shadow-2xl mt-2 max-w-[90vw] overflow-hidden">
+            <span className="text-xs font-black text-red-200 uppercase tracking-widest flex items-center gap-2 whitespace-nowrap truncate text-center justify-center">
               <span className="text-sm shrink-0">⚠️</span> INCORRECT: {displayClickedName.toUpperCase()}
             </span>
           </div>

@@ -33,7 +33,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-2 md:gap-3 w-max max-w-[320px] md:max-w-[360px] md:ml-auto md:mr-0 mx-auto">
+    <div className="grid grid-cols-1 gap-2 md:gap-3 w-full max-w-[440px] md:max-w-[600px] md:ml-auto md:mr-0 mx-auto">
       {choices.map((choice, i) => {
         const country = countries.find((c) =>
           subMode === "flag"
@@ -59,11 +59,11 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               <motion.div
                 initial={{ opacity: 0, x: -15, scale: 0.9 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 max-w-[280px] sm:max-w-[320px] md:max-w-none"
+                className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 max-w-[280px] sm:max-w-[400px] md:max-w-none"
               >
                 <div className="flex items-center gap-2">
                   <div className={`shrink-0 w-1.5 h-1.5 rounded-full ${isCorrect ? 'bg-emerald-400 animate-pulse' : 'bg-white/40'}`} />
-                  <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] leading-tight ${isCorrect ? 'text-emerald-400' : 'text-white/70'}`}>
+                  <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] leading-tight truncate whitespace-nowrap ${isCorrect ? 'text-emerald-400' : 'text-white/70'}`}>
                     {country?.name || choice}
                   </span>
                 </div>
@@ -74,7 +74,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               variant="outline"
               onClick={() => onChoice(choice)}
               disabled={disabled}
-              className={`w-full h-12 md:h-14 border-white/10 transition-all group/choice flex items-center justify-center p-2 ${
+              className={`w-full h-12 md:h-14 border-white/10 transition-all group/choice flex items-center justify-center p-2 min-w-0 ${
                 (feedback === 'correct' || revealed) && isCorrect
                   ? '!bg-emerald-500 !text-white !border-white shadow-[0_0_30px_rgba(16,185,129,0.5)] !opacity-100 scale-[1.05] z-10'
                   : feedback === 'wrong' && isClicked
@@ -93,7 +93,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                   }`}
                 />
               ) : (
-                <span className={`text-[10px] md:text-[11px] font-black tracking-widest uppercase whitespace-normal leading-[1.1] px-2 text-center transition-colors ${
+                <span className={`text-[10px] md:text-[11px] font-black tracking-wider uppercase truncate block w-full leading-[1.1] px-2 text-center transition-colors ${
                   (feedback === 'correct' || revealed) && isCorrect 
                     ? '!text-white' 
                     : feedback === 'wrong' && isClicked
