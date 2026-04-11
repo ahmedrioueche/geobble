@@ -69,9 +69,17 @@ const ResultModal: React.FC = () => {
 
   const handleRedeploy = () => {
     // 1. Advance difficulty if victory (up to what's unlocked)
-    if (isVictory && difficultyStage < maxLevels) {
-      const nextLevel = difficultyStage + 1;
-      setDifficultyStage(nextLevel);
+    if (isVictory) {
+      if (difficultyStage < maxLevels) {
+        const nextLevel = difficultyStage + 1;
+        setDifficultyStage(nextLevel);
+      } else {
+        // Last level reached and won, restart from level 1
+        setDifficultyStage(1);
+      }
+    } else if (isWorldCompletion) {
+      // If they somehow finished the world, reset difficulty to 1 for the next run
+      setDifficultyStage(1);
     }
 
     // 2. Clear status FIRST to avoid App.tsx re-triggering modal on reset
@@ -89,6 +97,9 @@ const ResultModal: React.FC = () => {
 
   const accuracyPct = Math.round(accuracy * 100);
 
+  const isFinalStage = difficultyStage === maxLevels;
+  const isShowPlayAgain = (isVictory && isFinalStage) || isWorldCompletion;
+
   return (
     <BaseModal
       isOpen={true}
@@ -99,12 +110,10 @@ const ResultModal: React.FC = () => {
       icon={Award}
       maxWidth="max-w-md"
       primaryButton={{
-        label: isWorldCompletion
-          ? "MISSION COMPLETE"
+        label: isShowPlayAgain
+          ? "PLAY AGAIN"
           : isVictory
-            ? difficultyStage === maxLevels
-              ? "PLAY AGAIN"
-              : "ADVANCE"
+            ? "ADVANCE"
             : "RETRY",
         onClick: handleRedeploy,
         icon: ChevronRight,

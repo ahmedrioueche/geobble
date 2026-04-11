@@ -182,6 +182,40 @@ export const WorldMap: React.FC<MapProps> = ({
       .translate(-dimensions.width / 2, -dimensions.height / 2);
   }, [dimensions]);
 
+  // Helper to extract the primary/significant parts of a feature
+  // This prevents the map from zooming out to the whole world when a country has small territories crossing the Antimeridian
+  const getEffectiveGeometry = React.useCallback(
+    (feature: any) => {
+      if (!pathGenerator || !feature) return null;
+      if (feature.geometry.type === "Polygon") return feature.geometry;
+
+      const parts = feature.geometry.coordinates.map((coords: any) => ({
+        type: "Polygon",
+        coordinates: coords,
+      }));
+
+      const partsWithArea = parts.map((p: any) => ({
+        geometry: p,
+        area: pathGenerator.area({ type: "Feature", geometry: p, properties: {} }),
+      }));
+
+      partsWithArea.sort((a: any, b: any) => b.area - a.area);
+
+      // Heuristic: Include the largest part and any parts at least 20% its size
+      // This captures the mainland of countries like NZ and Fiji while ignoring tiny outlying specks
+      const largestArea = partsWithArea[0].area;
+      const significantParts = partsWithArea.filter((p: any) => p.area > largestArea * 0.2);
+
+      if (significantParts.length === 1) return significantParts[0].geometry;
+
+      return {
+        type: "MultiPolygon",
+        coordinates: significantParts.map((p: any) => p.geometry.coordinates),
+      };
+    },
+    [pathGenerator]
+  );
+
   // Camera Animation for Missions (Smart Transitions)
   useEffect(() => {
     if (
@@ -213,7 +247,12 @@ export const WorldMap: React.FC<MapProps> = ({
 
       if (!feature) return;
 
-      const [[fx0, fy0], [fx1, fy1]] = pathGenerator.bounds(feature as any);
+      const effectiveGeometry = getEffectiveGeometry(feature);
+      const [[fx0, fy0], [fx1, fy1]] = pathGenerator.bounds({
+        type: "Feature",
+        geometry: effectiveGeometry,
+        properties: {},
+      } as any);
 
       // Visibility check
       const p0 = currentTransform.apply([fx0, fy0]);
@@ -260,9 +299,9 @@ export const WorldMap: React.FC<MapProps> = ({
       const finalScale = Math.max(homeTransform.k, targetContextScale);
 
       const transform = d3.zoomIdentity
-        .translate(viewCX, viewCY)
-        .scale(finalScale)
-        .translate(-contextMidX, -contextMidY);
+          .translate(viewCX, viewCY)
+          .scale(finalScale)
+          .translate(-contextMidX, -contextMidY);
 
       svg
         .transition()
@@ -287,7 +326,12 @@ export const WorldMap: React.FC<MapProps> = ({
 
     if (!feature) return;
 
-    const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
+    const effectiveGeometry = getEffectiveGeometry(feature);
+    const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
+      type: "Feature",
+      geometry: effectiveGeometry,
+      properties: {},
+    } as any);
 
     const dx = x1 - x0;
     const dy = y1 - y0;
@@ -350,6 +394,7 @@ export const WorldMap: React.FC<MapProps> = ({
     dimensions,
     idToCodeLookup,
     homeTransform,
+    getEffectiveGeometry,
   ]);
 
   const handleCountryClick = React.useCallback(
@@ -409,7 +454,12 @@ export const WorldMap: React.FC<MapProps> = ({
         const isGuideActive = isSelected || (isFeedbackItem && mode === "reverse");
 
         if (isTiny && isGuideActive) {
-          const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
+          const effectiveGeometry = getEffectiveGeometry(feature);
+          const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
+            type: "Feature",
+            geometry: effectiveGeometry,
+            properties: {},
+          } as any);
           const cx = (x0 + x1) / 2;
           const cy = (y0 + y1) / 2;
           // Determine radius that covers the entire extent plus thin padding
@@ -502,7 +552,11 @@ export const WorldMap: React.FC<MapProps> = ({
     const area = pathGenerator.area(feature as any);
     if (area > 150) return null;
 
-    return pathGenerator.centroid(feature as any);
+    return pathGenerator.centroid({
+      type: "Feature",
+      geometry: getEffectiveGeometry(feature),
+      properties: {},
+    } as any);
   }, [
     geoData,
     pathGenerator,
