@@ -11,7 +11,6 @@ import { useModalStore } from "../../store/modal";
 import { useGameStore, type SubMode } from "../../store/useGameStore";
 import { normalizeCountryName } from "../../utils/name-normalizer";
 
-
 export const useGameLogic = () => {
   const {
     score,
@@ -47,7 +46,6 @@ export const useGameLogic = () => {
     setTotalLevels,
     totalLevels,
     maxStreak,
-    baseChallengeValue,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -150,7 +148,10 @@ export const useGameLogic = () => {
         const c = countries.find((x) => x.cca3 === code);
         if (!c) return "Unknown";
         if (currentSubMode === "flag") return c.cca2 || "??";
-        if (currentSubMode === "capital") return (c.capital && c.capital.length > 0) ? c.capital[0] : "No Capital";
+        if (currentSubMode === "capital")
+          return c.capital && c.capital.length > 0
+            ? c.capital[0]
+            : "No Capital";
         return c.name || "Unknown";
       };
 
@@ -184,7 +185,10 @@ export const useGameLogic = () => {
 
     const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
     const ranges = getTierRanges(sliceSize);
-    const rangeIdx = Math.max(0, Math.min(difficultyStage - 1, ranges.length - 1));
+    const rangeIdx = Math.max(
+      0,
+      Math.min(difficultyStage - 1, ranges.length - 1),
+    );
     const currentRange = ranges[rangeIdx] || { size: sliceSize };
 
     openModal("result", {
@@ -193,14 +197,18 @@ export const useGameLogic = () => {
       streak: maxStreak,
       correctAnswers: correctAttempts,
       totalQuestions:
-        challengeType === "world" ? (countries.length || 240) : currentRange.size,
+        challengeType === "world" ? countries.length || 240 : currentRange.size,
       isVictory,
       difficultyStage,
       challengeType,
       challengeValue,
       isWorldCompletion:
-        (challengeType === "world" && totalQuestions >= countries.length && countries.length > 0) ||
-        (challengeType === "count" && difficultyStage === totalLevels && isVictory),
+        (challengeType === "world" &&
+          totalQuestions >= countries.length &&
+          countries.length > 0) ||
+        (challengeType === "count" &&
+          difficultyStage === totalLevels &&
+          isVictory),
       timeElapsed,
       totalLevels,
     });
@@ -225,12 +233,18 @@ export const useGameLogic = () => {
     if (countries.length === 0 || freshState.gameStatus !== "playing") return;
 
     // 0. Check if count mode should end (avoid generating 21st question)
-    if (freshState.challengeType === "count" && freshState.totalAttempts >= freshState.challengeValue) {
+    if (
+      freshState.challengeType === "count" &&
+      freshState.totalAttempts >= freshState.challengeValue
+    ) {
       return;
     }
 
     // 0. Check if world mode should end
-    if (freshState.challengeType === "world" && freshState.totalQuestions >= countries.length) {
+    if (
+      freshState.challengeType === "world" &&
+      freshState.totalQuestions >= countries.length
+    ) {
       finishGame();
       return;
     }
@@ -252,11 +266,15 @@ export const useGameLogic = () => {
       }
     } else {
       // Dynamic Stages for Count/Timer mode
-      const sliceSize = freshState.challengeType === "count" ? freshState.challengeValue : 30;
+      const sliceSize =
+        freshState.challengeType === "count" ? freshState.challengeValue : 30;
       const ranges = getTierRanges(sliceSize);
 
       // Ensure stage is within calculated ranges
-      const rangeIdx = Math.max(0, Math.min(freshState.difficultyStage - 1, ranges.length - 1));
+      const rangeIdx = Math.max(
+        0,
+        Math.min(freshState.difficultyStage - 1, ranges.length - 1),
+      );
       const currentRange = ranges[rangeIdx];
 
       if (!currentRange) {
@@ -265,7 +283,10 @@ export const useGameLogic = () => {
       }
 
       // Codes defined for THIS level
-      const levelCodes = SORTED_POOL.slice(currentRange.start, currentRange.end);
+      const levelCodes = SORTED_POOL.slice(
+        currentRange.start,
+        currentRange.end,
+      );
 
       // Filter countries from the master list that are in THIS level
       const stageCountries = countries.filter((c) =>
@@ -347,7 +368,10 @@ export const useGameLogic = () => {
           const c = countries.find((x) => x.cca3 === code);
           if (!c) return "Unknown";
           if (subMode === "flag") return c.cca2 || "??";
-          if (subMode === "capital") return (c.capital && c.capital.length > 0) ? c.capital[0] : "No Capital";
+          if (subMode === "capital")
+            return c.capital && c.capital.length > 0
+              ? c.capital[0]
+              : "No Capital";
           return c.name || "Unknown";
         };
 
@@ -357,14 +381,7 @@ export const useGameLogic = () => {
         setChoices(updatedChoices);
       }
     }
-  }, [
-    subMode,
-    mode,
-    gameStatus,
-    currentCountryCode,
-    countries,
-    setChoices,
-  ]);
+  }, [subMode, mode, gameStatus, currentCountryCode, countries, setChoices]);
 
   // Timer Engine
   useEffect(() => {
@@ -381,18 +398,16 @@ export const useGameLogic = () => {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [
-    gameStatus,
-    challengeType,
-    finishGame,
-    setTimeRemaining,
-  ]);
+  }, [gameStatus, challengeType, finishGame, setTimeRemaining]);
 
   const startGame = useCallback(() => {
     const state = useGameStore.getState();
     // Synchronize mission goal with actual tier size
     // Use baseChallengeValue as the stable anchor for range calculation
-    const sliceSize = state.challengeType === "count" ? (state.baseChallengeValue || state.challengeValue) : 30;
+    const sliceSize =
+      state.challengeType === "count"
+        ? state.baseChallengeValue || state.challengeValue
+        : 30;
     const ranges = getTierRanges(sliceSize);
     const calculatedMaxLevels = ranges.length;
 
@@ -400,7 +415,10 @@ export const useGameLogic = () => {
     setTotalLevels(calculatedMaxLevels);
 
     // Ensure stage is within calculated ranges (clamp to last available range)
-    const rangeIdx = Math.max(0, Math.min(state.difficultyStage - 1, ranges.length - 1));
+    const rangeIdx = Math.max(
+      0,
+      Math.min(state.difficultyStage - 1, ranges.length - 1),
+    );
     const currentRange = ranges[rangeIdx];
 
     if (
@@ -415,13 +433,7 @@ export const useGameLogic = () => {
     setStreak(0);
     setGameStatus("playing");
     nextQuestion();
-  }, [
-    setScore,
-    setStreak,
-    setFeedback,
-    generateChoices,
-    setRevealed,
-  ]);
+  }, [setScore, setStreak, setFeedback, generateChoices, setRevealed]);
 
   const submitAnswer = useCallback(
     (selectedIdentifier: string) => {
