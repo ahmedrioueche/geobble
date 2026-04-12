@@ -46,6 +46,8 @@ export const useGameLogic = () => {
     setChallenge,
     setTotalLevels,
     totalLevels,
+    maxStreak,
+    baseChallengeValue,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -188,7 +190,7 @@ export const useGameLogic = () => {
     openModal("result", {
       score,
       accuracy,
-      streak,
+      streak: maxStreak,
       correctAnswers: correctAttempts,
       totalQuestions:
         challengeType === "world" ? (countries.length || 240) : currentRange.size,
@@ -220,7 +222,12 @@ export const useGameLogic = () => {
 
   const nextQuestion = useCallback(() => {
     const freshState = useGameStore.getState();
-    if (countries.length === 0) return;
+    if (countries.length === 0 || freshState.gameStatus !== "playing") return;
+
+    // 0. Check if count mode should end (avoid generating 21st question)
+    if (freshState.challengeType === "count" && freshState.totalAttempts >= freshState.challengeValue) {
+      return;
+    }
 
     // 0. Check if world mode should end
     if (freshState.challengeType === "world" && freshState.totalQuestions >= countries.length) {
@@ -319,9 +326,13 @@ export const useGameLogic = () => {
       totalAttempts >= challengeValue
     ) {
       // Small delay to let the final feedback play
+      // We check gameStatus again inside to ensure we don't finish twice
       const timer = setTimeout(() => {
-        finishGame();
-      }, 1000);
+        const currentStatus = useGameStore.getState().gameStatus;
+        if (currentStatus === "playing") {
+          finishGame();
+        }
+      }, 1500); // Increased delay to 1.5s for final feedback
       return () => clearTimeout(timer);
     }
   }, [gameStatus, challengeType, totalAttempts, challengeValue, finishGame]);
@@ -379,8 +390,9 @@ export const useGameLogic = () => {
 
   const startGame = useCallback(() => {
     const state = useGameStore.getState();
-    // Synchronize mission goal with actual tier size (handles merged remainders)
-    const sliceSize = state.challengeType === "count" ? state.challengeValue : 30;
+    // Synchronize mission goal with actual tier size
+    // Use baseChallengeValue as the stable anchor for range calculation
+    const sliceSize = state.challengeType === "count" ? (state.baseChallengeValue || state.challengeValue) : 30;
     const ranges = getTierRanges(sliceSize);
     const calculatedMaxLevels = ranges.length;
 

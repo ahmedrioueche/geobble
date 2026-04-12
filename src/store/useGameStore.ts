@@ -33,6 +33,8 @@ interface GameState {
   pulseKey: number;
   streakLost: number | null;
   startTime: number | null;
+  maxStreak: number;
+  baseChallengeValue: number; // The user's intended target (e.g., 20)
   tempHighlightCode: string | null;
 
   // Actions
@@ -97,16 +99,23 @@ export const useGameStore = create<GameState>()(
       pulseKey: 0,
       streakLost: null,
       startTime: null,
+      maxStreak: 0,
+      baseChallengeValue: 0,
       tempHighlightCode: null,
 
       setScore: (score) => set({ score }),
-      setStreak: (streak) => set({ streak }),
+      setStreak: (streak) =>
+        set((state) => ({
+          streak,
+          maxStreak: Math.max(state.maxStreak || 0, streak),
+        })),
       setMode: (mode) => set({ mode }),
       setSubMode: (subMode) => set({ subMode }),
       setChallenge: (challengeType, challengeValue) =>
         set({
           challengeType,
           challengeValue,
+          baseChallengeValue: challengeValue, // Store the primary selection
           timeRemaining: challengeType === "timer" ? challengeValue : 0,
         }),
       setTimeRemaining: (timeRemaining) => set({ timeRemaining }),
@@ -144,6 +153,7 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           score: 0,
           streak: 0,
+          maxStreak: 0,
           totalQuestions: 0,
           totalAttempts: 0,
           correctAttempts: 0,
@@ -177,10 +187,12 @@ export const useGameStore = create<GameState>()(
         set({
           score: 0,
           streak: 0,
+          maxStreak: 0,
           mode: "identify",
           subMode: "name",
           challengeType: "world",
           challengeValue: 0,
+          baseChallengeValue: 0,
           timeRemaining: 0,
           difficultyStage: 1,
           totalLevels: 0,

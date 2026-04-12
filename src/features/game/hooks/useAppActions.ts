@@ -88,7 +88,10 @@ export const useAppActions = () => {
           setScore(score + 10 * (streak + 1));
           setStreak(streak + 1);
           setTimeout(() => {
-            nextQuestion();
+            const freshState = useGameStore.getState();
+            if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
+              nextQuestion();
+            }
           }, 1200);
         } else {
           recordAttempt(false);
@@ -98,7 +101,10 @@ export const useAppActions = () => {
           if (streak > 0) setStreakLost(streak);
           setStreak(0);
           setTimeout(() => {
-            nextQuestion();
+            const freshState = useGameStore.getState();
+            if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
+              nextQuestion();
+            }
           }, 2000);
         }
       } else {
@@ -161,7 +167,10 @@ export const useAppActions = () => {
         setScore(score + 10 * (streak + 1));
         setStreak(streak + 1);
         setTimeout(() => {
-          nextQuestion();
+          const freshState = useGameStore.getState();
+          if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
+            nextQuestion();
+          }
         }, 1200);
       } else {
         recordAttempt(false);
@@ -171,7 +180,10 @@ export const useAppActions = () => {
         if (streak > 0) setStreakLost(streak);
         setStreak(0);
         setTimeout(() => {
-          nextQuestion();
+          const freshState = useGameStore.getState();
+          if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
+            nextQuestion();
+          }
         }, 2000);
       }
     },
@@ -206,7 +218,10 @@ export const useAppActions = () => {
       setStreak(0);
 
       setTimeout(() => {
-        nextQuestion();
+        const freshState = useGameStore.getState();
+        if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
+          nextQuestion();
+        }
       }, 1500);
     } else {
       nextQuestion();
