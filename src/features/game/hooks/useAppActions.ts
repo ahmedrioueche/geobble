@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CountryData } from "../../../data/country-data";
 import { nameMapping } from "../../../data/name-mapping";
 import { normalizeCountryName } from "../../../utils/name-normalizer";
@@ -35,6 +35,20 @@ export const useAppActions = () => {
   } = useGameLogic();
 
   const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearRevealTimer = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearRevealTimer();
+    };
+  }, [clearRevealTimer]);
 
   const playAudio = useCallback((path: string) => {
     const audio = new Audio(path);
@@ -76,11 +90,15 @@ export const useAppActions = () => {
         const normalizedClicked = normalizeCountryName(nameMapping[name] || name);
         const isCorrect = normalizedTarget === normalizedClicked;
 
-        if (isCorrect) {
-          if (revealed) {
+        if (revealed) {
+          if (isCorrect) {
+            clearRevealTimer();
             nextQuestion();
-            return;
           }
+          return;
+        }
+
+        if (isCorrect) {
 
           recordAttempt(true);
           playAudio("/audio/correct.mp3");
@@ -134,6 +152,7 @@ export const useAppActions = () => {
       recordAttempt,
       setStreakLost,
       setTempHighlightCode,
+      clearRevealTimer,
     ],
   );
 
@@ -211,6 +230,7 @@ export const useAppActions = () => {
   }, [startGame, startNewMission]);
 
   const handleSkip = useCallback(() => {
+    clearRevealTimer();
     if (currentCountry) {
       recordAttempt(false);
       setRevealed(true);
@@ -227,6 +247,7 @@ export const useAppActions = () => {
       nextQuestion();
     }
   }, [
+    clearRevealTimer,
     currentCountry,
     setRevealed,
     setStreak,
@@ -237,13 +258,34 @@ export const useAppActions = () => {
   ]);
 
   const handleReveal = useCallback(() => {
+    clearRevealTimer();
     setRevealed(true);
+    recordAttempt(false);
     useGameStore.getState().triggerPulse();
     if (mode === "identify" && streak > 0) {
       setStreakLost(streak);
       setStreak(0);
     }
-  }, [mode, streak, setRevealed, setStreak, setStreakLost]);
+
+    revealTimerRef.current = setTimeout(() => {
+      const freshState = useGameStore.getState();
+      if (
+        freshState.totalAttempts < freshState.challengeValue ||
+        freshState.challengeType !== "count"
+      ) {
+        nextQuestion();
+      }
+    }, 2500);
+  }, [
+    mode,
+    streak,
+    setRevealed,
+    setStreak,
+    setStreakLost,
+    recordAttempt,
+    nextQuestion,
+    clearRevealTimer,
+  ]);
 
   return {
     clickedCountry,

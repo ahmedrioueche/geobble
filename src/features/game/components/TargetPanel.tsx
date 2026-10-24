@@ -100,15 +100,15 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
           ) : (
             <button
               onClick={onReveal}
-              disabled={!!feedback}
+              disabled={!!feedback || revealed}
               className={`text-[10px] font-black uppercase tracking-wide transition-colors ${
-                feedback
+                feedback || revealed
                   ? "text-white/20 cursor-default"
                   : "text-white/40 hover:text-blue-400 cursor-pointer"
               }`}
-              title="Reveal Answer"
+              title={revealed ? "Target Revealed" : "Reveal Answer"}
             >
-              REVEAL
+              {revealed ? "REVEALED" : "REVEAL"}
             </button>
           )}
         </div>
