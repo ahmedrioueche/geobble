@@ -87,13 +87,13 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
             </button>
           )}
 
-          <div className="w-[1px] h-4 bg-white/10"></div>
+          <div className="w-[1px] h-4 bg-white/20"></div>
 
           {mode === "reverse" ? (
             <button
               onClick={triggerPulse}
               disabled={!!feedback}
-              className="text-[10px] font-black uppercase text-white/40 tracking-wide hover:text-sky-400 transition-colors"
+              className="text-[10px] font-black uppercase text-white/70 tracking-wide hover:text-sky-400 transition-colors"
             >
               TARGET
             </button>
@@ -103,8 +103,8 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               disabled={!!feedback || revealed}
               className={`text-[10px] font-black uppercase tracking-wide transition-colors ${
                 feedback || revealed
-                  ? "text-white/20 cursor-default"
-                  : "text-white/40 hover:text-blue-400 cursor-pointer"
+                  ? "text-white/25 cursor-default"
+                  : "text-white/75 hover:text-sky-300 cursor-pointer"
               }`}
               title={revealed ? "Target Revealed" : "Reveal Answer"}
             >
@@ -117,13 +117,13 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
         {onSkip && !feedback && (
           <button
             onClick={onSkip}
-            className="group/skip flex items-center gap-2 pl-4 border-l border-white/10 hover:opacity-80 transition-opacity"
+            className="group/skip flex items-center gap-2 pl-4 border-l border-white/20 hover:opacity-100 transition-opacity"
             title="Skip Mission"
           >
-            <span className="text-[10px] font-black text-white/50 group-hover:text-red-400 transition-colors uppercase tracking-wide">
+            <span className="text-[10px] font-black text-white/75 group-hover:text-red-400 transition-colors uppercase tracking-wide">
               SKIP
             </span>
-            <span className="text-[9px] font-medium text-white/50 bg-white/5 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-bold text-white/80 bg-white/15 px-1.5 py-0.5 rounded">
               ⌘S
             </span>
           </button>

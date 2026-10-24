@@ -30,7 +30,7 @@ export const StatItem: React.FC<StatItemProps> = ({
   return (
     <div className="flex flex-col items-end">
       <span 
-        className={`${labelSizes[size]} text-[var(--color-text-secondary)] uppercase font-black tracking-[0.2em] opacity-60`}
+        className={`${labelSizes[size]} text-slate-300 uppercase font-black tracking-[0.2em] opacity-90`}
       >
         {label}
       </span>
@@ -42,7 +42,7 @@ export const StatItem: React.FC<StatItemProps> = ({
           {value}
         </span>
         {suffix && (
-          <span className="text-xs font-bold opacity-50" style={{ color }}>
+          <span className="text-xs font-bold opacity-80" style={{ color }}>
             {suffix}
           </span>
         )}

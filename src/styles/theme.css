@@ -1,17 +1,17 @@
 :root {
   /* Primary Palette */
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
+  --color-bg-primary: #0a1322;
+  --color-bg-secondary: #16243b;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #cbd5e1;
   --color-accent: #38bdf8;
   --color-accent-hover: #0ea5e9;
 
-  /* Map Colors */
-  --color-map-land: #475569;
-  --color-map-hover: #64748b;
-  --color-map-selected: #38bdf8;
-  --color-map-stroke: #1e293b;
+  /* Map Colors - High Contrast Tactical Palette */
+  --color-map-land: #476582;
+  --color-map-hover: #38bdf8;
+  --color-map-selected: #22c55e;
+  --color-map-stroke: #0a1322;
 
   /* Game Colors */
   --color-correct: #22c55e;

@@ -69,7 +69,7 @@ function App() {
 
       <main className="relative w-full h-full">
         {/* Deep Field Ambient Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,#020617_100%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#111e33_0%,#080f1d_100%)]"></div>
 
         <TacticalInterface
           currentCountry={currentCountry}
@@ -83,8 +83,8 @@ function App() {
         <div
           className={`absolute inset-0 w-full h-full transition-all duration-1000 transform ${
             gameStatus === "playing"
-              ? "grayscale-[0.4] brightness-75 scale-100"
-              : "grayscale-0 scale-105"
+              ? "brightness-105 contrast-105 saturate-110 scale-100"
+              : "brightness-100 scale-105"
           }`}
         >
           <WorldMap

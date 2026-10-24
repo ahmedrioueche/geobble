@@ -110,7 +110,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
           {/* Desktop/Tablet Modes Integration */}
           {gameStatus === "playing" && (
-            <div className="hidden lg:flex bg-slate-950/60 p-1 rounded-xl border border-white/5">
+            <div className="hidden lg:flex bg-slate-900/80 p-1 rounded-xl border border-white/15">
               {modes.map((m) => (
                 <button
                   key={m}
@@ -119,8 +119,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                     px-3 lg:px-5 py-1 rounded-lg text-[9px] lg:text-[10px] font-bold uppercase transition-all duration-200
                     ${
                       subMode === m
-                        ? "bg-white text-slate-950 shadow-lg"
-                        : "text-white/40 hover:text-white/80 hover:bg-white/5"
+                        ? "bg-white text-slate-950 shadow-lg font-black"
+                        : "text-white/75 hover:text-white hover:bg-white/10"
                     }
                   `}
                 >
@@ -297,7 +297,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               />
             </div>
 
-            <div className="flex bg-slate-950/60 p-1 rounded-xl border border-white/5 gap-1">
+            <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/15 gap-1">
               {modes.map((m) => (
                 <button
                   key={m}
@@ -306,8 +306,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                     px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all duration-200
                     ${
                       subMode === m
-                        ? "bg-white text-slate-950 shadow-lg"
-                        : "text-white/40 hover:text-white/80 hover:bg-white/5"
+                        ? "bg-white text-slate-950 shadow-lg font-black"
+                        : "text-white/75 hover:text-white hover:bg-white/10"
                     }
                   `}
                 >

@@ -108,8 +108,8 @@ export const WorldMap: React.FC<MapProps> = ({
     zoomRef.current = zoom;
     svg.call(zoom);
 
-    g.style("--map-stroke-width", "0.5px");
-    g.style("--map-selected-stroke-width", "1.2px");
+    g.style("--map-stroke-width", "0.65px");
+    g.style("--map-selected-stroke-width", "1.5px");
   }, [pathGenerator]);
 
   // Map each feature ID to its logical country code (cca3)
@@ -486,17 +486,18 @@ export const WorldMap: React.FC<MapProps> = ({
               d={path || ""}
               style={{
                 fill: fillColor,
-                fillOpacity: isHighlighted ? 1 : 0.85,
+                fillOpacity: 1,
                 strokeWidth: isHighlighted
                   ? "var(--map-selected-stroke-width)"
                   : "var(--map-stroke-width)",
               }}
               className={`
-                stroke-white/30 
+                stroke-white/40 
                 transition-all 
-                duration-500 
+                duration-300 
                 hover:fill-opacity-100
-                hover:stroke-white/60
+                hover:stroke-white/90
+                hover:drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]
                 cursor-pointer
                 ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
               `}
@@ -570,7 +571,7 @@ export const WorldMap: React.FC<MapProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-slate-950 mt-20"
+      className="relative w-full h-full overflow-hidden bg-[#0a1526] mt-20"
     >
       {loading || !pathGenerator ? (
         <div className="flex items-center justify-center h-full text-white/40 font-bold uppercase tracking-tight text-[10px]">

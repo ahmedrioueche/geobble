@@ -74,14 +74,14 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               variant="outline"
               onClick={() => onChoice(choice)}
               disabled={disabled}
-              className={`w-full h-12 md:h-14 border-white/10 transition-all group/choice flex items-center justify-center p-2 min-w-0 ${
+              className={`w-full h-12 md:h-14 border-white/20 bg-slate-900/90 shadow-lg transition-all group/choice flex items-center justify-center p-2 min-w-0 ${
                 (feedback === 'correct' || revealed) && isCorrect
                   ? '!bg-emerald-500 !text-white !border-white shadow-[0_0_30px_rgba(16,185,129,0.5)] !opacity-100 scale-[1.05] z-10'
                   : feedback === 'wrong' && isClicked
                   ? '!bg-red-600 !text-white !border-white !opacity-100 scale-[0.98]'
                   : (feedback || revealed) && isCorrect
                   ? 'bg-emerald-500/20 border-emerald-500/40 opacity-80'
-                  : 'hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/5'
+                  : 'hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10'
               }`}
             >
               {subMode === "flag" && country ? (
@@ -89,7 +89,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                   src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
                   alt="Choice"
                   className={`h-6 md:h-8 w-auto rounded shadow-sm border ${
-                    (feedback === 'correct' || revealed) && isCorrect ? 'border-white scale-110' : 'border-white/5'
+                    (feedback === 'correct' || revealed) && isCorrect ? 'border-white scale-110' : 'border-white/20'
                   }`}
                 />
               ) : (
@@ -98,7 +98,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                     ? '!text-white' 
                     : feedback === 'wrong' && isClicked
                     ? '!text-white'
-                    : 'text-white/80 group-hover/choice:text-white'
+                    : 'text-white group-hover/choice:text-sky-300'
                 }`}>
                   {choice}
                 </span>

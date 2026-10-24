@@ -69,7 +69,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
             <h2 className="text-3xl md:text-7xl font-black tracking-tighter text-white mb-4 uppercase italic">
               SELECT <span className="text-[var(--color-accent)]">MISSION</span> MODE
             </h2>
-            <p className="text-[var(--color-text-secondary)] text-[10px] md:text-xs font-bold tracking-[0.4em] uppercase opacity-40">
+            <p className="text-[var(--color-text-secondary)] text-[10px] md:text-xs font-bold tracking-[0.4em] uppercase opacity-80">
               Define your operational parameters
             </p>
           </motion.div>
@@ -88,8 +88,8 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
                   flex-1 min-w-[280px] max-w-[400px]
                   ${
                     selected === mode.id
-                      ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_100px_rgba(56,189,248,0.15)] scale-[1.02]"
-                      : "border-white/5 bg-slate-900/50 hover:border-white/20 hover:bg-slate-900/80"
+                      ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_100px_rgba(56,189,248,0.25)] scale-[1.02]"
+                      : "border-white/20 bg-slate-900/80 hover:border-white/40 hover:bg-slate-900"
                   }
                 `}
               >
@@ -97,12 +97,12 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
                 <h3 className="text-xl md:text-3xl font-black text-white mb-3 tracking-tighter uppercase leading-tight">
                   {mode.title}
                 </h3>
-                <p className="text-[var(--color-text-secondary)] text-xs md:text-base mb-8 font-medium leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
+                <p className="text-[var(--color-text-secondary)] text-xs md:text-base mb-8 font-medium leading-relaxed opacity-90 group-hover:opacity-100 transition-opacity">
                   {mode.description}
                 </p>
 
                 <div className="mt-auto pt-6 border-t border-white/10">
-                  <span className="text-[var(--color-accent)] text-[10px] font-black uppercase tracking-[0.2em] opacity-50 block mb-2">
+                  <span className="text-[var(--color-accent)] text-[10px] font-black uppercase tracking-[0.2em] opacity-90 block mb-2">
                     TACTICAL TIP
                   </span>
                   <p className="text-white text-xs font-bold leading-relaxed">

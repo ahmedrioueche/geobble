@@ -19,7 +19,7 @@ export const GlobalOverlays: React.FC<GlobalOverlaysProps> = ({
   return (
     <div className="absolute inset-0 pointer-events-none z-50">
       {/* Ambient Map Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_0%,rgba(15,23,42,0.4)_80%,rgba(15,23,42,0.8)_100%)]"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_0%,rgba(15,23,42,0.15)_85%,rgba(10,18,32,0.4)_100%)]"></div>
 
       {/* Country Info Popup */}
       <div className="absolute top-14 md:top-18 right-4 md:right-8 pointer-events-auto">
