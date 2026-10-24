@@ -8,6 +8,7 @@ interface TargetPanelProps {
   feedback: "correct" | "wrong" | null;
   onSkip?: () => void;
   onReveal?: () => void;
+  isJustDocked?: boolean;
 }
 
 export const TargetPanel: React.FC<TargetPanelProps> = ({
@@ -15,6 +16,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   feedback,
   onSkip,
   onReveal,
+  isJustDocked = false,
 }) => {
   const { mode, subMode, triggerPulse, revealed } = useGameStore();
 
@@ -26,6 +28,20 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
         animate={
           feedback === "correct"
             ? { scale: [1, 1.05, 1], transition: { duration: 0.3 } }
+            : isJustDocked
+            ? {
+                scale: [0.94, 1.05, 1],
+                borderColor: [
+                  "rgba(56,189,248,0.9)",
+                  "rgba(56,189,248,0.4)",
+                  "rgba(255,255,255,0.1)",
+                ],
+                boxShadow: [
+                  "0 0 35px rgba(56,189,248,0.7)",
+                  "0 32px 64px -16px rgba(0,0,0,0.6)",
+                ],
+                transition: { duration: 0.5, ease: "easeOut" },
+              }
             : {}
         }
         className="relative px-4 py-2 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
