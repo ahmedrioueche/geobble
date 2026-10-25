@@ -11,7 +11,6 @@ interface TacticalInterfaceProps {
   currentCountry: CountryData | undefined;
   countries: CountryData[];
   onChoiceSelect: (choice: string) => void;
-  onSkip: () => void;
   onReveal: () => void;
 }
 
@@ -19,7 +18,6 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   currentCountry,
   countries,
   onChoiceSelect,
-  onSkip,
   onReveal,
 }) => {
   const { gameStatus, mode, subMode, feedback, clickedName, choices, revealed } = useGameStore();
@@ -82,7 +80,6 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                     <TargetPanel
                       country={currentCountry}
                       feedback={feedback}
-                      onSkip={onSkip}
                       onReveal={onReveal}
                       isJustDocked={isJustDocked}
                     />

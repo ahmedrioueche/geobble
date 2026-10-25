@@ -6,7 +6,6 @@ import { useGameStore } from "../../../store/useGameStore";
 interface TargetPanelProps {
   country: CountryData | undefined;
   feedback: "correct" | "wrong" | null;
-  onSkip?: () => void;
   onReveal?: () => void;
   isJustDocked?: boolean;
 }
@@ -14,7 +13,6 @@ interface TargetPanelProps {
 export const TargetPanel: React.FC<TargetPanelProps> = ({
   country,
   feedback,
-  onSkip,
   onReveal,
   isJustDocked = false,
 }) => {
@@ -44,7 +42,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               }
             : {}
         }
-        className="relative px-4 py-2 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
+        className="relative px-4 py-2 md:px-7 md:py-4 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 md:gap-6 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
       >
         {/* Educational Hint: Reveal official country name for Flags/Capitals (Standard Modes only) */}
         {mode !== 'reverse' && (subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
@@ -62,38 +60,38 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
           </motion.div>
         )}
         {/* Data Point: Flag or Text */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 md:gap-5">
           {mode === "reverse" ? (
             <button
               onClick={triggerPulse}
               disabled={!!feedback}
-              className="text-sm font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
+              className="text-sm md:text-xl font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
             >
               IDENTIFY TERRITORY
             </button>
           ) : subMode === "flag" ? (
             <img
-              src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
+              src={`https://flagcdn.com/w160/${country.cca2.toLowerCase()}.png`}
               alt="Target"
-              className="h-5 w-auto rounded shadow-sm border border-white/5"
+              className="h-5 md:h-10 w-auto rounded md:rounded-md shadow-sm border border-white/5"
             />
           ) : (
             <button
               onClick={triggerPulse}
               disabled={!!feedback}
-              className="text-sm font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
+              className="text-sm md:text-xl font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
             >
               {subMode === "capital" ? country.capital[0] : country.name}
             </button>
           )}
 
-          <div className="w-[1px] h-4 bg-white/20"></div>
+          <div className="w-[1px] h-4 md:h-7 bg-white/20"></div>
 
           {mode === "reverse" ? (
             <button
               onClick={triggerPulse}
               disabled={!!feedback}
-              className="text-[10px] font-black uppercase text-white/70 tracking-wide hover:text-sky-400 transition-colors"
+              className="text-[10px] md:text-sm font-black uppercase text-white/70 tracking-wide hover:text-sky-400 transition-colors"
             >
               TARGET
             </button>
@@ -101,7 +99,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
             <button
               onClick={onReveal}
               disabled={!!feedback || revealed}
-              className={`text-[10px] font-black uppercase tracking-wide transition-colors ${
+              className={`text-[10px] md:text-sm font-black uppercase tracking-wide transition-colors ${
                 feedback || revealed
                   ? "text-white/25 cursor-default"
                   : "text-white/75 hover:text-sky-300 cursor-pointer"
@@ -113,21 +111,6 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
           )}
         </div>
 
-        {/* Action: Skip */}
-        {onSkip && !feedback && (
-          <button
-            onClick={onSkip}
-            className="group/skip flex items-center gap-2 pl-4 border-l border-white/20 hover:opacity-100 transition-opacity"
-            title="Skip Mission"
-          >
-            <span className="text-[10px] font-black text-white/75 group-hover:text-red-400 transition-colors uppercase tracking-wide">
-              SKIP
-            </span>
-            <span className="text-[9px] font-bold text-white/80 bg-white/15 px-1.5 py-0.5 rounded">
-              ⌘S
-            </span>
-          </button>
-        )}
       </motion.div>
     </div>
   );

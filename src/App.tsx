@@ -106,7 +106,6 @@ function App() {
           currentCountry={currentCountry}
           countries={countries}
           onChoiceSelect={handleChoiceSelect}
-          onSkip={skipQuestion}
           onReveal={handleReveal}
         />
 
