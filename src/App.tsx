@@ -1,4 +1,4 @@
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { LoadingScreen } from "./components/organisms/LoadingScreen";
 import { GameHUD } from "./features/game/components/GameHUD";
@@ -66,6 +66,37 @@ function App() {
         onToggleFullscreen={toggleFullscreen}
         totalCountries={countries.length}
       />
+
+      {/* Bottom-left Start Game Hero Button (desktop only) */}
+      <AnimatePresence>
+        {gameStatus === "idle" && !showModeSelect && (
+          <motion.div
+            initial={{ opacity: 0, x: -20, y: 20 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: -20, y: 20 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="fixed bottom-8 left-8 hidden md:flex flex-col items-start gap-2 pointer-events-none z-30"
+          >
+            <div className="pointer-events-auto flex flex-col items-start gap-2">
+              <button
+                onClick={() => setShowModeSelect(true)}
+                className="group relative flex items-center gap-3 px-7 py-4 bg-gradient-to-r from-sky-400 via-sky-500 to-blue-600 hover:from-sky-300 hover:via-sky-400 hover:to-blue-500 text-slate-950 font-black text-xl rounded-2xl shadow-[0_0_40px_rgba(56,189,248,0.45)] hover:shadow-[0_0_70px_rgba(56,189,248,0.7)] transition-all transform hover:scale-105 active:scale-95 border-2 border-white/30 uppercase tracking-wider cursor-pointer"
+              >
+                <svg
+                  className="w-6 h-6 fill-current transition-transform group-hover:scale-110"
+                  viewBox="0 0 24 24"
+                >
+                  <polygon points="6 3 20 12 6 21 6 3" />
+                </svg>
+                <span>START GAME</span>
+              </button>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 px-1">
+                Choose a mode &amp; test your skills
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="relative w-full h-full">
         {/* Deep Field Ambient Background */}

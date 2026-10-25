@@ -105,6 +105,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               GEOBBLE
             </h1>
           </button>
+
+          {/* Desktop Quit Button when game is active */}
+          {gameStatus === "playing" && (
+            <button
+              onClick={resetGame}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+              title="Quit game and return to map"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>QUIT</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
@@ -229,9 +245,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <Button
                 onClick={onStart}
                 size="sm"
-                className="font-bold text-[10px] bg-white text-slate-950 hover:bg-white/90"
+                className="font-black text-xs px-4 py-2 bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 shadow-md uppercase tracking-wider"
               >
-                START MISSION
+                START GAME
               </Button>
 
               <button
