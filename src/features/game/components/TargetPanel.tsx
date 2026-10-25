@@ -16,7 +16,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onReveal,
   isJustDocked = false,
 }) => {
-  const { mode, subMode, triggerPulse, revealed } = useGameStore();
+  const { mode, subMode, triggerSonar, revealed } = useGameStore();
 
   if (!country) return null;
 
@@ -62,12 +62,17 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
         {/* Data Point: Flag or Text */}
         <div className="flex items-center gap-3 md:gap-5">
           {mode === "reverse" ? (
+            // Single SONAR button — pans camera to target and fires rings
             <button
-              onClick={triggerPulse}
+              onClick={triggerSonar}
               disabled={!!feedback}
-              className="text-sm md:text-xl font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
+              className={`flex items-center gap-1.5 text-sm md:text-base font-black uppercase tracking-tight transition-colors ${
+                feedback ? "text-white/30 cursor-default" : "text-sky-300 hover:text-sky-200 cursor-pointer"
+              }`}
+              title="Pan map to target and fire sonar"
             >
-              IDENTIFY TERRITORY
+              <span>🔍</span>
+              <span>FIND ON MAP</span>
             </button>
           ) : subMode === "flag" ? (
             <img
@@ -76,26 +81,14 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               className="h-5 md:h-10 w-auto rounded md:rounded-md shadow-sm border border-white/5"
             />
           ) : (
-            <button
-              onClick={triggerPulse}
-              disabled={!!feedback}
-              className="text-sm md:text-xl font-black text-white uppercase tracking-tight hover:text-sky-400 transition-colors"
-            >
+            <span className="text-sm md:text-xl font-black text-white uppercase tracking-tight">
               {subMode === "capital" ? country.capital[0] : country.name}
-            </button>
+            </span>
           )}
 
           <div className="w-[1px] h-4 md:h-7 bg-white/20"></div>
 
-          {mode === "reverse" ? (
-            <button
-              onClick={triggerPulse}
-              disabled={!!feedback}
-              className="text-[10px] md:text-sm font-black uppercase text-white/70 tracking-wide hover:text-sky-400 transition-colors"
-            >
-              TARGET
-            </button>
-          ) : (
+          {mode !== "reverse" && (
             <button
               onClick={onReveal}
               disabled={!!feedback || revealed}

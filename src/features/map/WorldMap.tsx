@@ -28,6 +28,7 @@ export const WorldMap: React.FC<MapProps> = ({
   const {
     gameStatus,
     pulseKey,
+    sonarKey,
     feedback,
     clickedCode,
     clickedName,
@@ -396,6 +397,70 @@ export const WorldMap: React.FC<MapProps> = ({
     homeTransform,
     getEffectiveGeometry,
   ]);
+
+  // Sonar button: always pan to target immediately, no in-view skip
+  useEffect(() => {
+    if (
+      sonarKey === 0 ||
+      !geoData ||
+      !pathGenerator ||
+      !svgRef.current ||
+      !zoomRef.current ||
+      gameStatus !== "playing" ||
+      !selectedCountryCode ||
+      dimensions.width === 0
+    )
+      return;
+
+    const svg = d3.select(svgRef.current);
+
+    const feature = (geoData.features as unknown as CountryFeature[]).find(
+      (f) => {
+        const code = f.id?.toString() || "";
+        const mappedCode =
+          idToCodeLookup[code] ||
+          idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
+        return mappedCode === selectedCountryCode;
+      },
+    );
+
+    if (!feature) return;
+
+    const effectiveGeometry = getEffectiveGeometry(feature);
+    const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
+      type: "Feature",
+      geometry: effectiveGeometry,
+      properties: {},
+    } as any);
+
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const x = (x0 + x1) / 2;
+    const y = (y0 + y1) / 2;
+
+    const isMobile = dimensions.width < 768;
+    const targetCenterX = isMobile ? dimensions.width * 0.35 : dimensions.width / 2;
+    const targetCenterY = isMobile ? dimensions.height * 0.65 : dimensions.height / 2;
+
+    const scale = Math.max(
+      1,
+      Math.min(
+        25,
+        0.45 / Math.max(dx / dimensions.width, dy / dimensions.height),
+      ),
+    );
+
+    const transform = d3.zoomIdentity
+      .translate(targetCenterX, targetCenterY)
+      .scale(scale)
+      .translate(-x, -y);
+
+    svg
+      .transition()
+      .duration(900)
+      .ease(d3.easeCubicInOut)
+      .call(zoomRef.current.transform, transform);
+  }, [sonarKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCountryClick = React.useCallback(
     (name: string, code: string) => {

@@ -31,6 +31,7 @@ interface GameState {
   clickedCode: string | null;
   revealed: boolean;
   pulseKey: number;
+  sonarKey: number;
   streakLost: number | null;
   startTime: number | null;
   maxStreak: number;
@@ -64,6 +65,7 @@ interface GameState {
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
   triggerPulse: () => void;
+  triggerSonar: () => void;
   resetGame: () => void;
   setStreakLost: (value: number | null) => void;
   setTempHighlightCode: (code: string | null) => void;
@@ -102,6 +104,7 @@ export const useGameStore = create<GameState>()(
       maxStreak: 0,
       baseChallengeValue: 0,
       tempHighlightCode: null,
+      sonarKey: 0,
 
       setScore: (score) => set({ score }),
       setStreak: (streak) =>
@@ -183,6 +186,11 @@ export const useGameStore = create<GameState>()(
       },
       setRevealed: (revealed) => set({ revealed }),
       triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
+      triggerSonar: () =>
+        set((state) => ({
+          sonarKey: state.sonarKey + 1,
+          pulseKey: state.pulseKey + 1,
+        })),
       resetGame: () =>
         set({
           score: 0,
@@ -211,6 +219,7 @@ export const useGameStore = create<GameState>()(
           clickedCode: null,
           revealed: false,
           pulseKey: 0,
+          sonarKey: 0,
           streakLost: null,
           startTime: null,
         }),
