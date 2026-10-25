@@ -25,7 +25,6 @@ function App() {
     handleReveal,
     gameStatus,
     mode,
-    skipQuestion,
     currentCountry,
     countries,
     missionId,
@@ -111,11 +110,10 @@ function App() {
 
         {/* Map Container - Full Viewport Filling */}
         <div
-          className={`absolute inset-0 w-full h-full transition-all duration-1000 transform ${
-            gameStatus === "playing"
-              ? "brightness-105 contrast-105 saturate-110 scale-100"
-              : "brightness-100 scale-105"
-          }`}
+          className={`absolute inset-0 w-full h-full transition-all duration-1000 transform ${gameStatus === "playing"
+            ? "brightness-105 contrast-105 saturate-110 scale-100"
+            : "brightness-100 scale-105"
+            }`}
         >
           <WorldMap
             onCountryClick={handleCountryClick}
