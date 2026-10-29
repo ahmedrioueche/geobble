@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type GameMode = "identify" | "reverse";
+export type GameMode = "identify" | "reverse" | "pin";
+export type PinDirection = "locate" | "identify";
 export type SubMode = "name" | "flag" | "capital";
 export type ChallengeType = "world" | "count" | "timer";
 
@@ -9,6 +10,8 @@ interface GameState {
   score: number;
   streak: number;
   mode: GameMode;
+  pinDirection: PinDirection;
+  pinLocation: [number, number] | null;
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number; // For count or timer (seconds)
@@ -42,6 +45,8 @@ interface GameState {
   setScore: (score: number) => void;
   setStreak: (streak: number) => void;
   setMode: (mode: GameMode) => void;
+  setPinDirection: (direction: PinDirection) => void;
+  setPinLocation: (location: [number, number] | null) => void;
   setSubMode: (subMode: SubMode) => void;
   setChallenge: (type: ChallengeType, value: number) => void;
   setTimeRemaining: (time: number) => void;
@@ -77,6 +82,8 @@ export const useGameStore = create<GameState>()(
       score: 0,
       streak: 0,
       mode: "identify",
+      pinDirection: "locate",
+      pinLocation: null,
       subMode: "name",
       challengeType: "world",
       challengeValue: 0,
@@ -113,6 +120,8 @@ export const useGameStore = create<GameState>()(
           maxStreak: Math.max(state.maxStreak || 0, streak),
         })),
       setMode: (mode) => set({ mode }),
+      setPinDirection: (pinDirection) => set({ pinDirection }),
+      setPinLocation: (pinLocation) => set({ pinLocation }),
       setSubMode: (subMode) => set({ subMode }),
       setChallenge: (challengeType, challengeValue) =>
         set({
@@ -162,6 +171,7 @@ export const useGameStore = create<GameState>()(
           correctAttempts: 0,
           playedCountryCodes: [],
           gameStatus: "playing",
+          pinLocation: null,
           timeRemaining:
             state.challengeType === "timer" ? state.challengeValue : 0,
           streakLost: null,
@@ -197,6 +207,8 @@ export const useGameStore = create<GameState>()(
           streak: 0,
           maxStreak: 0,
           mode: "identify",
+          pinDirection: "locate",
+          pinLocation: null,
           subMode: "name",
           challengeType: "world",
           challengeValue: 0,

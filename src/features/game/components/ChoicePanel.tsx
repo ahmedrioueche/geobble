@@ -2,13 +2,14 @@ import { motion } from "framer-motion";
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import type { CountryData } from "../../../data/country-data";
-import { useGameStore } from "../../../store/useGameStore";
+import { useGameStore, type SubMode } from "../../../store/useGameStore";
 
 interface ChoicePanelProps {
   choices: string[];
   onChoice: (choice: string) => void;
   disabled?: boolean;
   countries: CountryData[];
+  subModeOverride?: SubMode;
 }
 
 export const ChoicePanel: React.FC<ChoicePanelProps> = ({
@@ -16,8 +17,10 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   onChoice,
   disabled,
   countries,
+  subModeOverride,
 }) => {
   const { subMode, currentCountryCode, feedback, clickedName, revealed } = useGameStore();
+  const activeSubMode = subModeOverride || subMode;
 
   const targetCountry = React.useMemo(() => 
     countries.find(c => c.cca3 === currentCountryCode),
@@ -27,8 +30,8 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   const isCorrectChoice = (choice: string) => {
     if (!targetCountry || !choice) return false;
     const c = choice.toLowerCase();
-    if (subMode === 'flag') return c === targetCountry.cca2?.toLowerCase();
-    if (subMode === 'capital') return c === targetCountry.capital?.[0]?.toLowerCase();
+    if (activeSubMode === 'flag') return c === targetCountry.cca2?.toLowerCase();
+    if (activeSubMode === 'capital') return c === targetCountry.capital?.[0]?.toLowerCase();
     return c === targetCountry.name?.toLowerCase();
   };
 
@@ -36,9 +39,9 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
     <div className="grid grid-cols-1 gap-2 md:gap-3 w-full max-w-[440px] md:max-w-[600px] md:ml-auto md:mr-0 mx-auto">
       {choices.map((choice, i) => {
         const country = countries.find((c) =>
-          subMode === "flag"
+          activeSubMode === "flag"
             ? c.cca2 === choice
-            : subMode === "capital"
+            : activeSubMode === "capital"
               ? c.capital[0] === choice
               : c.name === choice,
         );
@@ -55,7 +58,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
             className="relative flex items-center"
           >
             {/* Educational Hint: Reveal names after choice or skip */}
-            {(subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
+            {(activeSubMode === 'flag' || activeSubMode === 'capital') && (feedback || revealed) && (
               <motion.div
                 initial={{ opacity: 0, x: -15, scale: 0.9 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -84,7 +87,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                   : 'hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10'
               }`}
             >
-              {subMode === "flag" && country ? (
+              {activeSubMode === "flag" && country ? (
                 <img
                   src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
                   alt="Choice"

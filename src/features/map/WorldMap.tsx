@@ -8,7 +8,7 @@ import { useWorldMap, type CountryFeature } from "./useWorldMap";
 import { normalizeCountryName } from "../../utils/name-normalizer";
 
 interface MapProps {
-  onCountryClick?: (name: string, code: string) => void;
+  onCountryClick?: (name: string, code: string, coordinates?: [number, number]) => void;
   selectedCountry?: string;
   selectedCountryCode?: string | null;
   selectedCountryName?: string | null;
@@ -33,6 +33,8 @@ export const WorldMap: React.FC<MapProps> = ({
     clickedCode,
     clickedName,
     mode,
+    pinDirection,
+    pinLocation,
     revealed,
     tempHighlightCode,
   } = useGameStore();
@@ -162,6 +164,51 @@ export const WorldMap: React.FC<MapProps> = ({
     return map;
   }, [geoData, countries]);
 
+  const targetPinCoordinates = useMemo((): [number, number] | null => {
+    if (
+      mode !== "pin" ||
+      pinDirection !== "identify" ||
+      !selectedCountryCode ||
+      !geoData ||
+      !pathGenerator
+    ) return null;
+
+    const feature = (geoData.features as unknown as CountryFeature[]).find((item) => {
+      const code = item.id?.toString() || "";
+      const mappedCode =
+        idToCodeLookup[code] ||
+        idToCodeLookup[item.properties?.name?.toLowerCase() || ""];
+      return mappedCode === selectedCountryCode;
+    });
+    if (!feature) return null;
+
+    const centroid = d3.geoCentroid(feature as any) as [number, number];
+    if (d3.geoContains(feature as any, centroid)) return centroid;
+
+    const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
+    const divisions = 64;
+    const invert = projection.invert;
+    if (!invert) return null;
+    for (let row = 0; row < divisions; row += 1) {
+      for (let column = 0; column < divisions; column += 1) {
+        const point = invert([
+          x0 + ((column + 0.5) / divisions) * (x1 - x0),
+          y0 + ((row + 0.5) / divisions) * (y1 - y0),
+        ]) as [number, number] | null;
+        if (point && d3.geoContains(feature as any, point)) return point;
+      }
+    }
+    return null;
+  }, [
+    mode,
+    pinDirection,
+    selectedCountryCode,
+    geoData,
+    pathGenerator,
+    projection,
+    idToCodeLookup,
+  ]);
+
   // Handle Home View for Desktop/Mobile
   const homeTransform = useMemo(() => {
     if (dimensions.width === 0) return d3.zoomIdentity;
@@ -228,6 +275,8 @@ export const WorldMap: React.FC<MapProps> = ({
       dimensions.width === 0
     )
       return;
+
+    if (mode === "pin") return;
 
     const svg = d3.select(svgRef.current);
     const currentTransform = d3.zoomTransform(svgRef.current);
@@ -463,12 +512,19 @@ export const WorldMap: React.FC<MapProps> = ({
   }, [sonarKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCountryClick = React.useCallback(
-    (name: string, code: string) => {
+    (name: string, code: string, event: MouseEvent) => {
       if (onCountryClick) {
-        onCountryClick(name, code);
+        const invert = projection.invert;
+        const point =
+          mode === "pin" && gRef.current && invert
+            ? (invert(d3.pointer(event, gRef.current)) as
+                | [number, number]
+                | null)
+            : null;
+        onCountryClick(name, code, point || undefined);
       }
     },
-    [onCountryClick],
+    [onCountryClick, mode, projection],
   );
 
   const mapElements = useMemo(() => {
@@ -482,7 +538,8 @@ export const WorldMap: React.FC<MapProps> = ({
 
         const mappedCode =
           idToCodeLookup[code] || idToCodeLookup[name.toLowerCase()];
-        const shouldShowSelection = mode === "reverse" || revealed;
+        const shouldShowSelection =
+          mode === "reverse" || revealed || (mode === "pin" && feedback !== null);
         const isSelected =
           shouldShowSelection && mappedCode &&
           ((selectedCountryCode && mappedCode === selectedCountryCode) ||
@@ -552,21 +609,25 @@ export const WorldMap: React.FC<MapProps> = ({
               style={{
                 fill: fillColor,
                 fillOpacity: 1,
-                strokeWidth: isHighlighted
-                  ? "var(--map-selected-stroke-width)"
-                  : "var(--map-stroke-width)",
+                strokeWidth:
+                  mode === "pin"
+                    ? isSelected
+                      ? "var(--map-selected-stroke-width)"
+                      : 0
+                    : isHighlighted
+                      ? "var(--map-selected-stroke-width)"
+                      : "var(--map-stroke-width)",
               }}
               className={`
-                stroke-white/40 
+                ${mode === "pin" ? (isSelected ? "stroke-white/40" : "") : "stroke-white/40"}
                 transition-all 
                 duration-300 
                 hover:fill-opacity-100
-                hover:stroke-white/90
-                hover:drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]
+                ${mode === "pin" ? "" : "hover:stroke-white/90 hover:drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]"}
                 cursor-pointer
                 ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
               `}
-              onClick={() => handleCountryClick(name, code)}
+              onClick={(event) => handleCountryClick(name, code, event.nativeEvent)}
             >
               {gameStatus !== "playing" && <title>{name}</title>}
             </path>
@@ -584,6 +645,8 @@ export const WorldMap: React.FC<MapProps> = ({
     idToCodeLookup,
     handleCountryClick,
     gameStatus,
+    mode,
+    revealed,
     feedback,
     clickedCode,
     tempHighlightCode,
@@ -633,6 +696,16 @@ export const WorldMap: React.FC<MapProps> = ({
     mode,
   ]);
 
+  const visiblePinCoordinates =
+    mode === "pin" && gameStatus === "playing"
+      ? pinDirection === "identify"
+        ? targetPinCoordinates
+        : pinLocation
+      : null;
+  const visiblePinPoint = visiblePinCoordinates
+    ? projection(visiblePinCoordinates)
+    : null;
+
   return (
     <div
       ref={containerRef}
@@ -652,6 +725,23 @@ export const WorldMap: React.FC<MapProps> = ({
           >
             <g ref={gRef} className="map-features">
               {mapElements}
+
+              {visiblePinPoint && (
+                <g
+                  transform={`translate(${visiblePinPoint[0]}, ${visiblePinPoint[1]})`}
+                  className="pointer-events-none"
+                  aria-label="Map pin"
+                >
+                  <path
+                    d="M0 1C-3-5-12-12-12-20a12 12 0 1 1 24 0C12-12 3-5 0 1Z"
+                    fill={feedback === "correct" ? "#22c55e" : feedback === "wrong" ? "#ef4444" : "#f59e0b"}
+                    stroke="#fff"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle cx="0" cy="-20" r="4" fill="#fff" />
+                </g>
+              )}
 
               {/* Tactical Sonar Animation */}
               <AnimatePresence>

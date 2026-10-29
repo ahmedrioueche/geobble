@@ -1,4 +1,4 @@
-export type GameMode = "identify" | "reverse";
+export type GameMode = "identify" | "reverse" | "pin";
 
 export type GameSubMode = "entire-world" | "set-count" | "timer";
 

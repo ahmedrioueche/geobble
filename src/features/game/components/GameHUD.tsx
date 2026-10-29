@@ -22,6 +22,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     score,
     streak,
     gameStatus,
+    mode,
+    pinDirection,
     subMode,
     setSubMode,
     resetGame,
@@ -37,6 +39,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   } = useGameStore();
 
   const modes: SubMode[] = ["name", "flag", "capital"];
+  const showPromptModes = mode !== "pin" || pinDirection !== "identify";
 
   // Note: maxLevels is now provided by totalLevels in the store for mission stability
 
@@ -125,7 +128,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         <div className="flex items-center gap-3 md:gap-8 lg:gap-12">
           {/* Desktop/Tablet Modes Integration */}
-          {gameStatus === "playing" && (
+          {gameStatus === "playing" && showPromptModes && (
             <div className="hidden lg:flex bg-slate-900/80 p-1 rounded-xl border border-white/15">
               {modes.map((m) => (
                 <button
@@ -313,7 +316,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               />
             </div>
 
-            <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/15 gap-1">
+              {showPromptModes && <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/15 gap-1">
               {modes.map((m) => (
                 <button
                   key={m}
@@ -330,7 +333,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                   {m[0]}
                 </button>
               ))}
-            </div>
+              </div>}
           </div>
         </div>
       )}

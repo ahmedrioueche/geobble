@@ -9,6 +9,7 @@ export const useAppActions = () => {
   const {
     gameStatus,
     mode,
+    pinDirection,
     subMode,
     choices,
     feedback,
@@ -24,6 +25,7 @@ export const useAppActions = () => {
     recordAttempt,
     setStreakLost,
     setTempHighlightCode,
+    setPinLocation,
   } = useGameStore();
 
   const {
@@ -66,8 +68,9 @@ export const useAppActions = () => {
   }, [clickedCountry]);
 
   const handleCountryClick = useCallback(
-    (name: string, code: string) => {
-      if (mode !== "identify" || feedback) return;
+    (name: string, code: string, coordinates?: [number, number]) => {
+      const isPinLocate = mode === "pin" && pinDirection === "locate";
+      if ((mode !== "identify" && !isPinLocate) || feedback) return;
 
       // Multi-tiered lookup: cca3 -> ccn3 (numeric) -> name mapping -> raw name
       let countryData = countries.find((c) => c.cca3 === code) || null;
@@ -85,6 +88,7 @@ export const useAppActions = () => {
       if (gameStatus === "playing") {
         const targetCountry = currentCountry;
         if (!targetCountry) return;
+        if (isPinLocate && coordinates) setPinLocation(coordinates);
 
         const isCorrect = countryData?.cca3 === targetCountry.cca3;
 
@@ -150,6 +154,8 @@ export const useAppActions = () => {
       recordAttempt,
       setStreakLost,
       setTempHighlightCode,
+      setPinLocation,
+      pinDirection,
       clearRevealTimer,
     ],
   );
@@ -163,9 +169,11 @@ export const useAppActions = () => {
       const normalizedChoice = normalizeCountryName(choice);
       let isCorrect = false;
 
-      if (subMode === "flag") {
+      const choiceSubMode = mode === "pin" ? "name" : subMode;
+
+      if (choiceSubMode === "flag") {
         isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();
-      } else if (subMode === "capital") {
+      } else if (choiceSubMode === "capital") {
         isCorrect =
           choice.toLowerCase() === currentCountry.capital[0].toLowerCase();
       } else {
@@ -208,6 +216,7 @@ export const useAppActions = () => {
       feedback,
       currentCountry,
       subMode,
+      mode,
       nextQuestion,
       setFeedback,
       score,

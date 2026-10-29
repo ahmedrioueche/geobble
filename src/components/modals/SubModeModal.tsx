@@ -4,6 +4,8 @@ import {
   GraduationCap,
   Hash,
   Lock,
+  MapPin,
+  Crosshair,
   Timer,
 } from "lucide-react";
 import React, { useState } from "react";
@@ -24,6 +26,8 @@ const SubModeModal: React.FC = () => {
   const { currentModal, subModeProps, closeModal } = useModalStore();
   const {
     setChallenge,
+    pinDirection,
+    setPinDirection,
     setDifficultyStage,
     unlockedStage,
     challengeType,
@@ -40,7 +44,6 @@ const SubModeModal: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<number>(
     unlockedStage || 1,
   );
-
   const maxLevels =
     selectedType === "world" ? 1 : getMaxLevels(selectedValue);
 
@@ -65,7 +68,11 @@ const SubModeModal: React.FC = () => {
   };
 
   const modeTitle =
-    subModeProps.mode === "identify" ? "IDENTIFY MISSION" : "REVERSE OPS";
+    subModeProps.mode === "identify"
+      ? "IDENTIFY MISSION"
+      : subModeProps.mode === "pin"
+        ? "PIN DROP"
+        : "REVERSE OPS";
 
   return (
     <BaseModal
@@ -83,6 +90,34 @@ const SubModeModal: React.FC = () => {
       }}
     >
       <div className="space-y-8">
+        {subModeProps.mode === "pin" && (
+          <div>
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
+              Select Direction
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { id: "locate" as const, label: "LOCATE", description: "Drop inside the named country", icon: MapPin },
+                { id: "identify" as const, label: "IDENTIFY", description: "Name the country under the pin", icon: Crosshair },
+              ]).map(({ id, label, description, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setPinDirection(id)}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+                    pinDirection === id
+                      ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                      : "border-white/5 bg-white/5 hover:border-white/20"
+                  }`}
+                >
+                  <Icon className={`w-6 h-6 ${pinDirection === id ? "text-primary" : "text-white/40"}`} />
+                  <span className="font-bold text-sm">{label}</span>
+                  <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">{description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Challenge Type Selection */}
         <div>
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">

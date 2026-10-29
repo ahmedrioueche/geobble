@@ -29,6 +29,15 @@ const MODES_CONFIG = [
       "A country glows green on the world map. Your objective is to identify which country it is by picking the correct choice from 4 options.",
     tip: "Great for testing your recognition of territory borders, shapes, flags, and capitals.",
   },
+  {
+    id: "pin" as GameMode,
+    icon: "📍",
+    title: "PIN DROP",
+    badge: "BORDERLESS MAP",
+    description:
+      "Drop a pin inside a named country, or identify a country from a pin already on the map.",
+    tip: "Two directions, one hidden-border challenge.",
+  },
 ];
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({

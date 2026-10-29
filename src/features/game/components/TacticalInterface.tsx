@@ -20,7 +20,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   onChoiceSelect,
   onReveal,
 }) => {
-  const { gameStatus, mode, subMode, feedback, clickedName, choices, revealed } = useGameStore();
+  const { gameStatus, mode, pinDirection, subMode, feedback, clickedName, choices, revealed } = useGameStore();
 
   const [isDocked, setIsDocked] = useState(mode !== "identify");
   const [isJustDocked, setIsJustDocked] = useState(false);
@@ -85,13 +85,14 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                     />
                   </div>
 
-              {mode === "reverse" && (
+              {(mode === "reverse" || (mode === "pin" && pinDirection === "identify")) && (
                 <div className="shadow-2xl rounded-3xl bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit">
                   <ChoicePanel
                     choices={choices}
                     onChoice={onChoiceSelect}
                     disabled={!!feedback}
                     countries={countries}
+                    subModeOverride={mode === "pin" ? "name" : undefined}
                   />
                 </div>
               )}

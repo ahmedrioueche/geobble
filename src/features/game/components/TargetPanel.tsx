@@ -16,7 +16,8 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onReveal,
   isJustDocked = false,
 }) => {
-  const { mode, subMode, triggerSonar, revealed } = useGameStore();
+  const { mode, pinDirection, subMode, triggerSonar, revealed } = useGameStore();
+  const isPinIdentify = mode === "pin" && pinDirection === "identify";
 
   if (!country) return null;
 
@@ -45,7 +46,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
         className="relative px-4 py-2 md:px-7 md:py-4 rounded-2xl border border-white/10 transition-all duration-300 flex items-center gap-4 md:gap-6 bg-slate-900/95 backdrop-blur-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
       >
         {/* Educational Hint: Reveal official country name for Flags/Capitals (Standard Modes only) */}
-        {mode !== 'reverse' && (subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
+        {mode !== 'reverse' && !isPinIdentify && (subMode === 'flag' || subMode === 'capital') && (feedback || revealed) && (
           <motion.div
             initial={{ opacity: 0, x: -15, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -74,6 +75,10 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               <span>🔍</span>
               <span>FIND ON MAP</span>
             </button>
+          ) : isPinIdentify ? (
+            <span className="text-sm md:text-xl font-black text-sky-300 uppercase tracking-tight">
+              IDENTIFY PIN
+            </span>
           ) : subMode === "flag" ? (
             <img
               src={`https://flagcdn.com/w160/${country.cca2.toLowerCase()}.png`}
@@ -88,7 +93,7 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
 
           <div className="w-[1px] h-4 md:h-7 bg-white/20"></div>
 
-          {mode !== "reverse" && (
+          {mode !== "reverse" && !isPinIdentify && (
             <button
               onClick={onReveal}
               disabled={!!feedback || revealed}

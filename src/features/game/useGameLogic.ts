@@ -28,6 +28,7 @@ export const useGameLogic = () => {
     setMissionId,
     setFeedback,
     setRevealed,
+    setPinLocation,
     challengeType,
     challengeValue,
     totalQuestions,
@@ -318,6 +319,7 @@ export const useGameLogic = () => {
     // 3. Reset feedback and revealed state
     setFeedback(null);
     setRevealed(false);
+    setPinLocation(null);
 
     // 4. Set new target and record it
     setCurrentCountry(target.cca3);
@@ -325,8 +327,14 @@ export const useGameLogic = () => {
     setMissionId(Date.now().toString());
 
     // 5. If reverse mode, generate choices
-    if (freshState.mode === "reverse") {
-      generateChoices(target, freshState.subMode);
+    if (
+      freshState.mode === "reverse" ||
+      (freshState.mode === "pin" && freshState.pinDirection === "identify")
+    ) {
+      generateChoices(
+        target,
+        freshState.mode === "pin" ? "name" : freshState.subMode,
+      );
     }
   }, [
     countries,
@@ -337,6 +345,7 @@ export const useGameLogic = () => {
     setFeedback,
     generateChoices,
     setRevealed,
+    setPinLocation,
   ]);
 
   // Mission Completion Watcher
