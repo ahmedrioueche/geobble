@@ -20,6 +20,7 @@ export const useGameLogic = () => {
     currentCountryCode,
     setCurrentCountry,
     mode,
+    pinDirection,
     subMode,
     setChoices,
     setChoiceCodes,
@@ -331,10 +332,7 @@ export const useGameLogic = () => {
       freshState.mode === "reverse" ||
       (freshState.mode === "pin" && freshState.pinDirection === "identify")
     ) {
-      generateChoices(
-        target,
-        freshState.mode === "pin" ? "name" : freshState.subMode,
-      );
+      generateChoices(target, freshState.subMode);
     }
   }, [
     countries,
@@ -370,7 +368,11 @@ export const useGameLogic = () => {
   // Effect to update labels (and sort them) when subMode changes in Reverse mode
   // This keeps the countries stable but rearranges them alphabetically based on the current DISPLAY value
   useEffect(() => {
-    if (mode === "reverse" && gameStatus === "playing" && currentCountryCode) {
+    if (
+      (mode === "reverse" || (mode === "pin" && pinDirection === "identify")) &&
+      gameStatus === "playing" &&
+      currentCountryCode
+    ) {
       const state = useGameStore.getState();
       if (state.choiceCodes.length > 0) {
         const getChoiceValue = (code: string) => {
@@ -390,7 +392,7 @@ export const useGameLogic = () => {
         setChoices(updatedChoices);
       }
     }
-  }, [subMode, mode, gameStatus, currentCountryCode, countries, setChoices]);
+  }, [subMode, mode, pinDirection, gameStatus, currentCountryCode, countries, setChoices]);
 
   // Timer Engine
   useEffect(() => {

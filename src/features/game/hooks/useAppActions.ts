@@ -169,7 +169,7 @@ export const useAppActions = () => {
       const normalizedChoice = normalizeCountryName(choice);
       let isCorrect = false;
 
-      const choiceSubMode = mode === "pin" ? "name" : subMode;
+      const choiceSubMode = subMode;
 
       if (choiceSubMode === "flag") {
         isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();

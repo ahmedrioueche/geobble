@@ -167,7 +167,6 @@ export const WorldMap: React.FC<MapProps> = ({
   const targetPinCoordinates = useMemo((): [number, number] | null => {
     if (
       mode !== "pin" ||
-      pinDirection !== "identify" ||
       !selectedCountryCode ||
       !geoData ||
       !pathGenerator
@@ -201,7 +200,6 @@ export const WorldMap: React.FC<MapProps> = ({
     return null;
   }, [
     mode,
-    pinDirection,
     selectedCountryCode,
     geoData,
     pathGenerator,
@@ -737,15 +735,19 @@ export const WorldMap: React.FC<MapProps> = ({
     mode,
   ]);
 
-  const visiblePinCoordinates =
-    mode === "pin" && gameStatus === "playing"
-      ? pinDirection === "identify"
-        ? targetPinCoordinates
-        : pinLocation
+  const isPinGame = mode === "pin" && gameStatus === "playing";
+  const showTargetPin =
+    isPinGame &&
+    (pinDirection === "identify" || (pinDirection === "locate" && revealed));
+  const targetPinPoint =
+    showTargetPin && targetPinCoordinates
+      ? projection(targetPinCoordinates)
       : null;
-  const visiblePinPoint = visiblePinCoordinates
-    ? projection(visiblePinCoordinates)
-    : null;
+  const guessPinPoint =
+    isPinGame && pinDirection === "locate" && pinLocation
+      ? projection(pinLocation)
+      : null;
+  const pinScale = dimensions.width < 768 ? 0.34 : 0.5;
 
   return (
     <div
@@ -767,11 +769,28 @@ export const WorldMap: React.FC<MapProps> = ({
             <g ref={gRef} className="map-features">
               {mapElements}
 
-              {visiblePinPoint && (
+              {targetPinPoint && (
                 <g
-                  transform={`translate(${visiblePinPoint[0]}, ${visiblePinPoint[1]})`}
+                  transform={`translate(${targetPinPoint[0]}, ${targetPinPoint[1]}) scale(${pinScale})`}
                   className="pointer-events-none"
-                  aria-label="Map pin"
+                  aria-label="Target location"
+                >
+                  <path
+                    d="M0 1C-3-5-12-12-12-20a12 12 0 1 1 24 0C12-12 3-5 0 1Z"
+                    fill="#22c55e"
+                    stroke="#fff"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle cx="0" cy="-20" r="4" fill="#fff" />
+                </g>
+              )}
+
+              {guessPinPoint && (
+                <g
+                  transform={`translate(${guessPinPoint[0]}, ${guessPinPoint[1]}) scale(${pinScale})`}
+                  className="pointer-events-none"
+                  aria-label="Your pin"
                 >
                   <path
                     d="M0 1C-3-5-12-12-12-20a12 12 0 1 1 24 0C12-12 3-5 0 1Z"

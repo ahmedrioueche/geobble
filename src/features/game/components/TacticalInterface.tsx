@@ -77,12 +77,14 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                   className="pointer-events-auto flex flex-col items-end gap-3"
                 >
                   <div className="w-full flex flex-col items-end gap-3">
-                    <TargetPanel
-                      country={currentCountry}
-                      feedback={feedback}
-                      onReveal={onReveal}
-                      isJustDocked={isJustDocked}
-                    />
+                    {!(mode === "pin" && pinDirection === "identify") && (
+                      <TargetPanel
+                        country={currentCountry}
+                        feedback={feedback}
+                        onReveal={onReveal}
+                        isJustDocked={isJustDocked}
+                      />
+                    )}
                   </div>
 
               {(mode === "reverse" || (mode === "pin" && pinDirection === "identify")) && (
@@ -92,7 +94,6 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                     onChoice={onChoiceSelect}
                     disabled={!!feedback}
                     countries={countries}
-                    subModeOverride={mode === "pin" ? "name" : undefined}
                   />
                 </div>
               )}
