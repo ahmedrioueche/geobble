@@ -610,7 +610,9 @@ export const WorldMap: React.FC<MapProps> = ({
         // Island Guide: Show a white dashed circle around tiny islands
         // Only active in Reverse Mode or when the Reveal helper is used
         let guideCircle = null;
-        const isGuideActive = isSelected || (isFeedbackItem && mode === "reverse");
+        const isGuideActive =
+          mode !== "pin" &&
+          (isSelected || (isFeedbackItem && mode === "reverse"));
 
         if (isTiny && isGuideActive) {
           const effectiveGeometry = getEffectiveGeometry(feature);
@@ -646,23 +648,25 @@ export const WorldMap: React.FC<MapProps> = ({
               style={{
                 fill: fillColor,
                 fillOpacity: 1,
+                stroke: mode === "pin" ? fillColor : undefined,
                 strokeWidth:
                   mode === "pin"
-                    ? isSelected
-                      ? "var(--map-selected-stroke-width)"
-                      : 0
+                    ? 1.5
                     : isHighlighted
                       ? "var(--map-selected-stroke-width)"
                       : "var(--map-stroke-width)",
+                strokeLinejoin: mode === "pin" ? "round" : undefined,
+                strokeLinecap: mode === "pin" ? "round" : undefined,
+                vectorEffect: mode === "pin" ? "non-scaling-stroke" : undefined,
               }}
               className={`
-                ${mode === "pin" ? (isSelected ? "stroke-white/40" : "") : "stroke-white/40"}
+                ${mode === "pin" ? "" : "stroke-white/40"}
                 transition-all 
                 duration-300 
                 hover:fill-opacity-100
                 ${mode === "pin" ? "" : "hover:stroke-white/90 hover:drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]"}
                 cursor-pointer
-                ${isHighlighted ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
+                ${isHighlighted && mode !== "pin" ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
               `}
               onClick={(event) => handleCountryClick(name, code, event.nativeEvent)}
             >
