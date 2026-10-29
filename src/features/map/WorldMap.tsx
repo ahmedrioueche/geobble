@@ -276,13 +276,13 @@ export const WorldMap: React.FC<MapProps> = ({
     )
       return;
 
-    if (mode === "pin") return;
-
     const svg = d3.select(svgRef.current);
     const currentTransform = d3.zoomTransform(svgRef.current);
+    const isPinLocate = mode === "pin" && pinDirection === "locate";
+    const isPinIdentify = mode === "pin" && pinDirection === "identify";
 
     // Case 1: Stealth Smart Zoom for Identify search phase
-    if (mode === "identify" && !revealed) {
+    if ((mode === "identify" && !revealed) || isPinLocate) {
       if (!selectedCountryCode) return;
 
       const feature = (geoData.features as unknown as CountryFeature[]).find(
@@ -364,6 +364,40 @@ export const WorldMap: React.FC<MapProps> = ({
     // Case 2: Target Selection (Reverse Ops or Identify Reveal) - Perform Smart Feature Zoom
     if (!selectedCountryCode) return;
 
+    if (isPinIdentify && targetPinCoordinates) {
+      const point = projection(targetPinCoordinates);
+      if (!point) return;
+
+      const isMobile = dimensions.width < 768;
+      const targetCenterX = isMobile
+        ? dimensions.width * 0.35
+        : dimensions.width / 2;
+      const targetCenterY = isMobile
+        ? dimensions.height * 0.65
+        : dimensions.height / 2;
+      const targetScale = Math.min(currentTransform.k, homeTransform.k);
+      const screenPoint = currentTransform.apply(point);
+      const isCentered =
+        Math.abs(screenPoint[0] - targetCenterX) < dimensions.width * 0.12 &&
+        Math.abs(screenPoint[1] - targetCenterY) < dimensions.height * 0.12;
+      const isGoodScale =
+        Math.abs(Math.log2(currentTransform.k / targetScale)) < 0.25;
+
+      if (isCentered && isGoodScale) return;
+
+      const transform = d3.zoomIdentity
+        .translate(targetCenterX, targetCenterY)
+        .scale(targetScale)
+        .translate(-point[0], -point[1]);
+
+      svg
+        .transition()
+        .duration(1200)
+        .ease(d3.easeCubicInOut)
+        .call(zoomRef.current.transform, transform);
+      return;
+    }
+
     const feature = (geoData.features as unknown as CountryFeature[]).find(
       (f) => {
         const code = f.id?.toString() || "";
@@ -436,6 +470,7 @@ export const WorldMap: React.FC<MapProps> = ({
   }, [
     missionId,
     selectedCountryCode,
+    pinDirection,
     revealed,
     mode,
     gameStatus,
@@ -445,6 +480,8 @@ export const WorldMap: React.FC<MapProps> = ({
     idToCodeLookup,
     homeTransform,
     getEffectiveGeometry,
+    targetPinCoordinates,
+    projection,
   ]);
 
   // Sonar button: always pan to target immediately, no in-view skip
