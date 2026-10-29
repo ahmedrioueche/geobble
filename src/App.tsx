@@ -9,10 +9,8 @@ import { useAppActions } from "./features/game/hooks/useAppActions";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
 import Modals from "./modals";
-import { useGameStore } from "./store/useGameStore";
 
 function App() {
-  const { setMode } = useGameStore();
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [showModeSelect, setShowModeSelect] = useState(false);
 
@@ -53,7 +51,6 @@ function App() {
         {showModeSelect && (
           <ModeSelection
             currentMode={mode}
-            onSelect={(m) => setMode(m)}
             onClose={() => setShowModeSelect(false)}
           />
         )}

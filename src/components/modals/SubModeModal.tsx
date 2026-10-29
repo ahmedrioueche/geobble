@@ -6,11 +6,14 @@ import {
   Lock,
   MapPin,
   Crosshair,
+  Flag,
+  Landmark,
+  Type,
   Timer,
 } from "lucide-react";
 import React, { useState } from "react";
 import { useModalStore } from "../../store/modal";
-import { useGameStore, type ChallengeType } from "../../store/useGameStore";
+import { useGameStore, type ChallengeType, type SubMode } from "../../store/useGameStore";
 import { getMaxLevels } from "../../data/difficulty-ranking";
 import BaseModal from "./BaseModal";
 
@@ -26,6 +29,10 @@ const SubModeModal: React.FC = () => {
   const { currentModal, subModeProps, closeModal } = useModalStore();
   const {
     setChallenge,
+    mode,
+    setMode,
+    subMode,
+    setSubMode,
     pinDirection,
     setPinDirection,
     setDifficultyStage,
@@ -46,6 +53,11 @@ const SubModeModal: React.FC = () => {
   );
   const maxLevels =
     selectedType === "world" ? 1 : getMaxLevels(selectedValue);
+  const promptModes: { id: SubMode; label: string; icon: typeof Type }[] = [
+    { id: "name", label: "COUNTRY NAME", icon: Type },
+    { id: "flag", label: "FLAG", icon: Flag },
+    { id: "capital", label: "CAPITAL", icon: Landmark },
+  ];
 
   // If stage is out of bounds for the current count, adjust
   if (selectedStage > maxLevels && selectedType !== "world") {
@@ -56,6 +68,20 @@ const SubModeModal: React.FC = () => {
 
   const handleStart = () => {
     setChallenge(selectedType, selectedValue);
+    const direction =
+      mode === "pin"
+        ? pinDirection
+        : mode === "reverse"
+          ? "identify"
+          : "locate";
+    setMode(
+      subModeProps.modeGroup === "pin"
+        ? "pin"
+        : direction === "locate"
+          ? "identify"
+          : "reverse",
+    );
+    if (subModeProps.modeGroup === "pin") setPinDirection(direction);
     setDifficultyStage(selectedStage);
 
     // In a real implementation, we would call the game start logic here.
@@ -67,12 +93,23 @@ const SubModeModal: React.FC = () => {
     window.dispatchEvent(new CustomEvent("game:start-mission"));
   };
 
-  const modeTitle =
-    subModeProps.mode === "identify"
-      ? "IDENTIFY MISSION"
-      : subModeProps.mode === "pin"
-        ? "PIN DROP"
-        : "REVERSE OPS";
+  const selectedDirection =
+    mode === "pin"
+      ? pinDirection
+      : mode === "reverse"
+        ? "identify"
+        : "locate";
+  const modeTitle = subModeProps.modeGroup === "pin" ? "PIN DROP" : "COUNTRY MODE";
+  const directions =
+    subModeProps.modeGroup === "pin"
+      ? [
+          { id: "locate" as const, label: "LOCATE", description: "Drop inside the named country", icon: MapPin },
+          { id: "identify" as const, label: "IDENTIFY", description: "Name the country under the pin", icon: Crosshair },
+        ]
+      : [
+          { id: "locate" as const, label: "LOCATE", description: "Find the prompted country on the map", icon: MapPin },
+          { id: "identify" as const, label: "IDENTIFY", description: "Choose the country highlighted on the map", icon: Crosshair },
+        ];
 
   return (
     <BaseModal
@@ -90,33 +127,59 @@ const SubModeModal: React.FC = () => {
       }}
     >
       <div className="space-y-8">
-        {subModeProps.mode === "pin" && (
-          <div>
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-              Select Direction
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                { id: "locate" as const, label: "LOCATE", description: "Drop inside the named country", icon: MapPin },
-                { id: "identify" as const, label: "IDENTIFY", description: "Name the country under the pin", icon: Crosshair },
-              ]).map(({ id, label, description, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setPinDirection(id)}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                    pinDirection === id
-                      ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                      : "border-white/5 bg-white/5 hover:border-white/20"
-                  }`}
-                >
-                  <Icon className={`w-6 h-6 ${pinDirection === id ? "text-primary" : "text-white/40"}`} />
-                  <span className="font-bold text-sm">{label}</span>
-                  <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">{description}</span>
-                </button>
-              ))}
-            </div>
+        <div>
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
+            Starting Prompt
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {promptModes.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setSubMode(id)}
+                aria-pressed={subMode === id}
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+                  subMode === id
+                    ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                    : "border-white/5 bg-white/5 hover:border-white/20"
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${subMode === id ? "text-primary" : "text-white/40"}`} />
+                <span className="font-bold text-[10px] sm:text-xs">{label}</span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
+            Select Direction
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {directions.map(({ id, label, description, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => {
+                  if (subModeProps.modeGroup === "pin") {
+                    setMode("pin");
+                    setPinDirection(id);
+                  } else {
+                    setMode(id === "locate" ? "identify" : "reverse");
+                  }
+                }}
+                aria-pressed={selectedDirection === id}
+                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+                  selectedDirection === id
+                    ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                    : "border-white/5 bg-white/5 hover:border-white/20"
+                }`}
+              >
+                <Icon className={`w-6 h-6 ${selectedDirection === id ? "text-primary" : "text-white/40"}`} />
+                <span className="font-bold text-sm">{label}</span>
+                <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">{description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Challenge Type Selection */}
         <div>

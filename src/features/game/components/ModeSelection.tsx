@@ -1,60 +1,50 @@
 import { motion } from "framer-motion";
+import { Check } from "lucide-react";
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { type GameMode } from "../../../store/useGameStore";
+import type { GameModeGroup } from "../../../types/modal";
 import { useModalStore } from "../../../store/modal";
 
 interface ModeSelectionProps {
-  onSelect: (mode: GameMode) => void;
   onClose: () => void;
   currentMode: GameMode;
 }
 
 const MODES_CONFIG = [
   {
-    id: "identify" as GameMode,
+    id: "country" as GameModeGroup,
     icon: "🎯",
-    title: "FIND ON MAP",
-    badge: "CLICK THE MAP",
+    title: "COUNTRY MODE",
+    badge: "LOCATE OR IDENTIFY",
     description:
-      "You are given a Country Name, Flag, or Capital. Your objective is to find and click that country directly on the interactive world map.",
-    tip: "Perfect for learning where countries are located in the world. Use Sonar or Reveal if you get stuck.",
+      "Choose Locate to find a country from its name, flag, or capital. Choose Identify to name the highlighted country from four choices. Switch prompt types during play.",
   },
   {
-    id: "reverse" as GameMode,
-    icon: "⚡",
-    title: "MULTIPLE CHOICE",
-    badge: "REVERSE QUIZ",
-    description:
-      "A country glows green on the world map. Your objective is to identify which country it is by picking the correct choice from 4 options.",
-    tip: "Great for testing your recognition of territory borders, shapes, flags, and capitals.",
-  },
-  {
-    id: "pin" as GameMode,
+    id: "pin" as GameModeGroup,
     icon: "📍",
     title: "PIN DROP",
     badge: "BORDERLESS MAP",
     description:
-      "Drop a pin inside a named country, or identify a country from a pin already on the map.",
-    tip: "Two directions, one hidden-border challenge.",
+      "Play without borders. In Locate, place a pin inside the prompted country. In Identify, use the pin on the map to choose the country. Switch prompt types during play.",
   },
 ];
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({
-  onSelect,
   onClose,
   currentMode,
 }) => {
-  const [selected, setSelected] = React.useState<GameMode>(currentMode);
+  const [selected, setSelected] = React.useState<GameModeGroup>(
+    currentMode === "pin" ? "pin" : "country",
+  );
   const openModal = useModalStore((state) => state.openModal);
 
-  const handleSelect = (mode: GameMode) => {
-    setSelected(mode);
-    onSelect(mode);
+  const handleSelect = (modeGroup: GameModeGroup) => {
+    setSelected(modeGroup);
   };
 
   const handleExecute = () => {
-    openModal("sub-mode", { mode: selected });
+    openModal("sub-mode", { modeGroup: selected });
   };
 
   return (
@@ -62,9 +52,9 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[100] overflow-y-scroll bg-slate-950/95 backdrop-blur-3xl py-8 md:py-16 px-4 md:px-8 pb-32"
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/95 backdrop-blur-3xl px-4 py-8 md:px-8 md:py-12 pb-28"
       >
-        <div className="max-w-5xl mx-auto flex flex-col items-center relative">
+        <div className="relative mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-5xl flex-col items-center justify-center">
           {/* Single close button top-right */}
           <div className="absolute top-0 right-0">
             <button
@@ -82,9 +72,9 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           <motion.div
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-center mb-8 md:mb-14"
+            className="mb-6 text-center md:mb-9"
           >
-            <h2 className="text-3xl md:text-6xl font-black tracking-tighter text-white mb-3 uppercase italic">
+            <h2 className="text-2xl md:text-5xl font-black tracking-tighter text-white mb-2 uppercase italic">
               SELECT <span className="text-[var(--color-accent)]">GAME</span> MODE
             </h2>
             <p className="text-[var(--color-text-secondary)] text-[10px] md:text-xs font-bold tracking-[0.3em] uppercase opacity-90">
@@ -93,56 +83,53 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           </motion.div>
 
           {/* Mode Cards Grid */}
-          <div className="flex flex-wrap justify-center gap-6 md:gap-8 w-full max-w-4xl">
+          <div className="grid w-full max-w-4xl grid-cols-1 items-stretch gap-4 sm:grid-cols-2 md:gap-6">
             {MODES_CONFIG.map((mode, i) => (
-              <motion.div
+              <motion.button
                 key={mode.id}
+                type="button"
+                aria-pressed={selected === mode.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 onClick={() => handleSelect(mode.id)}
                 className={`
-                  relative p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 cursor-pointer transition-all duration-300 overflow-hidden group flex flex-col min-h-[320px] md:min-h-[350px]
-                  flex-1 min-w-[280px] max-w-[420px]
+                  group relative flex min-h-[240px] min-w-0 flex-col overflow-hidden rounded-2xl border-2 p-5 text-left transition-all duration-300 sm:min-h-[270px] md:p-7
                   ${
                     selected === mode.id
-                      ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_80px_rgba(56,189,248,0.25)] scale-[1.02]"
+                      ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.2)]"
                       : "border-white/20 bg-slate-900/80 hover:border-white/40 hover:bg-slate-900"
                   }
                 `}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-4xl md:text-5xl transform group-hover:scale-110 transition-transform duration-300">
+                <div className="mb-4 flex items-center justify-between gap-2 md:mb-6">
+                  <div className="text-4xl transition-transform duration-300 group-hover:scale-110 md:text-5xl">
                     {mode.icon}
                   </div>
-                  <span className="text-[10px] md:text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full bg-white/10 text-sky-400 border border-sky-400/30">
+                  <span className="inline-flex rounded-full border border-sky-400/30 bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-sky-400 sm:text-[10px]">
                     {mode.badge}
                   </span>
                 </div>
 
-                <h3 className="text-2xl md:text-3xl font-black text-white mb-3 tracking-tight uppercase leading-tight">
+                <h3 className="mb-3 break-words text-lg font-black uppercase leading-tight tracking-tight text-white md:text-2xl">
                   {mode.title}
                 </h3>
-                <p className="text-slate-300 text-xs md:text-sm mb-6 font-medium leading-relaxed">
+                <p className="text-sm font-medium leading-relaxed text-slate-300 md:text-base">
                   {mode.description}
                 </p>
 
-                <div className="mt-auto pt-4 border-t border-white/10">
-                  <span className="text-[var(--color-accent)] text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] block mb-1">
-                    TIP
-                  </span>
-                  <p className="text-white/80 text-xs font-medium leading-relaxed">
-                    {mode.tip}
-                  </p>
+                <div className="mt-auto flex min-h-8 items-end pt-5">
+                  {selected === mode.id && (
+                    <motion.span
+                      layoutId="active-indicator"
+                      className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-[var(--color-accent)]"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Selected
+                    </motion.span>
+                  )}
                 </div>
-
-                {selected === mode.id && (
-                  <motion.div
-                    layoutId="active-indicator"
-                    className="absolute top-5 right-5 w-4 h-4 rounded-full bg-[var(--color-accent)] shadow-[0_0_15px_var(--color-accent)]"
-                  />
-                )}
-              </motion.div>
+              </motion.button>
             ))}
           </div>
         </div>

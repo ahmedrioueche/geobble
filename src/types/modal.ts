@@ -1,9 +1,10 @@
 export type GameMode = "identify" | "reverse" | "pin";
+export type GameModeGroup = "country" | "pin";
 
 export type GameSubMode = "entire-world" | "set-count" | "timer";
 
 export interface SubModeModalProps {
-  mode: GameMode;
+  modeGroup: GameModeGroup;
 }
 
 export interface ConfirmModalProps {
