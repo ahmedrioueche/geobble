@@ -86,9 +86,7 @@ export const useAppActions = () => {
         const targetCountry = currentCountry;
         if (!targetCountry) return;
 
-        const normalizedTarget = normalizeCountryName(targetCountry.name);
-        const normalizedClicked = normalizeCountryName(nameMapping[name] || name);
-        const isCorrect = normalizedTarget === normalizedClicked;
+        const isCorrect = countryData?.cca3 === targetCountry.cca3;
 
         if (revealed) {
           if (isCorrect) {

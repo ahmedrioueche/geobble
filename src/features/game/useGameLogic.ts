@@ -462,11 +462,17 @@ export const useGameLogic = () => {
           isCorrect = normalizedSelected === normalizedTarget;
         }
       } else {
-        // In identify mode, user clicks map, always giving the country name
+        // In identify mode, the selected identifier is a map country name or code.
         const mappedSelectedName =
           nameMapping[selectedIdentifier] || selectedIdentifier;
-        const normalizedSelected = normalizeCountryName(mappedSelectedName);
-        isCorrect = normalizedSelected === normalizedTarget;
+        const selectedCountry = countries.find(
+          (country) =>
+            country.cca3 === selectedIdentifier.toUpperCase() ||
+            country.ccn3 === selectedIdentifier ||
+            normalizeCountryName(country.name) ===
+              normalizeCountryName(mappedSelectedName),
+        );
+        isCorrect = selectedCountry?.cca3 === targetCountry.cca3;
       }
 
       if (isCorrect) {
