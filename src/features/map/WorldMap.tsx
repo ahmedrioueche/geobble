@@ -747,7 +747,7 @@ export const WorldMap: React.FC<MapProps> = ({
     isPinGame && pinDirection === "locate" && pinLocation
       ? projection(pinLocation)
       : null;
-  const pinScale = dimensions.width < 768 ? 0.34 : 0.5;
+  const pinScale = dimensions.width < 768 ? 0.2 : 0.5;
 
   return (
     <div

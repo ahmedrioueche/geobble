@@ -52,9 +52,9 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/95 backdrop-blur-3xl px-4 py-8 md:px-8 md:py-12 pb-28"
+        className="fixed inset-0 z-[100] flex items-start justify-start overflow-y-auto bg-slate-950/95 backdrop-blur-3xl px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-28 md:items-center md:justify-center md:px-8 md:py-12"
       >
-        <div className="relative mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-5xl flex-col items-center justify-center">
+        <div className="relative mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-start pt-2 md:min-h-[calc(100dvh-8rem)] md:justify-center md:pt-0">
           {/* Single close button top-right */}
           <div className="absolute top-0 right-0">
             <button
