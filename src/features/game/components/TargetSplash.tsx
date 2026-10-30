@@ -14,14 +14,17 @@ export const TargetSplash: React.FC<TargetSplashProps> = ({
   onDockStart,
   onDockComplete,
 }) => {
-  const { gameStatus, mode, subMode, feedback, revealed } = useGameStore();
+  const { gameStatus, mode, pinDirection, subMode, feedback, revealed } =
+    useGameStore();
+  const shouldAnimateTarget =
+    mode === "identify" || (mode === "pin" && pinDirection === "locate");
   const [isVisible, setIsVisible] = useState(false);
   const [targetOffset, setTargetOffset] = useState({ x: 250, y: -250 });
 
   useEffect(() => {
     if (
       gameStatus !== "playing" ||
-      mode !== "identify" ||
+      !shouldAnimateTarget ||
       !currentCountry ||
       feedback !== null ||
       revealed
@@ -55,9 +58,19 @@ export const TargetSplash: React.FC<TargetSplashProps> = ({
     return () => {
       clearTimeout(dockStartTimer);
     };
-  }, [currentCountry?.cca3, subMode, mode, gameStatus, feedback, revealed, onDockStart]);
+  }, [
+    currentCountry?.cca3,
+    subMode,
+    mode,
+    pinDirection,
+    shouldAnimateTarget,
+    gameStatus,
+    feedback,
+    revealed,
+    onDockStart,
+  ]);
 
-  if (gameStatus !== "playing" || mode !== "identify" || !currentCountry) {
+  if (gameStatus !== "playing" || !shouldAnimateTarget || !currentCountry) {
     return null;
   }
 

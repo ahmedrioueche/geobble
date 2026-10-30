@@ -21,18 +21,27 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   onReveal,
 }) => {
   const { gameStatus, mode, pinDirection, subMode, feedback, clickedName, choices, revealed } = useGameStore();
+  const shouldAnimateTarget =
+    mode === "identify" || (mode === "pin" && pinDirection === "locate");
 
-  const [isDocked, setIsDocked] = useState(mode !== "identify");
+  const [isDocked, setIsDocked] = useState(!shouldAnimateTarget);
   const [isJustDocked, setIsJustDocked] = useState(false);
 
   useEffect(() => {
-    if (mode === "identify" && gameStatus === "playing" && !feedback && !revealed) {
+    if (shouldAnimateTarget && gameStatus === "playing" && !feedback && !revealed) {
       setIsDocked(false);
       setIsJustDocked(false);
     } else {
       setIsDocked(true);
     }
-  }, [currentCountry?.cca3, subMode, mode, gameStatus]);
+  }, [
+    currentCountry?.cca3,
+    subMode,
+    mode,
+    pinDirection,
+    shouldAnimateTarget,
+    gameStatus,
+  ]);
 
   useEffect(() => {
     if (feedback !== null || revealed) {
