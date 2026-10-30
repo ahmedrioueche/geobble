@@ -373,7 +373,10 @@ export const WorldMap: React.FC<MapProps> = ({
       const targetCenterY = isMobile
         ? dimensions.height * 0.65
         : dimensions.height / 2;
-      const targetScale = Math.min(currentTransform.k, homeTransform.k);
+      const targetScale = Math.max(
+        currentTransform.k,
+        isMobile ? 2.2 : 2.4,
+      );
       const screenPoint = currentTransform.apply(point);
       const isCentered =
         Math.abs(screenPoint[0] - targetCenterX) < dimensions.width * 0.12 &&
