@@ -35,10 +35,15 @@ Explore the global theatre at your own pace. Hover and click any territory to re
 
 The game store can export and restore a versioned, JSON-serializable gameplay
 snapshot with `createSessionSnapshot()` and `restoreSessionSnapshot(snapshot)`.
-Snapshots include mission progress and the active target, but intentionally omit
-transient feedback and locally unlocked progression. Unsupported or malformed
-snapshots are rejected. This provides a client-side state boundary; it does not
-implement networking or server-authoritative multiplayer.
+Target selection and answer-choice generation share a seeded random stream; its
+state is included so the same session can continue with the same sequence after
+a restore. An in-progress game is saved locally and can be resumed from the
+mode-selection menu. Pending round advances resume with their remaining delay,
+and timer challenges account for time spent away. Snapshots include mission
+progress and the active target, but intentionally omit transient feedback and
+locally unlocked progression. Unsupported or malformed snapshots are rejected.
+This provides a client-side state boundary; it does not implement networking or
+server-authoritative multiplayer.
 
 ---
 

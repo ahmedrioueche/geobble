@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import {
   createInitialGameState,
   type GameStateData,
@@ -9,6 +9,8 @@ import {
   restoreGameSessionSnapshot,
 } from "./gameSessionSnapshot";
 import type { GameSessionSnapshot } from "./gameSessionSnapshot";
+import { createRandomSeed, getNextSeededRandom } from "./seededRandom";
+import { createSafeBrowserStorage } from "./safeBrowserStorage";
 
 export type GameMode = "identify" | "reverse" | "pin";
 export type PinDirection = "locate" | "identify";
@@ -44,8 +46,10 @@ interface GameState extends GameStateData {
   ) => void;
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
+  setPendingAdvanceAt: (timestamp: number | null) => void;
   resetGame: () => void;
   setStreakLost: (value: number | null) => void;
+  nextRandom: () => number;
   createSessionSnapshot: () => GameSessionSnapshot;
   restoreSessionSnapshot: (snapshot: unknown) => void;
 }
@@ -60,6 +64,15 @@ export const useGameStore = create<GameState>()(
           streak,
           maxStreak: Math.max(state.maxStreak || 0, streak),
         })),
+      nextRandom: () => {
+        let value = 0;
+        set((state) => {
+          const next = getNextSeededRandom(state.randomState);
+          value = next.value;
+          return { randomState: next.state };
+        });
+        return value;
+      },
       setMode: (mode) => set({ mode }),
       setPinDirection: (pinDirection) => set({ pinDirection }),
       setPinLocation: (pinLocation) => set({ pinLocation }),
@@ -106,6 +119,8 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           score: 0,
           streak: 0,
+          randomState: createRandomSeed(),
+          pendingAdvanceAt: null,
           maxStreak: 0,
           totalQuestions: 0,
           totalAttempts: 0,
@@ -118,7 +133,11 @@ export const useGameStore = create<GameState>()(
           streakLost: null,
           startTime: Date.now(),
         })),
-      setGameStatus: (status) => set({ gameStatus: status }),
+      setGameStatus: (status) =>
+        set({
+          gameStatus: status,
+          ...(status === "playing" ? {} : { pendingAdvanceAt: null }),
+        }),
       setCurrentCountry: (code) => set({ currentCountryCode: code }),
       setChoices: (choices) => set({ choices }),
       setChoiceCodes: (choiceCodes) => set({ choiceCodes }),
@@ -136,6 +155,7 @@ export const useGameStore = create<GameState>()(
         next();
       },
       setRevealed: (revealed) => set({ revealed }),
+      setPendingAdvanceAt: (pendingAdvanceAt) => set({ pendingAdvanceAt }),
       resetGame: () =>
         set((state) => createInitialGameState(state.unlockedStage)),
       setStreakLost: (streakLost) => set({ streakLost }),
@@ -150,6 +170,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: "geobble-storage",
+      storage: createJSONStorage(createSafeBrowserStorage),
       partialize: (state) => ({ unlockedStage: state.unlockedStage }), // Only persist the unlock progress
     },
   ),

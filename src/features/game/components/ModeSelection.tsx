@@ -4,17 +4,26 @@ import { Button } from "../../../components/atoms/Button";
 import { type GameMode } from "../../../store/useGameStore";
 import type { GameModeGroup } from "../../../types/modal";
 import { useModalStore } from "../../../store/modal";
+import type { GameSessionSnapshot } from "../../../store/gameSessionSnapshot";
 import { ModeOptionCard } from "./ModeOptionCard";
 import { MODE_OPTIONS } from "./modeOptions";
 
 interface ModeSelectionProps {
   onClose: () => void;
   currentMode: GameMode;
+  savedSession: GameSessionSnapshot | null;
+  onResume: () => void;
+  onRetrySave: () => void;
+  resumeError: string | null;
 }
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({
   onClose,
   currentMode,
+  savedSession,
+  onResume,
+  onRetrySave,
+  resumeError,
 }) => {
   const [selected, setSelected] = React.useState<GameModeGroup>(
     currentMode === "pin" ? "pin" : "country",
@@ -84,9 +93,33 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="fixed bottom-6 inset-x-4 md:inset-x-auto md:right-12 z-[110] flex items-center justify-end gap-3"
+        className="fixed bottom-6 inset-x-4 md:inset-x-auto md:right-12 z-[110] flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center"
       >
-
+        {resumeError && (
+          <>
+            <p role="alert" className="text-center text-xs font-bold text-rose-300">
+              {resumeError}
+            </p>
+            <Button
+              size="md"
+              variant="secondary"
+              onClick={onRetrySave}
+              className="h-14 px-5 text-xs font-black uppercase tracking-widest"
+            >
+              Retry save
+            </Button>
+          </>
+        )}
+        {savedSession && (
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={onResume}
+            className="h-14 px-6 text-sm font-black uppercase tracking-widest sm:h-18"
+          >
+            Resume saved game
+          </Button>
+        )}
         <Button
           size="lg"
           onClick={handleExecute}

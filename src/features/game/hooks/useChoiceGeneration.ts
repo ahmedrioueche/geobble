@@ -10,6 +10,7 @@ interface UseChoiceGenerationProps {
   pinDirection: "locate" | "identify";
   gameStatus: "idle" | "playing" | "finished";
   currentCountryCode: string | null;
+  random: () => number;
   setChoices: (choices: string[]) => void;
   setChoiceCodes: (codes: string[]) => void;
 }
@@ -31,6 +32,7 @@ export const useChoiceGeneration = ({
   pinDirection,
   gameStatus,
   currentCountryCode,
+  random,
   setChoices,
   setChoiceCodes,
 }: UseChoiceGenerationProps) => {
@@ -38,7 +40,11 @@ export const useChoiceGeneration = ({
     (target: CountryData, currentSubMode: SubMode) => {
       if (countries.length === 0) return;
 
-      const selectedCountries = generateChoiceCountries(target, countries);
+      const selectedCountries = generateChoiceCountries(
+        target,
+        countries,
+        random,
+      );
       setChoiceCodes(selectedCountries.map((country) => country.cca3));
       setChoices(
         selectedCountries
@@ -46,7 +52,7 @@ export const useChoiceGeneration = ({
           .sort((a, b) => a.localeCompare(b)),
       );
     },
-    [countries, setChoices, setChoiceCodes],
+    [countries, random, setChoices, setChoiceCodes],
   );
 
   useEffect(() => {

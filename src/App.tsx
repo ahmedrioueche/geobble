@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { LoadingScreen } from "./components/organisms/LoadingScreen";
 import { GameHUD } from "./features/game/components/GameHUD";
 import { GlobalOverlays } from "./features/game/components/GlobalOverlays";
@@ -8,11 +8,18 @@ import { TacticalInterface } from "./features/game/components/TacticalInterface"
 import { useAppActions } from "./features/game/hooks/useAppActions";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
+import { useSavedGameSession } from "./features/game/hooks/useSavedGameSession";
 import Modals from "./modals";
 
 function App() {
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [showModeSelect, setShowModeSelect] = useState(false);
+  const {
+    savedSession,
+    resumeError,
+    resumeSession,
+    retrySave,
+  } = useSavedGameSession();
 
   const {
     clickedCountry,
@@ -28,6 +35,11 @@ function App() {
     missionId,
     loading: dataLoading,
   } = useAppActions();
+
+  const handleResume = useCallback(() => {
+    resumeSession();
+    setShowModeSelect(false);
+  }, [resumeSession]);
 
   useEffect(() => {
     const handleMissionStart = () => {
@@ -52,6 +64,10 @@ function App() {
           <ModeSelection
             currentMode={mode}
             onClose={() => setShowModeSelect(false)}
+            savedSession={savedSession}
+            onResume={handleResume}
+            onRetrySave={retrySave}
+            resumeError={resumeError}
           />
         )}
       </AnimatePresence>

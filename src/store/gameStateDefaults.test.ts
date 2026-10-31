@@ -8,6 +8,7 @@ describe("createInitialGameState", () => {
 
     expect(first.unlockedStage).toBe(4);
     expect(first.gameStatus).toBe("idle");
+    expect(first.randomState).toBe(0);
     expect(first.playedCountryCodes).toEqual([]);
     expect(first.playedCountryCodes).not.toBe(second.playedCountryCodes);
     expect(first.sessionPlayedCodes).not.toBe(second.sessionPlayedCodes);

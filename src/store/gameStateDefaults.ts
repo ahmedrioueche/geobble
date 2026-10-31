@@ -8,6 +8,7 @@ import type {
 export interface GameStateData {
   score: number;
   streak: number;
+  randomState: number;
   mode: GameMode;
   pinDirection: PinDirection;
   pinLocation: [number, number] | null;
@@ -32,6 +33,7 @@ export interface GameStateData {
   clickedName: string | null;
   clickedCode: string | null;
   revealed: boolean;
+  pendingAdvanceAt: number | null;
   streakLost: number | null;
   startTime: number | null;
   maxStreak: number;
@@ -43,6 +45,7 @@ export const createInitialGameState = (
 ): GameStateData => ({
   score: 0,
   streak: 0,
+  randomState: 0,
   mode: "identify",
   pinDirection: "locate",
   pinLocation: null,
@@ -67,6 +70,7 @@ export const createInitialGameState = (
   clickedName: null,
   clickedCode: null,
   revealed: false,
+  pendingAdvanceAt: null,
   streakLost: null,
   startTime: null,
   maxStreak: 0,

@@ -31,6 +31,8 @@ export const useAppActions = () => {
     startNewMission,
     recordAttempt,
     setStreakLost,
+    pendingAdvanceAt,
+    setPendingAdvanceAt,
   } = useGameStore();
 
   const {
@@ -44,19 +46,76 @@ export const useAppActions = () => {
   const roundAdvanceTimerRef = useRef<
     ReturnType<typeof createTimeoutController> | null
   >(null);
+  const scheduledAdvanceAtRef = useRef<number | null>(null);
   if (roundAdvanceTimerRef.current === null) {
     roundAdvanceTimerRef.current = createTimeoutController();
   }
 
   const clearRoundAdvanceTimer = useCallback(() => {
     roundAdvanceTimerRef.current?.clear();
-  }, []);
+    scheduledAdvanceAtRef.current = null;
+    if (useGameStore.getState().pendingAdvanceAt !== null) {
+      setPendingAdvanceAt(null);
+    }
+  }, [setPendingAdvanceAt]);
+
+  const scheduleAdvanceAt = useCallback(
+    (timestamp: number) => {
+      if (scheduledAdvanceAtRef.current === timestamp) return;
+      roundAdvanceTimerRef.current?.clear();
+      scheduledAdvanceAtRef.current = timestamp;
+      roundAdvanceTimerRef.current?.schedule(
+        Math.max(0, timestamp - Date.now()),
+        () => {
+          scheduledAdvanceAtRef.current = null;
+          setPendingAdvanceAt(null);
+          const freshState = useGameStore.getState();
+          if (
+            shouldAdvanceRound(
+              freshState.challengeType,
+              freshState.challengeValue,
+              freshState.totalAttempts,
+            )
+          ) {
+            nextQuestion();
+          }
+        },
+      );
+    },
+    [nextQuestion, setPendingAdvanceAt],
+  );
+
+  useEffect(() => {
+    if (gameStatus !== "playing" || pendingAdvanceAt === null) {
+      roundAdvanceTimerRef.current?.clear();
+      scheduledAdvanceAtRef.current = null;
+      return;
+    }
+
+    scheduleAdvanceAt(pendingAdvanceAt);
+    return () => {
+      if (scheduledAdvanceAtRef.current === pendingAdvanceAt) {
+        roundAdvanceTimerRef.current?.clear();
+        scheduledAdvanceAtRef.current = null;
+      }
+    };
+  }, [gameStatus, pendingAdvanceAt, scheduleAdvanceAt]);
+
+  const scheduleAdvance = useCallback(
+    (delayMs: number) => {
+      const timestamp = Date.now() + delayMs;
+      setPendingAdvanceAt(timestamp);
+      scheduleAdvanceAt(timestamp);
+    },
+    [scheduleAdvanceAt, setPendingAdvanceAt],
+  );
 
   useEffect(() => {
     return () => {
-      clearRoundAdvanceTimer();
+      roundAdvanceTimerRef.current?.clear();
+      scheduledAdvanceAtRef.current = null;
     };
-  }, [clearRoundAdvanceTimer]);
+  }, []);
 
   const playAudio = useCallback((path: string) => {
     const audio = new Audio(path);
@@ -89,20 +148,7 @@ export const useAppActions = () => {
           setStreakLost,
           setRevealed,
           clearAdvanceTimer: clearRoundAdvanceTimer,
-          scheduleAdvance: (delayMs) => {
-            roundAdvanceTimerRef.current?.schedule(delayMs, () => {
-              const freshState = useGameStore.getState();
-              if (
-                shouldAdvanceRound(
-                  freshState.challengeType,
-                  freshState.challengeValue,
-                  freshState.totalAttempts,
-                )
-              ) {
-                nextQuestion();
-              }
-            });
-          },
+          scheduleAdvance,
           nextQuestion,
         },
       );
@@ -113,6 +159,7 @@ export const useAppActions = () => {
       playAudio,
       recordAttempt,
       revealed,
+      scheduleAdvance,
       score,
       setFeedback,
       setRevealed,

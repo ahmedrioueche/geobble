@@ -25,6 +25,9 @@ export const useMissionProgression = ({
   const setMissionId = useGameStore((state) => state.setMissionId);
   const setFeedback = useGameStore((state) => state.setFeedback);
   const setRevealed = useGameStore((state) => state.setRevealed);
+  const setPendingAdvanceAt = useGameStore(
+    (state) => state.setPendingAdvanceAt,
+  );
   const setPinLocation = useGameStore((state) => state.setPinLocation);
   const setTotalLevels = useGameStore((state) => state.setTotalLevels);
   const setChallenge = useGameStore((state) => state.setChallenge);
@@ -68,6 +71,7 @@ export const useMissionProgression = ({
       return;
     }
 
+    setPendingAdvanceAt(null);
     setFeedback(null);
     setRevealed(false);
     setPinLocation(null);
@@ -91,6 +95,7 @@ export const useMissionProgression = ({
     setMissionId,
     setFeedback,
     setRevealed,
+    setPendingAdvanceAt,
     setPinLocation,
   ]);
 

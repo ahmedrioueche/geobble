@@ -29,6 +29,7 @@ export const useGameLogic = () => {
     unlockNextStage,
     totalLevels,
     maxStreak,
+    nextRandom,
   } = useGameStore();
   const { openModal } = useModalStore();
 
@@ -40,6 +41,7 @@ export const useGameLogic = () => {
     pinDirection,
     gameStatus,
     currentCountryCode,
+    random: nextRandom,
     setChoices,
     setChoiceCodes,
   });
@@ -93,6 +95,7 @@ export const useGameLogic = () => {
 
   const { startGame, nextQuestion } = useMissionProgression({
     countries,
+    random: nextRandom,
     generateChoices,
     finishGame,
   });

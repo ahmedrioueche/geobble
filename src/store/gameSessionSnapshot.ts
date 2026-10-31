@@ -1,10 +1,13 @@
 import type { GameStateData } from "./gameStateDefaults";
 import { createInitialGameState } from "./gameStateDefaults";
 
+export const GAME_SESSION_STORAGE_KEY = "geobble-active-session";
+
 type GameSessionData = Pick<
   GameStateData,
   | "score"
   | "streak"
+  | "randomState"
   | "maxStreak"
   | "mode"
   | "pinDirection"
@@ -27,11 +30,13 @@ type GameSessionData = Pick<
   | "choiceCodes"
   | "missionId"
   | "revealed"
+  | "pendingAdvanceAt"
   | "startTime"
 >;
 
 export interface GameSessionSnapshot extends GameSessionData {
   version: 1;
+  savedAt: number;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -75,8 +80,11 @@ const isGameSessionSnapshot = (
   if (!isRecord(value) || value.version !== 1) return false;
 
   return (
+    isNonnegativeNumber(value.savedAt) &&
     isNonnegativeInteger(value.score) &&
     isNonnegativeInteger(value.streak) &&
+    isNonnegativeInteger(value.randomState) &&
+    value.randomState <= 0xffffffff &&
     isNonnegativeInteger(value.maxStreak) &&
     isOneOf(value.mode, ["identify", "reverse", "pin"] as const) &&
     isOneOf(value.pinDirection, ["locate", "identify"] as const) &&
@@ -101,6 +109,8 @@ const isGameSessionSnapshot = (
     isStringArray(value.choiceCodes) &&
     isNullableString(value.missionId) &&
     typeof value.revealed === "boolean" &&
+    (value.pendingAdvanceAt === null ||
+      isNonnegativeNumber(value.pendingAdvanceAt)) &&
     (value.startTime === null || isNonnegativeNumber(value.startTime))
   );
 };
@@ -114,10 +124,13 @@ export class InvalidGameSessionSnapshotError extends Error {
 
 export const createGameSessionSnapshot = (
   state: GameStateData,
+  savedAt = Date.now(),
 ): GameSessionSnapshot => ({
   version: 1,
+  savedAt,
   score: state.score,
   streak: state.streak,
+  randomState: state.randomState,
   maxStreak: state.maxStreak,
   mode: state.mode,
   pinDirection: state.pinDirection,
@@ -140,17 +153,20 @@ export const createGameSessionSnapshot = (
   choiceCodes: [...state.choiceCodes],
   missionId: state.missionId,
   revealed: state.revealed,
+  pendingAdvanceAt: state.pendingAdvanceAt,
   startTime: state.startTime,
 });
 
 export const restoreGameSessionSnapshot = (
   value: unknown,
   unlockedStage: number,
+  now = Date.now(),
 ): GameStateData => {
   if (
     !isGameSessionSnapshot(value) ||
     !isNonnegativeInteger(unlockedStage) ||
-    unlockedStage < 1
+    unlockedStage < 1 ||
+    !isNonnegativeNumber(now)
   ) {
     throw new InvalidGameSessionSnapshotError();
   }
@@ -160,6 +176,7 @@ export const restoreGameSessionSnapshot = (
     ...initialState,
     score: value.score,
     streak: value.streak,
+    randomState: value.randomState,
     maxStreak: value.maxStreak,
     mode: value.mode,
     pinDirection: value.pinDirection,
@@ -168,7 +185,14 @@ export const restoreGameSessionSnapshot = (
     challengeType: value.challengeType,
     challengeValue: value.challengeValue,
     baseChallengeValue: value.baseChallengeValue,
-    timeRemaining: value.timeRemaining,
+    timeRemaining:
+      value.challengeType === "timer" && value.gameStatus === "playing"
+        ? Math.max(
+            0,
+            value.timeRemaining -
+              Math.max(0, Math.floor((now - value.savedAt) / 1000)),
+          )
+        : value.timeRemaining,
     difficultyStage: value.difficultyStage,
     totalLevels: value.totalLevels,
     totalQuestions: value.totalQuestions,
@@ -182,6 +206,7 @@ export const restoreGameSessionSnapshot = (
     choiceCodes: [...value.choiceCodes],
     missionId: value.missionId,
     revealed: value.revealed,
+    pendingAdvanceAt: value.pendingAdvanceAt,
     startTime: value.startTime,
   };
 };
