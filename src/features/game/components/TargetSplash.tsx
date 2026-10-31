@@ -22,44 +22,47 @@ export const TargetSplash: React.FC<TargetSplashProps> = ({
   const [targetOffset, setTargetOffset] = useState({ x: 250, y: -250 });
 
   useEffect(() => {
-    if (
-      gameStatus !== "playing" ||
-      !shouldAnimateTarget ||
-      !currentCountry ||
-      feedback !== null ||
-      revealed
-    ) {
-      setIsVisible(false);
-      return;
+    let frameId: number;
+    let dockStartTimer: ReturnType<typeof setTimeout> | null = null;
+    const shouldShowTarget =
+      gameStatus === "playing" &&
+      shouldAnimateTarget &&
+      currentCountry !== undefined &&
+      feedback === null &&
+      !revealed;
+
+    if (!shouldShowTarget) {
+      frameId = requestAnimationFrame(() => setIsVisible(false));
+      return () => cancelAnimationFrame(frameId);
     }
 
-    // Measure target dock anchor position on screen for pixel-perfect arc flight
-    const anchor = document.getElementById("target-dock-anchor");
-    if (anchor) {
-      const rect = anchor.getBoundingClientRect();
-      const destX = rect.left + rect.width / 2 - window.innerWidth / 2;
-      const destY = rect.top + rect.height / 2 - window.innerHeight / 2;
-      setTargetOffset({ x: destX, y: destY });
-    } else {
-      setTargetOffset({
-        x: Math.max(80, window.innerWidth / 2 - 130),
-        y: -(window.innerHeight / 2) + (window.innerWidth < 768 ? 125 : 105),
-      });
-    }
+    frameId = requestAnimationFrame(() => {
+      // Measure target dock anchor position on screen for pixel-perfect arc flight
+      const anchor = document.getElementById("target-dock-anchor");
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        const destX = rect.left + rect.width / 2 - window.innerWidth / 2;
+        const destY = rect.top + rect.height / 2 - window.innerHeight / 2;
+        setTargetOffset({ x: destX, y: destY });
+      } else {
+        setTargetOffset({
+          x: Math.max(80, window.innerWidth / 2 - 130),
+          y: -(window.innerHeight / 2) + (window.innerWidth < 768 ? 125 : 105),
+        });
+      }
 
-    setIsVisible(true);
+      setIsVisible(true);
+    });
 
-    // Trigger the target panel to reveal sooner (at 620ms as flight initiates)
-    // so there is zero dead-time and seamless overlap
-    const dockStartTimer = setTimeout(() => {
-      onDockStart();
-    }, 620);
+    // Trigger the target panel to reveal sooner (at 620ms as flight initiates).
+    dockStartTimer = setTimeout(onDockStart, 620);
 
     return () => {
-      clearTimeout(dockStartTimer);
+      cancelAnimationFrame(frameId);
+      if (dockStartTimer !== null) clearTimeout(dockStartTimer);
     };
   }, [
-    currentCountry?.cca3,
+    currentCountry,
     subMode,
     mode,
     pinDirection,

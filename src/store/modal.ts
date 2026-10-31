@@ -2,6 +2,11 @@ import { create } from "zustand";
 import type { ConfirmModalProps, SubModeModalProps, ResultModalProps } from "../types/modal";
 
 type ModalType = "confirm" | "sub-mode" | "result" | null;
+type OpenModalArgs =
+  | [modal: "confirm", props?: ConfirmModalProps]
+  | [modal: "sub-mode", props: SubModeModalProps]
+  | [modal: "result", props: ResultModalProps]
+  | [modal: null];
 
 interface ModalState {
   currentModal: ModalType;
@@ -9,7 +14,7 @@ interface ModalState {
   subModeProps?: SubModeModalProps;
   resultProps?: ResultModalProps;
 
-  openModal: (modal: ModalType, props?: any) => void;
+  openModal: (...args: OpenModalArgs) => void;
   closeModal: () => void;
 }
 
@@ -17,16 +22,16 @@ export const useModalStore = create<ModalState>((set) => ({
   currentModal: null,
   confirmModalProps: undefined,
   subModeProps: undefined,
-  openModal: (modal, props) =>
+  openModal: (...args) =>
     set(() => {
-      if (modal === "confirm") {
-        return { currentModal: "confirm", confirmModalProps: props };
+      if (args[0] === "confirm") {
+        return { currentModal: "confirm", confirmModalProps: args[1] };
       }
-      if (modal === "sub-mode") {
-        return { currentModal: "sub-mode", subModeProps: props };
+      if (args[0] === "sub-mode") {
+        return { currentModal: "sub-mode", subModeProps: args[1] };
       }
-      if (modal === "result") {
-        return { currentModal: "result", resultProps: props };
+      if (args[0] === "result") {
+        return { currentModal: "result", resultProps: args[1] };
       }
 
       return { currentModal: null };

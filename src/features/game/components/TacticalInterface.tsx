@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChoicePanel } from "./ChoicePanel";
 import { FeedbackPill } from "./FeedbackPill";
 import { TargetPanel } from "./TargetPanel";
@@ -20,46 +20,57 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
   onChoiceSelect,
   onReveal,
 }) => {
-  const { gameStatus, mode, pinDirection, subMode, feedback, clickedName, choices, revealed } = useGameStore();
-  const shouldAnimateTarget =
-    mode === "identify" || (mode === "pin" && pinDirection === "locate");
-
-  const [isDocked, setIsDocked] = useState(!shouldAnimateTarget);
-  const [isJustDocked, setIsJustDocked] = useState(false);
-
-  useEffect(() => {
-    if (shouldAnimateTarget && gameStatus === "playing" && !feedback && !revealed) {
-      setIsDocked(false);
-      setIsJustDocked(false);
-    } else {
-      setIsDocked(true);
-    }
-  }, [
-    currentCountry?.cca3,
-    subMode,
+  const {
+    gameStatus,
     mode,
     pinDirection,
-    shouldAnimateTarget,
-    gameStatus,
-  ]);
+    subMode,
+    feedback,
+    clickedName,
+    choices,
+    revealed,
+  } = useGameStore();
+  const shouldAnimateTarget =
+    mode === "identify" || (mode === "pin" && pinDirection === "locate");
+  const targetKey = currentCountry
+    ? `${currentCountry.cca3}:${subMode}:${mode}:${pinDirection}`
+    : null;
+  const [dockedTargetKey, setDockedTargetKey] = useState<string | null>(null);
+  const [justDockedTargetKey, setJustDockedTargetKey] = useState<string | null>(
+    null,
+  );
+  const dockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDocked =
+    !shouldAnimateTarget ||
+    feedback !== null ||
+    revealed ||
+    (targetKey !== null && dockedTargetKey === targetKey);
+  const isJustDocked =
+    targetKey !== null && justDockedTargetKey === targetKey;
 
-  useEffect(() => {
-    if (feedback !== null || revealed) {
-      setIsDocked(true);
-    }
-  }, [feedback, revealed]);
+  const handleDockStart = useCallback(() => {
+    if (targetKey) setDockedTargetKey(targetKey);
+  }, [targetKey]);
 
-  const handleDockStart = () => {
-    setIsDocked(true);
-  };
-
-  const handleDockComplete = () => {
-    setIsDocked(true);
-    setIsJustDocked(true);
-    setTimeout(() => {
-      setIsJustDocked(false);
+  const handleDockComplete = useCallback(() => {
+    if (!targetKey) return;
+    setDockedTargetKey(targetKey);
+    setJustDockedTargetKey(targetKey);
+    if (dockTimerRef.current !== null) clearTimeout(dockTimerRef.current);
+    dockTimerRef.current = setTimeout(() => {
+      setJustDockedTargetKey((currentKey) =>
+        currentKey === targetKey ? null : currentKey,
+      );
+      dockTimerRef.current = null;
     }, 500);
-  };
+  }, [targetKey]);
+
+  useEffect(
+    () => () => {
+      if (dockTimerRef.current !== null) clearTimeout(dockTimerRef.current);
+    },
+    [],
+  );
 
   return (
     <>
@@ -76,7 +87,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
           <AnimatePresence>
             {gameStatus === "playing" &&
               currentCountry &&
-              (isDocked || mode === "reverse") && (
+              isDocked && (
                 <motion.div
                   key={currentCountry.cca3}
                   initial={{ opacity: 0, scale: 0.95, y: -4 }}

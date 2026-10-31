@@ -1,29 +1,15 @@
-import {
-  ChevronRight,
-  Globe,
-  GraduationCap,
-  Hash,
-  Lock,
-  MapPin,
-  Crosshair,
-  Flag,
-  Landmark,
-  Type,
-  Timer,
-} from "lucide-react";
+import { ChevronRight, GraduationCap } from "lucide-react";
 import React, { useState } from "react";
-import { useModalStore } from "../../store/modal";
-import { useGameStore, type ChallengeType, type SubMode } from "../../store/useGameStore";
 import { getMaxLevels } from "../../data/difficulty-ranking";
+import { useModalStore } from "../../store/modal";
+import {
+  useGameStore,
+  type ChallengeType,
+  type PinDirection,
+} from "../../store/useGameStore";
 import BaseModal from "./BaseModal";
-
-const COUNTS = [10, 20, 30, 40, 50];
-const TIMES = [
-  { label: "30s", value: 30 },
-  { label: "1m", value: 60 },
-  { label: "2m", value: 120 },
-  { label: "5m", value: 300 },
-];
+import { SubModeChallengeSettings } from "./SubModeChallengeSettings";
+import { SubModeModeSettings } from "./SubModeModeSettings";
 
 const SubModeModal: React.FC = () => {
   const { currentModal, subModeProps, closeModal } = useModalStore();
@@ -41,7 +27,6 @@ const SubModeModal: React.FC = () => {
     challengeValue,
   } = useGameStore();
 
-  // Local state for modal before committing to store
   const [selectedType, setSelectedType] = useState<ChallengeType>(
     challengeType || "world",
   );
@@ -53,18 +38,29 @@ const SubModeModal: React.FC = () => {
   );
   const maxLevels =
     selectedType === "world" ? 1 : getMaxLevels(selectedValue);
-  const promptModes: { id: SubMode; label: string; icon: typeof Type }[] = [
-    { id: "name", label: "COUNTRY NAME", icon: Type },
-    { id: "flag", label: "FLAG", icon: Flag },
-    { id: "capital", label: "CAPITAL", icon: Landmark },
-  ];
 
-  // If stage is out of bounds for the current count, adjust
   if (selectedStage > maxLevels && selectedType !== "world") {
     setSelectedStage(maxLevels);
   }
 
   if (currentModal !== "sub-mode" || !subModeProps) return null;
+
+  const selectedDirection: PinDirection =
+    mode === "pin"
+      ? pinDirection
+      : mode === "reverse"
+        ? "identify"
+        : "locate";
+  const modeTitle = subModeProps.modeGroup === "pin" ? "PIN DROP" : "COUNTRY MODE";
+
+  const handleDirectionChange = (direction: PinDirection) => {
+    if (subModeProps.modeGroup === "pin") {
+      setMode("pin");
+      setPinDirection(direction);
+    } else {
+      setMode(direction === "locate" ? "identify" : "reverse");
+    }
+  };
 
   const handleStart = () => {
     setChallenge(selectedType, selectedValue);
@@ -83,33 +79,9 @@ const SubModeModal: React.FC = () => {
     );
     if (subModeProps.modeGroup === "pin") setPinDirection(direction);
     setDifficultyStage(selectedStage);
-
-    // In a real implementation, we would call the game start logic here.
-    // For now, we'll just close the modal.
-    // The App.tsx will need to be updated to listen for the start trigger.
     closeModal();
-
-    // Dispatch a custom event or call a prop to trigger the game start in App.tsx
     window.dispatchEvent(new CustomEvent("game:start-mission"));
   };
-
-  const selectedDirection =
-    mode === "pin"
-      ? pinDirection
-      : mode === "reverse"
-        ? "identify"
-        : "locate";
-  const modeTitle = subModeProps.modeGroup === "pin" ? "PIN DROP" : "COUNTRY MODE";
-  const directions =
-    subModeProps.modeGroup === "pin"
-      ? [
-          { id: "locate" as const, label: "LOCATE", description: "Drop inside the named country", icon: MapPin },
-          { id: "identify" as const, label: "IDENTIFY", description: "Name the country under the pin", icon: Crosshair },
-        ]
-      : [
-          { id: "locate" as const, label: "LOCATE", description: "Find the prompted country on the map", icon: MapPin },
-          { id: "identify" as const, label: "IDENTIFY", description: "Choose the country highlighted on the map", icon: Crosshair },
-        ];
 
   return (
     <BaseModal
@@ -127,223 +99,23 @@ const SubModeModal: React.FC = () => {
       }}
     >
       <div className="space-y-8">
-        <div>
-          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-            Starting Prompt
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {promptModes.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setSubMode(id)}
-                aria-pressed={subMode === id}
-                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                  subMode === id
-                    ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                    : "border-white/5 bg-white/5 hover:border-white/20"
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${subMode === id ? "text-primary" : "text-white/40"}`} />
-                <span className="font-bold text-[10px] sm:text-xs">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-            Select Direction
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            {directions.map(({ id, label, description, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => {
-                  if (subModeProps.modeGroup === "pin") {
-                    setMode("pin");
-                    setPinDirection(id);
-                  } else {
-                    setMode(id === "locate" ? "identify" : "reverse");
-                  }
-                }}
-                aria-pressed={selectedDirection === id}
-                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                  selectedDirection === id
-                    ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                    : "border-white/5 bg-white/5 hover:border-white/20"
-                }`}
-              >
-                <Icon className={`w-6 h-6 ${selectedDirection === id ? "text-primary" : "text-white/40"}`} />
-                <span className="font-bold text-sm">{label}</span>
-                <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">{description}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Challenge Type Selection */}
-        <div>
-          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-            Select Challenge Type
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button
-              onClick={() => setSelectedType("world")}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                selectedType === "world"
-                  ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                  : "border-white/5 bg-white/5 hover:border-white/20"
-              }`}
-            >
-              <Globe
-                className={`w-6 h-6 ${selectedType === "world" ? "text-primary" : "text-white/40"}`}
-              />
-              <div className="font-bold text-sm">ENTIRE WORLD</div>
-              <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-                Conquer them all
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                setSelectedType("count");
-                if (selectedValue === 0 || !COUNTS.includes(selectedValue))
-                  setSelectedValue(10);
-              }}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                selectedType === "count"
-                  ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                  : "border-white/5 bg-white/5 hover:border-white/20"
-              }`}
-            >
-              <Hash
-                className={`w-6 h-6 ${selectedType === "count" ? "text-primary" : "text-white/40"}`}
-              />
-              <div className="font-bold text-sm">SET COUNT</div>
-              <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-                Fixed targets
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                setSelectedType("timer");
-                if (
-                  selectedValue === 0 ||
-                  !TIMES.find((t) => t.value === selectedValue)
-                )
-                  setSelectedValue(60);
-              }}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
-                selectedType === "timer"
-                  ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
-                  : "border-white/5 bg-white/5 hover:border-white/20"
-              }`}
-            >
-              <Timer
-                className={`w-6 h-6 ${selectedType === "timer" ? "text-primary" : "text-white/40"}`}
-              />
-              <div className="font-bold text-sm">TIME TRIAL</div>
-              <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-                Beat the clock
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* Dynamic Values */}
-        {selectedType === "count" && (
-          <div className="animate-in fade-in slide-in-from-top-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-              Number of Countries
-            </label>
-            <div className="flex gap-2">
-              {COUNTS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setSelectedValue(c)}
-                  className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${
-                    selectedValue === c
-                      ? "border-primary bg-primary text-white shadow-lg"
-                      : "border-white/5 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {selectedType === "timer" && (
-          <div className="animate-in fade-in slide-in-from-top-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-              Session Duration
-            </label>
-            <div className="flex gap-2">
-              {TIMES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setSelectedValue(t.value)}
-                  className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${
-                    selectedValue === t.value
-                      ? "border-primary bg-primary text-white shadow-lg"
-                      : "border-white/5 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Difficulty Stages */}
-        {selectedType !== "world" && (
-          <div className="animate-in fade-in slide-in-from-top-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
-              Selection: Tier {selectedStage}
-            </label>
-            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 max-h-[160px] overflow-y-auto p-1 custom-scrollbar">
-              {Array.from({ length: maxLevels }, (_, i) => i + 1).map((id) => {
-                const isLocked = id > unlockedStage;
-                const isSelected = selectedStage === id;
-
-                return (
-                  <button
-                    key={id}
-                    disabled={isLocked}
-                    onClick={() => setSelectedStage(id)}
-                    className={`relative h-10 md:h-12 rounded-xl border-2 transition-all group flex items-center justify-center ${
-                      isSelected
-                        ? "border-primary bg-primary/20"
-                        : isLocked
-                          ? "border-white/5 bg-white/5 opacity-50 cursor-not-allowed"
-                          : "border-white/5 bg-white/5 hover:border-white/20"
-                    }`}
-                  >
-                    {isLocked ? (
-                      <Lock className="w-3 h-3 text-white/20" />
-                    ) : (
-                      <span
-                        className={`font-black text-sm md:text-lg ${isSelected ? "text-primary" : "text-white/20"}`}
-                      >
-                        {id}
-                      </span>
-                    )}
-
-                    {isSelected && (
-                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary shadow-[0_0_10px_var(--color-primary)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-4 text-xs text-white/40 font-medium italic">
-              {selectedType === "count"
-                ? `Progress through the world in sets of ${selectedValue} targets each.`
-                : "Race against the clock across different difficulty tiers."}
-            </p>
-          </div>
-        )}
+        <SubModeModeSettings
+          modeGroup={subModeProps.modeGroup}
+          subMode={subMode}
+          selectedDirection={selectedDirection}
+          onSubModeChange={setSubMode}
+          onDirectionChange={handleDirectionChange}
+        />
+        <SubModeChallengeSettings
+          selectedType={selectedType}
+          selectedValue={selectedValue}
+          selectedStage={selectedStage}
+          maxLevels={maxLevels}
+          unlockedStage={unlockedStage}
+          onTypeChange={setSelectedType}
+          onValueChange={setSelectedValue}
+          onStageChange={setSelectedStage}
+        />
       </div>
     </BaseModal>
   );

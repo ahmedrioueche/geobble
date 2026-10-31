@@ -1,46 +1,16 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  createInitialGameState,
+  type GameStateData,
+} from "./gameStateDefaults";
 
 export type GameMode = "identify" | "reverse" | "pin";
 export type PinDirection = "locate" | "identify";
 export type SubMode = "name" | "flag" | "capital";
 export type ChallengeType = "world" | "count" | "timer";
 
-interface GameState {
-  score: number;
-  streak: number;
-  mode: GameMode;
-  pinDirection: PinDirection;
-  pinLocation: [number, number] | null;
-  subMode: SubMode;
-  challengeType: ChallengeType;
-  challengeValue: number; // For count or timer (seconds)
-  timeRemaining: number;
-  difficultyStage: number; // Current session stage
-  totalLevels: number; // Total levels in the current mission series
-  unlockedStage: number; // Highest unlocked stage (persisted)
-  totalQuestions: number;
-  totalAttempts: number; // Answers submitted
-  correctAttempts: number; // Correct answers submitted
-  playedCountryCodes: string[];
-  sessionPlayedCodes: string[];
-  gameStatus: "idle" | "playing" | "finished";
-  currentCountryCode: string | null;
-  choices: string[];
-  choiceCodes: string[];
-  missionId: string | null;
-  feedback: "correct" | "wrong" | null;
-  clickedName: string | null;
-  clickedCode: string | null;
-  revealed: boolean;
-  pulseKey: number;
-  sonarKey: number;
-  streakLost: number | null;
-  startTime: number | null;
-  maxStreak: number;
-  baseChallengeValue: number; // The user's intended target (e.g., 20)
-  tempHighlightCode: string | null;
-
+interface GameState extends GameStateData {
   // Actions
   setScore: (score: number) => void;
   setStreak: (streak: number) => void;
@@ -69,50 +39,14 @@ interface GameState {
   ) => void;
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
-  triggerPulse: () => void;
-  triggerSonar: () => void;
   resetGame: () => void;
   setStreakLost: (value: number | null) => void;
-  setTempHighlightCode: (code: string | null) => void;
 }
 
 export const useGameStore = create<GameState>()(
   persist(
     (set) => ({
-      score: 0,
-      streak: 0,
-      mode: "identify",
-      pinDirection: "locate",
-      pinLocation: null,
-      subMode: "name",
-      challengeType: "world",
-      challengeValue: 0,
-      timeRemaining: 0,
-      difficultyStage: 1,
-      totalLevels: 0,
-      unlockedStage: 1,
-      totalQuestions: 0,
-      totalAttempts: 0,
-      correctAttempts: 0,
-      playedCountryCodes: [],
-      sessionPlayedCodes: [],
-      gameStatus: "idle",
-      currentCountryCode: null,
-      choices: [],
-      choiceCodes: [],
-      missionId: null,
-      feedback: null,
-      clickedName: null,
-      clickedCode: null,
-      revealed: false,
-      pulseKey: 0,
-      streakLost: null,
-      startTime: null,
-      maxStreak: 0,
-      baseChallengeValue: 0,
-      tempHighlightCode: null,
-      sonarKey: 0,
-
+      ...createInitialGameState(),
       setScore: (score) => set({ score }),
       setStreak: (streak) =>
         set((state) => ({
@@ -195,48 +129,9 @@ export const useGameStore = create<GameState>()(
         next();
       },
       setRevealed: (revealed) => set({ revealed }),
-      triggerPulse: () => set((state) => ({ pulseKey: state.pulseKey + 1 })),
-      triggerSonar: () =>
-        set((state) => ({
-          sonarKey: state.sonarKey + 1,
-          pulseKey: state.pulseKey + 1,
-        })),
       resetGame: () =>
-        set({
-          score: 0,
-          streak: 0,
-          maxStreak: 0,
-          mode: "identify",
-          pinDirection: "locate",
-          pinLocation: null,
-          subMode: "name",
-          challengeType: "world",
-          challengeValue: 0,
-          baseChallengeValue: 0,
-          timeRemaining: 0,
-          difficultyStage: 1,
-          totalLevels: 0,
-          totalQuestions: 0,
-          totalAttempts: 0,
-          correctAttempts: 0,
-          playedCountryCodes: [],
-          sessionPlayedCodes: [],
-          gameStatus: "idle",
-          currentCountryCode: null,
-          choices: [],
-          choiceCodes: [],
-          missionId: null,
-          feedback: null,
-          clickedName: null,
-          clickedCode: null,
-          revealed: false,
-          pulseKey: 0,
-          sonarKey: 0,
-          streakLost: null,
-          startTime: null,
-        }),
+        set((state) => createInitialGameState(state.unlockedStage)),
       setStreakLost: (streakLost) => set({ streakLost }),
-      setTempHighlightCode: (tempHighlightCode) => set({ tempHighlightCode }),
     }),
     {
       name: "geobble-storage",

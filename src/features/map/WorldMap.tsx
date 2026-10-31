@@ -1,11 +1,16 @@
 import * as d3 from "d3";
-import { AnimatePresence, motion } from "framer-motion";
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useRef } from "react";
 import type { CountryData } from "../../data/country-data";
-import { nameMapping } from "../../data/name-mapping";
 import { useGameStore } from "../../store/useGameStore";
-import { useWorldMap, type CountryFeature } from "./useWorldMap";
-import { normalizeCountryName } from "../../utils/name-normalizer";
+import { useMapUiStore } from "../../store/useMapUiStore";
+import { useMapCamera } from "./useMapCamera";
+import { MapMarkers } from "./MapMarkers";
+import { useWorldMap } from "./useWorldMap";
+import { CountryLayer } from "./CountryLayer";
+import { useMapViewport } from "./useMapViewport";
+import { useMapCountryData } from "./useMapCountryData";
+import { useMapSonarPoint } from "./useMapSonarPoint";
+import { getMapMarkerState } from "./mapMarkerState";
 
 interface MapProps {
   onCountryClick?: (name: string, code: string, coordinates?: [number, number]) => void;
@@ -27,8 +32,6 @@ export const WorldMap: React.FC<MapProps> = ({
   const { geoData, loading, error, projection } = useWorldMap();
   const {
     gameStatus,
-    pulseKey,
-    sonarKey,
     feedback,
     clickedCode,
     clickedName,
@@ -36,518 +39,42 @@ export const WorldMap: React.FC<MapProps> = ({
     pinDirection,
     pinLocation,
     revealed,
-    tempHighlightCode,
   } = useGameStore();
+  const { pulseKey, sonarKey, tempHighlightCode } = useMapUiStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { containerRef, dimensions, pathGenerator } = useMapViewport({
+    geoData,
+    projection,
+  });
 
-  const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
-
-  // Resize listener
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const observeTarget = containerRef.current;
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-
-    resizeObserver.observe(observeTarget);
-    return () => resizeObserver.unobserve(observeTarget);
-  }, []);
-
-  // Update Dynamic Projection
-  const pathGenerator = useMemo(() => {
-    if (!geoData || dimensions.width === 0 || dimensions.height === 0)
-      return null;
-
-    // Fit the map to our current container bounds
-    const p = projection.fitSize(
-      [dimensions.width, dimensions.height],
+  const { features, idToCodeLookup, targetPinCoordinates } =
+    useMapCountryData({
       geoData,
-    );
-    return d3.geoPath().projection(p);
-  }, [geoData, dimensions, projection]);
-
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-
-  // Initialize Zoom behavior
-  useEffect(() => {
-    if (!svgRef.current || !gRef.current || !pathGenerator) return;
-
-    const svg = d3.select(svgRef.current);
-    const g = d3.select(gRef.current);
-
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 40])
-      .extent([
-        [0, 0],
-        [dimensions.width, dimensions.height],
-      ])
-      .translateExtent([
-        [-dimensions.width * 0.15, -dimensions.height * 0.15],
-        [dimensions.width * 1.15, dimensions.height * 1.15],
-      ])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-        // Ensure strokes stay visible at high zoom levels
-        g.style(
-          "--map-stroke-width",
-          `${Math.max(0.12, 0.5 / event.transform.k)}px`,
-        );
-        g.style(
-          "--map-selected-stroke-width",
-          `${Math.max(0.4, 1.2 / event.transform.k)}px`,
-        );
-      });
-
-    zoomRef.current = zoom;
-    svg.call(zoom);
-
-    g.style("--map-stroke-width", "0.65px");
-    g.style("--map-selected-stroke-width", "1.5px");
-  }, [pathGenerator]);
-
-  // Map each feature ID to its logical country code (cca3)
-  const idToCodeLookup = useMemo(() => {
-    if (!geoData || countries.length === 0) return {};
-    const map: Record<string, string> = {};
-
-    (geoData.features as any[]).forEach((f) => {
-      const id = f.id?.toString();
-      const name = f.properties?.name || "";
-
-      const findMappedName = (n: string) => {
-        if (!n) return "";
-        if (nameMapping[n]) return nameMapping[n];
-        const titleCase = n
-          .split(" ")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-          .join(" ");
-        if (nameMapping[titleCase]) return nameMapping[titleCase];
-        const entry = Object.entries(nameMapping).find(
-          ([k]) => k.toLowerCase() === n.toLowerCase(),
-        );
-        return entry ? entry[1] : n;
-      };
-
-      const mappedName = findMappedName(name);
-      const normalizedMapped = normalizeCountryName(mappedName);
-
-      const country = countries.find(
-        (c) =>
-          (id &&
-            (c.cca3 === id ||
-              c.cca2 === id ||
-              c.ccn3 === id ||
-              parseInt(c.ccn3 || "0", 10).toString() === id)) ||
-          (normalizedMapped && normalizeCountryName(c.name) === normalizedMapped),
-      );
-
-      if (country) {
-        if (id) {
-          map[id] = country.cca3;
-        }
-        if (name) {
-          map[name.toLowerCase()] = country.cca3;
-        }
-      }
+      countries,
+      mode,
+      selectedCountryCode,
+      pathGenerator,
+      projection,
     });
 
-    return map;
-  }, [geoData, countries]);
-
-  const targetPinCoordinates = useMemo((): [number, number] | null => {
-    if (
-      mode !== "pin" ||
-      !selectedCountryCode ||
-      !geoData ||
-      !pathGenerator
-    ) return null;
-
-    const feature = (geoData.features as unknown as CountryFeature[]).find((item) => {
-      const code = item.id?.toString() || "";
-      const mappedCode =
-        idToCodeLookup[code] ||
-        idToCodeLookup[item.properties?.name?.toLowerCase() || ""];
-      return mappedCode === selectedCountryCode;
-    });
-    if (!feature) return null;
-
-    const centroid = d3.geoCentroid(feature as any) as [number, number];
-    if (d3.geoContains(feature as any, centroid)) return centroid;
-
-    const [[x0, y0], [x1, y1]] = pathGenerator.bounds(feature as any);
-    const divisions = 64;
-    const invert = projection.invert;
-    if (!invert) return null;
-    for (let row = 0; row < divisions; row += 1) {
-      for (let column = 0; column < divisions; column += 1) {
-        const point = invert([
-          x0 + ((column + 0.5) / divisions) * (x1 - x0),
-          y0 + ((row + 0.5) / divisions) * (y1 - y0),
-        ]) as [number, number] | null;
-        if (point && d3.geoContains(feature as any, point)) return point;
-      }
-    }
-    return null;
-  }, [
-    mode,
-    selectedCountryCode,
+  const { getEffectiveGeometry } = useMapCamera({
+    svgRef,
+    groupRef: gRef,
     geoData,
     pathGenerator,
     projection,
-    idToCodeLookup,
-  ]);
-
-  // Handle Home View for Desktop/Mobile
-  const homeTransform = useMemo(() => {
-    if (dimensions.width === 0) return d3.zoomIdentity;
-    const isMobile = dimensions.width < 768;
-
-    if (isMobile) {
-      // On mobile, a flat 1x zoom is too small due to vertical screen aspect ratio.
-      // 1.8x zoom provides a much better tactical feel while keeping the context.
-      return d3.zoomIdentity
-        .translate(dimensions.width / 2, dimensions.height / 2)
-        .scale(1.8)
-        .translate(-dimensions.width / 2, -dimensions.height / 2);
-    }
-
-    // On desktop, 1.3x zoom feels more tactical for identify missions and reduces context switching.
-    return d3.zoomIdentity
-      .translate(dimensions.width / 2, dimensions.height / 2)
-      .scale(1.3)
-      .translate(-dimensions.width / 2, -dimensions.height / 2);
-  }, [dimensions]);
-
-  // Helper to extract the primary/significant parts of a feature
-  // This prevents the map from zooming out to the whole world when a country has small territories crossing the Antimeridian
-  const getEffectiveGeometry = React.useCallback(
-    (feature: any) => {
-      if (!pathGenerator || !feature) return null;
-      if (feature.geometry.type === "Polygon") return feature.geometry;
-
-      const parts = feature.geometry.coordinates.map((coords: any) => ({
-        type: "Polygon",
-        coordinates: coords,
-      }));
-
-      const partsWithArea = parts.map((p: any) => ({
-        geometry: p,
-        area: pathGenerator.area({ type: "Feature", geometry: p, properties: {} }),
-      }));
-
-      partsWithArea.sort((a: any, b: any) => b.area - a.area);
-
-      // Heuristic: Include the largest part and any parts at least 20% its size
-      // This captures the mainland of countries like NZ and Fiji while ignoring tiny outlying specks
-      const largestArea = partsWithArea[0].area;
-      const significantParts = partsWithArea.filter((p: any) => p.area > largestArea * 0.2);
-
-      if (significantParts.length === 1) return significantParts[0].geometry;
-
-      return {
-        type: "MultiPolygon",
-        coordinates: significantParts.map((p: any) => p.geometry.coordinates),
-      };
-    },
-    [pathGenerator]
-  );
-
-  // Camera Animation for Missions (Smart Transitions)
-  useEffect(() => {
-    if (
-      !geoData ||
-      !pathGenerator ||
-      !svgRef.current ||
-      !zoomRef.current ||
-      gameStatus !== "playing" ||
-      dimensions.width === 0
-    )
-      return;
-
-    const svg = d3.select(svgRef.current);
-    const currentTransform = d3.zoomTransform(svgRef.current);
-    const isPinLocate = mode === "pin" && pinDirection === "locate";
-    const isPinIdentify = mode === "pin" && pinDirection === "identify";
-
-    // Case 1: Stealth Smart Zoom for Identify search phase
-    if ((mode === "identify" && !revealed) || isPinLocate) {
-      if (!selectedCountryCode) return;
-
-      const feature = (geoData.features as unknown as CountryFeature[]).find(
-        (f) => {
-          const code = f.id?.toString() || "";
-          const mappedCode =
-            idToCodeLookup[code] ||
-            idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
-          return mappedCode === selectedCountryCode;
-        },
-      );
-
-      if (!feature) return;
-
-      const effectiveGeometry = getEffectiveGeometry(feature);
-      const [[fx0, fy0], [fx1, fy1]] = pathGenerator.bounds({
-        type: "Feature",
-        geometry: effectiveGeometry,
-        properties: {},
-      } as any);
-
-      // Visibility check
-      const p0 = currentTransform.apply([fx0, fy0]);
-      const p1 = currentTransform.apply([fx1, fy1]);
-      const margin = 30;
-      const isInView =
-        p0[0] > margin &&
-        p0[1] > margin &&
-        p1[0] < dimensions.width - margin &&
-        p1[1] < dimensions.height - margin;
-
-      // If already clearly in view at a sane zoom level, don't move
-      if (isInView && currentTransform.k < 6.0) return;
-
-      // --- Stealth Logic: Zoom out to show target relative to previous center ---
-      const isMobile = dimensions.width < 768;
-      const viewCX = isMobile ? dimensions.width * 0.35 : dimensions.width / 2;
-      const viewCY = isMobile
-        ? dimensions.height * 0.65
-        : dimensions.height / 2;
-
-      // Current center in projection space
-      const curProjCX = (viewCX - currentTransform.x) / currentTransform.k;
-      const curProjCY = (viewCY - currentTransform.y) / currentTransform.k;
-
-      // Build bounding box containing BOTH current center and target country
-      const contextMinX = Math.min(curProjCX, fx0);
-      const contextMaxX = Math.max(curProjCX, fx1);
-      const contextMinY = Math.min(curProjCY, fy0);
-      const contextMaxY = Math.max(curProjCY, fy1);
-
-      const cdx = contextMaxX - contextMinX;
-      const cdy = contextMaxY - contextMinY;
-      const contextMidX = (contextMinX + contextMaxX) / 2;
-      const contextMidY = (contextMinY + contextMaxY) / 2;
-
-      // Calculate context scale to fit the entire movement range
-      const targetContextScale = Math.min(
-        currentTransform.k, // Never zoom in durante the search advance
-        0.65 / Math.max(cdx / dimensions.width, cdy / dimensions.height),
-      );
-
-      // Final scale: Zoom out but don't go beyond world level (homeTransform)
-      const finalScale = Math.max(homeTransform.k, targetContextScale);
-
-      const transform = d3.zoomIdentity
-          .translate(viewCX, viewCY)
-          .scale(finalScale)
-          .translate(-contextMidX, -contextMidY);
-
-      svg
-        .transition()
-        .duration(1400) // Slightly slower for a more 'scouring' feel
-        .ease(d3.easeCubicInOut)
-        .call(zoomRef.current.transform, transform);
-      return;
-    }
-
-    // Case 2: Target Selection (Reverse Ops or Identify Reveal) - Perform Smart Feature Zoom
-    if (!selectedCountryCode) return;
-
-    if (isPinIdentify && targetPinCoordinates) {
-      const point = projection(targetPinCoordinates);
-      if (!point) return;
-
-      const isMobile = dimensions.width < 768;
-      const targetCenterX = isMobile
-        ? dimensions.width * 0.35
-        : dimensions.width / 2;
-      const targetCenterY = isMobile
-        ? dimensions.height * 0.65
-        : dimensions.height / 2;
-      const targetScale = Math.max(
-        currentTransform.k,
-        isMobile ? 2.2 : 2.4,
-      );
-      const screenPoint = currentTransform.apply(point);
-      const isCentered =
-        Math.abs(screenPoint[0] - targetCenterX) < dimensions.width * 0.12 &&
-        Math.abs(screenPoint[1] - targetCenterY) < dimensions.height * 0.12;
-      const isGoodScale =
-        Math.abs(Math.log2(currentTransform.k / targetScale)) < 0.25;
-
-      if (isCentered && isGoodScale) return;
-
-      const transform = d3.zoomIdentity
-        .translate(targetCenterX, targetCenterY)
-        .scale(targetScale)
-        .translate(-point[0], -point[1]);
-
-      svg
-        .transition()
-        .duration(1200)
-        .ease(d3.easeCubicInOut)
-        .call(zoomRef.current.transform, transform);
-      return;
-    }
-
-    const feature = (geoData.features as unknown as CountryFeature[]).find(
-      (f) => {
-        const code = f.id?.toString() || "";
-        const mappedCode =
-          idToCodeLookup[code] ||
-          idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
-        return mappedCode === selectedCountryCode;
-      },
-    );
-
-    if (!feature) return;
-
-    const effectiveGeometry = getEffectiveGeometry(feature);
-    const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
-      type: "Feature",
-      geometry: effectiveGeometry,
-      properties: {},
-    } as any);
-
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const x = (x0 + x1) / 2;
-    const y = (y0 + y1) / 2;
-
-    const targetScaleFactor = mode === "reverse" ? 0.425 : 0.5;
-    const scale = Math.max(
-      1,
-      Math.min(
-        25,
-        targetScaleFactor /
-          Math.max(dx / dimensions.width, dy / dimensions.height),
-      ),
-    );
-
-    const isMobile = dimensions.width < 768;
-    const targetCenterX = isMobile
-      ? dimensions.width * 0.35
-      : dimensions.width / 2;
-    const targetCenterY = isMobile
-      ? dimensions.height * 0.65
-      : dimensions.height / 2;
-
-    const transform = d3.zoomIdentity
-      .translate(targetCenterX, targetCenterY)
-      .scale(scale)
-      .translate(-x, -y);
-
-    // Smart View Check: Only animate if the target is significantly out of view or improperly scaled
-    const p0 = currentTransform.apply([x0, y0]);
-    const p1 = currentTransform.apply([x1, y1]);
-
-    // Check if the country is within the visible viewport with a safety margin
-    const margin = 40;
-    const isInView =
-      p0[0] > margin &&
-      p0[1] > margin &&
-      p1[0] < dimensions.width - margin &&
-      p1[1] < dimensions.height - margin;
-
-    // Check if the current zoom level is approximately the same as the target zoom level
-    const isGoodScale = Math.abs(Math.log2(currentTransform.k / scale)) < 1;
-
-    if (isInView && isGoodScale) return;
-
-    svg
-      .transition()
-      .duration(1200)
-      .ease(d3.easeCubicInOut)
-      .call(zoomRef.current.transform, transform);
-  }, [
-    missionId,
-    selectedCountryCode,
-    pinDirection,
-    revealed,
-    mode,
-    gameStatus,
-    geoData,
-    pathGenerator,
     dimensions,
     idToCodeLookup,
-    homeTransform,
-    getEffectiveGeometry,
+    gameStatus,
+    mode,
+    pinDirection,
+    revealed,
+    selectedCountryCode,
     targetPinCoordinates,
-    projection,
-  ]);
-
-  // Sonar button: always pan to target immediately, no in-view skip
-  useEffect(() => {
-    if (
-      sonarKey === 0 ||
-      !geoData ||
-      !pathGenerator ||
-      !svgRef.current ||
-      !zoomRef.current ||
-      gameStatus !== "playing" ||
-      !selectedCountryCode ||
-      dimensions.width === 0
-    )
-      return;
-
-    const svg = d3.select(svgRef.current);
-
-    const feature = (geoData.features as unknown as CountryFeature[]).find(
-      (f) => {
-        const code = f.id?.toString() || "";
-        const mappedCode =
-          idToCodeLookup[code] ||
-          idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
-        return mappedCode === selectedCountryCode;
-      },
-    );
-
-    if (!feature) return;
-
-    const effectiveGeometry = getEffectiveGeometry(feature);
-    const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
-      type: "Feature",
-      geometry: effectiveGeometry,
-      properties: {},
-    } as any);
-
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const x = (x0 + x1) / 2;
-    const y = (y0 + y1) / 2;
-
-    const isMobile = dimensions.width < 768;
-    const targetCenterX = isMobile ? dimensions.width * 0.35 : dimensions.width / 2;
-    const targetCenterY = isMobile ? dimensions.height * 0.65 : dimensions.height / 2;
-
-    const scale = Math.max(
-      1,
-      Math.min(
-        25,
-        0.45 / Math.max(dx / dimensions.width, dy / dimensions.height),
-      ),
-    );
-
-    const transform = d3.zoomIdentity
-      .translate(targetCenterX, targetCenterY)
-      .scale(scale)
-      .translate(-x, -y);
-
-    svg
-      .transition()
-      .duration(900)
-      .ease(d3.easeCubicInOut)
-      .call(zoomRef.current.transform, transform);
-  }, [sonarKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    missionId,
+    sonarKey,
+  });
 
   const handleCountryClick = React.useCallback(
     (name: string, code: string, event: MouseEvent) => {
@@ -565,192 +92,27 @@ export const WorldMap: React.FC<MapProps> = ({
     [onCountryClick, mode, projection],
   );
 
-  const mapElements = useMemo(() => {
-    if (!geoData || !pathGenerator) return null;
-
-    return (geoData.features as unknown as CountryFeature[]).map(
-      (feature, index: number) => {
-        const name = feature.properties.name;
-        const code = feature.id?.toString() || "";
-        const path = pathGenerator(feature as any);
-
-        const mappedCode =
-          idToCodeLookup[code] || idToCodeLookup[name.toLowerCase()];
-        const shouldShowSelection =
-          mode === "reverse" || revealed || (mode === "pin" && feedback !== null);
-        const isSelected =
-          shouldShowSelection && mappedCode &&
-          ((selectedCountryCode && mappedCode === selectedCountryCode) ||
-            (selectedCountry &&
-              name.toLowerCase() === selectedCountry.toLowerCase()));
-
-        const isFeedbackItem =
-          mappedCode && (
-            (clickedCode && idToCodeLookup[clickedCode] === mappedCode) ||
-            (clickedName &&
-              idToCodeLookup[clickedName.toLowerCase()] === mappedCode)
-          );
-
-        let fillColor = "var(--color-map-land)";
-        if (isFeedbackItem && feedback) {
-          fillColor = feedback === "correct" ? "#22c55e" : "#ef4444";
-        } else if (isSelected || (tempHighlightCode && mappedCode === tempHighlightCode)) {
-          fillColor = "#22c55e";
-        }
-
-        const isHighlighted = isSelected || (isFeedbackItem && feedback) || (tempHighlightCode && mappedCode === tempHighlightCode);
-        const area = pathGenerator.area(feature as any);
-
-        // Visibility Tresholds
-        const SMALL_COUNTRY_THRESHOLD = 150; // Below this area, we show the pulsing 'Solar' effect
-        const TINY_ISLAND_THRESHOLD = 30;    // Below this area, we show the 'White Circle' guide
-
-        const isSmall = area < SMALL_COUNTRY_THRESHOLD;
-        const isTiny = area < TINY_ISLAND_THRESHOLD;
-
-        // Island Guide: Show a white dashed circle around tiny islands
-        // Only active in Reverse Mode or when the Reveal helper is used
-        let guideCircle = null;
-        const isGuideActive =
-          mode !== "pin" &&
-          (isSelected || (isFeedbackItem && mode === "reverse"));
-
-        if (isTiny && isGuideActive) {
-          const effectiveGeometry = getEffectiveGeometry(feature);
-          const [[x0, y0], [x1, y1]] = pathGenerator.bounds({
-            type: "Feature",
-            geometry: effectiveGeometry,
-            properties: {},
-          } as any);
-          const cx = (x0 + x1) / 2;
-          const cy = (y0 + y1) / 2;
-          // Determine radius that covers the entire extent plus thin padding
-          const r = Math.max((x1 - x0) / 2, (y1 - y0) / 2) + 4;
-
-          guideCircle = (
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill="none"
-              stroke="white"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              className="pointer-events-none animate-[pulse_2s_infinite] drop-shadow-[0_0_5px_white]"
-              style={{ vectorEffect: "non-scaling-stroke" }}
-            />
-          );
-        }
-
-        return (
-          <React.Fragment key={`${name}-${index}`}>
-            <path
-              d={path || ""}
-              style={{
-                fill: fillColor,
-                fillOpacity: 1,
-                stroke: mode === "pin" ? fillColor : undefined,
-                strokeWidth:
-                  mode === "pin"
-                    ? 1.5
-                    : isHighlighted
-                      ? "var(--map-selected-stroke-width)"
-                      : "var(--map-stroke-width)",
-                strokeLinejoin: mode === "pin" ? "round" : undefined,
-                strokeLinecap: mode === "pin" ? "round" : undefined,
-                vectorEffect: mode === "pin" ? "non-scaling-stroke" : undefined,
-              }}
-              className={`
-                ${mode === "pin" ? "" : "stroke-white/40"}
-                transition-all 
-                duration-300 
-                hover:fill-opacity-100
-                ${mode === "pin" ? "" : "hover:stroke-white/90 hover:drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]"}
-                cursor-pointer
-                ${isHighlighted && mode !== "pin" ? `stroke-${isFeedbackItem && feedback === "wrong" ? "[#ef4444]" : "[#22c55e]"} drop-shadow-[0_0_25px_rgba(${isFeedbackItem && feedback === "wrong" ? "239,68,68" : "34,197,94"},0.9)] z-50 ${isSmall ? "animate-pulse" : ""}` : ""}
-              `}
-              onClick={(event) => handleCountryClick(name, code, event.nativeEvent)}
-            >
-              {gameStatus !== "playing" && <title>{name}</title>}
-            </path>
-            {guideCircle}
-          </React.Fragment>
-        );
-      },
-    );
-  }, [
+  const sonarPoint = useMapSonarPoint({
     geoData,
     pathGenerator,
-    selectedCountry,
+    idToCodeLookup,
     selectedCountryCode,
     selectedCountryName,
-    idToCodeLookup,
-    handleCountryClick,
+    mode,
+    revealed,
+    getEffectiveGeometry,
+  });
+
+  const { targetPinPoint, guessPinPoint, pinScale } = getMapMarkerState({
+    mode,
     gameStatus,
-    mode,
+    pinDirection,
     revealed,
-    feedback,
-    clickedCode,
-    tempHighlightCode,
-  ]);
-
-  // Find centroid of the selected country for the sonar effect
-  const sonarPoint = useMemo(() => {
-    // Hide sonar until revealed in Identify mode to prevent cheating
-    const shouldShowSonar = mode === "reverse" || revealed;
-
-    if (
-      !geoData ||
-      !pathGenerator ||
-      !shouldShowSonar ||
-      (!selectedCountryCode && !selectedCountryName)
-    )
-      return null;
-
-    const feature = (geoData.features as unknown as CountryFeature[]).find(
-      (f) => {
-        const code = f.id?.toString() || "";
-        const mappedCode =
-          idToCodeLookup[code] ||
-          idToCodeLookup[f.properties?.name?.toLowerCase() || ""];
-        return selectedCountryCode && mappedCode === selectedCountryCode;
-      },
-    );
-
-    if (!feature) return null;
-
-    // Only show the sonar ring effect for smaller countries (below average)
-    const area = pathGenerator.area(feature as any);
-    if (area > 150) return null;
-
-    return pathGenerator.centroid({
-      type: "Feature",
-      geometry: getEffectiveGeometry(feature),
-      properties: {},
-    } as any);
-  }, [
-    geoData,
-    pathGenerator,
-    selectedCountryCode,
-    selectedCountryName,
-    idToCodeLookup,
-    revealed,
-    mode,
-  ]);
-
-  const isPinGame = mode === "pin" && gameStatus === "playing";
-  const showTargetPin =
-    isPinGame &&
-    (pinDirection === "identify" || (pinDirection === "locate" && revealed));
-  const targetPinPoint =
-    showTargetPin && targetPinCoordinates
-      ? projection(targetPinCoordinates)
-      : null;
-  const guessPinPoint =
-    isPinGame && pinDirection === "locate" && pinLocation
-      ? projection(pinLocation)
-      : null;
-  const pinScale = dimensions.width < 768 ? 0.2 : 0.5;
+    pinLocation,
+    targetPinCoordinates,
+    projection,
+    mapWidth: dimensions.width,
+  });
 
   return (
     <div
@@ -770,76 +132,33 @@ export const WorldMap: React.FC<MapProps> = ({
             className="w-full h-full select-none cursor-move"
           >
             <g ref={gRef} className="map-features">
-              {mapElements}
-
-              {targetPinPoint && (
-                <g
-                  transform={`translate(${targetPinPoint[0]}, ${targetPinPoint[1]}) scale(${pinScale})`}
-                  className="pointer-events-none"
-                  aria-label="Target location"
-                >
-                  <path
-                    d="M0 1C-3-5-12-12-12-20a12 12 0 1 1 24 0C12-12 3-5 0 1Z"
-                    fill="#22c55e"
-                    stroke="#fff"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <circle cx="0" cy="-20" r="4" fill="#fff" />
-                </g>
-              )}
-
-              {guessPinPoint && (
-                <g
-                  transform={`translate(${guessPinPoint[0]}, ${guessPinPoint[1]}) scale(${pinScale})`}
-                  className="pointer-events-none"
-                  aria-label="Your pin"
-                >
-                  <path
-                    d="M0 1C-3-5-12-12-12-20a12 12 0 1 1 24 0C12-12 3-5 0 1Z"
-                    fill={feedback === "correct" ? "#22c55e" : feedback === "wrong" ? "#ef4444" : "#f59e0b"}
-                    stroke="#fff"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <circle cx="0" cy="-20" r="4" fill="#fff" />
-                </g>
-              )}
-
-              {/* Tactical Sonar Animation */}
-              <AnimatePresence>
-                {sonarPoint && gameStatus === "playing" && pulseKey > 0 && (
-                  <motion.g
-                    key={pulseKey}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    {[0, 1, 2].map((i) => (
-                      <motion.circle
-                        key={i}
-                        cx={sonarPoint[0]}
-                        cy={sonarPoint[1]}
-                        r={20}
-                        fill="none"
-                        stroke="#22c55e"
-                        strokeWidth={2}
-                        initial={{ scale: 3, opacity: 0 }}
-                        animate={{
-                          scale: 0.5,
-                          opacity: [0, 0.8, 0],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          delay: i * 0.4,
-                          repeat: 2,
-                          ease: "easeOut",
-                        }}
-                      />
-                    ))}
-                  </motion.g>
-                )}
-              </AnimatePresence>
+              <CountryLayer
+                features={
+                  features
+                }
+                pathGenerator={pathGenerator}
+                idToCodeLookup={idToCodeLookup}
+                selectedCountry={selectedCountry}
+                selectedCountryCode={selectedCountryCode}
+                gameStatus={gameStatus}
+                mode={mode}
+                revealed={revealed}
+                feedback={feedback}
+                clickedCode={clickedCode}
+                clickedName={clickedName}
+                tempHighlightCode={tempHighlightCode}
+                onCountryClick={handleCountryClick}
+                getEffectiveGeometry={getEffectiveGeometry}
+              />
+              <MapMarkers
+                targetPinPoint={targetPinPoint}
+                guessPinPoint={guessPinPoint}
+                sonarPoint={sonarPoint}
+                feedback={feedback}
+                gameStatus={gameStatus}
+                pulseKey={pulseKey}
+                pinScale={pinScale}
+              />
             </g>
           </svg>
 

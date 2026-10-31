@@ -1,25 +1,32 @@
 import * as d3 from "d3";
-import type { FeatureCollection, Geometry } from "geojson";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { useEffect, useMemo, useState } from "react";
 import { feature } from "topojson-client";
 
-export interface CountryFeature {
-  type: "Feature";
-  id: string;
-  properties: {
-    name: string;
-  };
-  geometry: Geometry;
+export interface CountryProperties {
+  name: string;
 }
 
+export interface CountryFeature extends Feature<Geometry, CountryProperties> {
+  id: string;
+  properties: CountryProperties;
+}
+
+export type CountryFeatureCollection = Omit<
+  FeatureCollection<Geometry, CountryProperties>,
+  "features"
+> & {
+  features: CountryFeature[];
+};
+
 export const useWorldMap = () => {
-  const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
+  const [geoData, setGeoData] = useState<CountryFeatureCollection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const availableCodes = useMemo(() => {
     if (!geoData) return [];
-    return (geoData.features as any[]).map(f => f.id);
+    return geoData.features.map(({ id }) => id);
   }, [geoData]);
 
   useEffect(() => {
@@ -34,7 +41,7 @@ export const useWorldMap = () => {
         const geojson = feature(
           data,
           data.objects.countries,
-        ) as unknown as FeatureCollection;
+        ) as unknown as CountryFeatureCollection;
         setGeoData(geojson);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");

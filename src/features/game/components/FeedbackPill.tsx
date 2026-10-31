@@ -1,11 +1,13 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { CountryData } from "../../../data/country-data";
+import type { SubMode } from "../../../store/useGameStore";
 
 interface FeedbackPillProps {
   feedback: "correct" | "wrong" | null;
   clickedName: string | null;
-  subMode?: string;
-  countries?: any[];
+  subMode?: SubMode;
+  countries?: CountryData[];
 }
 
 const PRAISE_MESSAGES = [
@@ -14,8 +16,8 @@ const PRAISE_MESSAGES = [
   "MISSION ACCREDITED!",
   "SURGICAL PRECISION!",
   "OPERATIONAL SUCCESS!",
-  "PERFECT INTEL!"
-];
+  "PERFECT INTEL!",
+] as const;
 
 export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedName, subMode, countries }) => {
   const displayClickedName = React.useMemo(() => {
@@ -27,10 +29,14 @@ export const FeedbackPill: React.FC<FeedbackPillProps> = ({ feedback, clickedNam
     return clickedName;
   }, [clickedName, subMode, countries]);
 
-  const praise = React.useMemo(() => 
-    PRAISE_MESSAGES[Math.floor(Math.random() * PRAISE_MESSAGES.length)], 
-    [feedback]
-  );
+  const praise = React.useMemo(() => {
+    const seed = clickedName ?? "";
+    const index = Array.from(seed).reduce(
+      (total, character) => total + character.charCodeAt(0),
+      0,
+    );
+    return PRAISE_MESSAGES[index % PRAISE_MESSAGES.length];
+  }, [clickedName]);
 
   return (
     <AnimatePresence mode="wait">

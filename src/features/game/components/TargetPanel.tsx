@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import React from "react";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
+import { useMapUiStore } from "../../../store/useMapUiStore";
 
 interface TargetPanelProps {
   country: CountryData | undefined;
@@ -16,7 +17,8 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onReveal,
   isJustDocked = false,
 }) => {
-  const { mode, pinDirection, subMode, triggerSonar, revealed } = useGameStore();
+  const { mode, pinDirection, subMode, revealed } = useGameStore();
+  const triggerSonar = useMapUiStore((state) => state.triggerSonar);
   const isPinIdentify = mode === "pin" && pinDirection === "identify";
 
   if (!country) return null;

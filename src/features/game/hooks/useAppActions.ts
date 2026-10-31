@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CountryData } from "../../../data/country-data";
-import { nameMapping } from "../../../data/name-mapping";
-import { normalizeCountryName } from "../../../utils/name-normalizer";
+import { useCallback, useEffect, useRef } from "react";
 import { useGameStore } from "../../../store/useGameStore";
 import { useGameLogic } from "../useGameLogic";
+import {
+  shouldAdvanceRound,
+  type RoundAction,
+} from "../gameRules";
+import { useAnswerSelection } from "./useAnswerSelection";
+import { useRoundControls } from "./useRoundControls";
+import {
+  createTimeoutController,
+  executeRoundAction,
+} from "../roundActionExecutor";
 
 export const useAppActions = () => {
   const {
@@ -24,8 +31,6 @@ export const useAppActions = () => {
     startNewMission,
     recordAttempt,
     setStreakLost,
-    setTempHighlightCode,
-    setPinLocation,
   } = useGameStore();
 
   const {
@@ -36,21 +41,22 @@ export const useAppActions = () => {
     startGame,
   } = useGameLogic();
 
-  const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
-  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roundAdvanceTimerRef = useRef<
+    ReturnType<typeof createTimeoutController> | null
+  >(null);
+  if (roundAdvanceTimerRef.current === null) {
+    roundAdvanceTimerRef.current = createTimeoutController();
+  }
 
-  const clearRevealTimer = useCallback(() => {
-    if (revealTimerRef.current) {
-      clearTimeout(revealTimerRef.current);
-      revealTimerRef.current = null;
-    }
+  const clearRoundAdvanceTimer = useCallback(() => {
+    roundAdvanceTimerRef.current?.clear();
   }, []);
 
   useEffect(() => {
     return () => {
-      clearRevealTimer();
+      clearRoundAdvanceTimer();
     };
-  }, [clearRevealTimer]);
+  }, [clearRoundAdvanceTimer]);
 
   const playAudio = useCallback((path: string) => {
     const audio = new Audio(path);
@@ -58,248 +64,98 @@ export const useAppActions = () => {
     audio.play().catch(() => {}); // Ignore silent playback blocks
   }, []);
 
-  useEffect(() => {
-    if (clickedCountry) {
-      const timer = setTimeout(() => {
-        setClickedCountry(null);
-      }, 15000);
-      return () => clearTimeout(timer);
-    }
-  }, [clickedCountry]);
-
-  const handleCountryClick = useCallback(
-    (name: string, code: string, coordinates?: [number, number]) => {
-      const isPinLocate = mode === "pin" && pinDirection === "locate";
-      if ((mode !== "identify" && !isPinLocate) || feedback) return;
-
-      // Multi-tiered lookup: cca3 -> ccn3 (numeric) -> name mapping -> raw name
-      let countryData = countries.find((c) => c.cca3 === code) || null;
-      if (!countryData) {
-        countryData = countries.find((c) => c.ccn3 === code) || null;
-      }
-      if (!countryData) {
-        const normalizedInput = normalizeCountryName(nameMapping[name] || name);
-        countryData =
-          countries.find(
-            (c) => normalizeCountryName(c.name) === normalizedInput,
-          ) || null;
-      }
-
-      if (gameStatus === "playing") {
-        const targetCountry = currentCountry;
-        if (!targetCountry) return;
-        if (isPinLocate && coordinates) setPinLocation(coordinates);
-
-        const isCorrect = countryData?.cca3 === targetCountry.cca3;
-
-        if (revealed) {
-          if (isCorrect) {
-            clearRevealTimer();
-            nextQuestion();
-          }
-          return;
-        }
-
-        if (isCorrect) {
-
-          recordAttempt(true);
-          playAudio("/audio/correct.mp3");
-          setFeedback("correct", name, code);
-          setScore(score + 10 * (streak + 1));
-          setStreak(streak + 1);
-          setTimeout(() => {
-            const freshState = useGameStore.getState();
-            if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
-              nextQuestion();
-            }
-          }, 1200);
-        } else {
-          recordAttempt(false);
-          playAudio("/audio/wrong.mp3");
-          setFeedback("wrong", name, code);
-          setRevealed(true);
-          if (streak > 0) setStreakLost(streak);
-          setStreak(0);
-          setTimeout(() => {
-            const freshState = useGameStore.getState();
-            if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
-              nextQuestion();
-            }
-          }, 2000);
-        }
-      } else {
-        setClickedCountry(countryData);
-        if (countryData?.cca3) {
-          setTempHighlightCode(countryData.cca3);
-          setTimeout(() => {
-            setTempHighlightCode(null);
-          }, 1000);
-        }
-      }
+  const applyRoundAction = useCallback(
+    (
+      action: RoundAction,
+      clickedName: string,
+      clickedCode: string | null = null,
+    ) => {
+      executeRoundAction(
+        action,
+        { score, streak, revealed },
+        clickedName,
+        clickedCode,
+        {
+          recordAttempt,
+          playFeedback: (feedbackType) =>
+            playAudio(
+              feedbackType === "correct"
+                ? "/audio/correct.mp3"
+                : "/audio/wrong.mp3",
+            ),
+          setFeedback,
+          setScore,
+          setStreak,
+          setStreakLost,
+          setRevealed,
+          clearAdvanceTimer: clearRoundAdvanceTimer,
+          scheduleAdvance: (delayMs) => {
+            roundAdvanceTimerRef.current?.schedule(delayMs, () => {
+              const freshState = useGameStore.getState();
+              if (
+                shouldAdvanceRound(
+                  freshState.challengeType,
+                  freshState.challengeValue,
+                  freshState.totalAttempts,
+                )
+              ) {
+                nextQuestion();
+              }
+            });
+          },
+          nextQuestion,
+        },
+      );
     },
     [
-      mode,
-      feedback,
+      clearRoundAdvanceTimer,
       nextQuestion,
-      countries,
-      gameStatus,
-      currentCountry,
-      setFeedback,
-      score,
-      setScore,
-      streak,
-      setStreak,
-      revealed,
       playAudio,
       recordAttempt,
+      revealed,
+      score,
+      setFeedback,
+      setRevealed,
+      setScore,
+      setStreak,
       setStreakLost,
-      setTempHighlightCode,
-      setPinLocation,
-      pinDirection,
-      clearRevealTimer,
+      streak,
     ],
   );
 
-
-  const handleChoiceSelect = useCallback(
-    (choice: string) => {
-      if (feedback || !currentCountry) return;
-
-      const normalizedTarget = normalizeCountryName(currentCountry.name);
-      const normalizedChoice = normalizeCountryName(choice);
-      let isCorrect = false;
-
-      const choiceSubMode = subMode;
-
-      if (choiceSubMode === "flag") {
-        isCorrect = choice.toLowerCase() === currentCountry.cca2.toLowerCase();
-      } else if (choiceSubMode === "capital") {
-        isCorrect =
-          choice.toLowerCase() === currentCountry.capital[0].toLowerCase();
-      } else {
-        isCorrect = normalizedChoice === normalizedTarget;
-      }
-
-      if (isCorrect) {
-        if (revealed) {
-          nextQuestion();
-          return;
-        }
-
-        recordAttempt(true);
-        playAudio("/audio/correct.mp3");
-        setFeedback("correct", choice);
-        setScore(score + 10 * (streak + 1));
-        setStreak(streak + 1);
-        setTimeout(() => {
-          const freshState = useGameStore.getState();
-          if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
-            nextQuestion();
-          }
-        }, 1200);
-      } else {
-        recordAttempt(false);
-        playAudio("/audio/wrong.mp3");
-        setFeedback("wrong", choice);
-        setRevealed(true);
-        if (streak > 0) setStreakLost(streak);
-        setStreak(0);
-        setTimeout(() => {
-          const freshState = useGameStore.getState();
-          if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
-            nextQuestion();
-          }
-        }, 2000);
-      }
-    },
-    [
-      feedback,
-      currentCountry,
-      subMode,
-      mode,
-      nextQuestion,
-      setFeedback,
-      score,
-      setScore,
-      streak,
-      setStreak,
-      revealed,
-      playAudio,
-      recordAttempt,
-      setStreakLost,
-    ],
-  );
-
-  const handleFinalStart = useCallback(() => {
-    setClickedCountry(null);
-    startNewMission();
-    startGame();
-  }, [startGame, startNewMission]);
-
-  const handleSkip = useCallback(() => {
-    clearRevealTimer();
-    if (currentCountry) {
-      recordAttempt(false);
-      setRevealed(true);
-      if (streak > 0) setStreakLost(streak);
-      setStreak(0);
-
-      setTimeout(() => {
-        const freshState = useGameStore.getState();
-        if (freshState.totalAttempts < freshState.challengeValue || freshState.challengeType !== "count") {
-          nextQuestion();
-        }
-      }, 1500);
-    } else {
-      nextQuestion();
-    }
-  }, [
-    clearRevealTimer,
+  const {
+    clickedCountry,
+    setClickedCountry,
+    handleCountryClick,
+    handleChoiceSelect,
+  } = useAnswerSelection({
+    countries,
     currentCountry,
-    setRevealed,
-    setStreak,
-    nextQuestion,
-    recordAttempt,
-    streak,
-    setStreakLost,
-  ]);
-
-  const handleReveal = useCallback(() => {
-    clearRevealTimer();
-    setRevealed(true);
-    recordAttempt(false);
-    useGameStore.getState().triggerPulse();
-    if (mode === "identify" && streak > 0) {
-      setStreakLost(streak);
-      setStreak(0);
-    }
-
-    revealTimerRef.current = setTimeout(() => {
-      const freshState = useGameStore.getState();
-      if (
-        freshState.totalAttempts < freshState.challengeValue ||
-        freshState.challengeType !== "count"
-      ) {
-        nextQuestion();
-      }
-    }, 2500);
-  }, [
+    gameStatus,
     mode,
-    streak,
-    setRevealed,
-    setStreak,
-    setStreakLost,
-    recordAttempt,
+    pinDirection,
+    subMode,
+    feedback,
+    applyRoundAction,
+  });
+
+  const { start, skip, reveal } = useRoundControls({
+    currentCountry,
+    mode,
+    clearAdvanceTimer: clearRoundAdvanceTimer,
+    applyRoundAction,
     nextQuestion,
-    clearRevealTimer,
-  ]);
+    clearClickedCountry: () => setClickedCountry(null),
+    startNewMission,
+    startGame,
+  });
 
   return {
     clickedCountry,
     setClickedCountry,
     handleCountryClick,
     handleChoiceSelect,
-    handleFinalStart,
+    handleFinalStart: start,
     gameStatus,
     mode,
     choices,
@@ -307,8 +163,8 @@ export const useAppActions = () => {
     missionId,
     revealed,
     setRevealed,
-    handleReveal,
-    skipQuestion: handleSkip,
+    handleReveal: reveal,
+    skipQuestion: skip,
     nextQuestion,
     currentCountry,
     countries,

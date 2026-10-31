@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 export interface CountryData {
   name: string;
   officialName: string;
@@ -81,15 +79,16 @@ export const fetchCountries = async (): Promise<CountryData[]> => {
     let more = true;
 
     while (more) {
-      const response = await axios.get<RestCountriesV5Response>(API_BASE, {
-        params: {
-          response_fields: RESPONSE_FIELDS,
-          limit: PAGE_LIMIT,
-          offset,
-        },
+      const params = new URLSearchParams({
+        response_fields: RESPONSE_FIELDS,
+        limit: String(PAGE_LIMIT),
+        offset: String(offset),
       });
+      const response = await fetch(`${API_BASE}?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch country data');
 
-      const { objects, meta } = response.data.data;
+      const responseData: RestCountriesV5Response = await response.json();
+      const { objects, meta } = responseData.data;
       countries.push(...objects.map(mapRestCountry));
       more = meta.more;
       offset += PAGE_LIMIT;

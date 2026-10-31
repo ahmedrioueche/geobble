@@ -4,7 +4,7 @@ const ConfirmModal = lazy(() => import("./components/modals/ConfirmModal.tsx"));
 const SubModeModal = lazy(() => import("./components/modals/SubModeModal.tsx"));
 const ResultModal = lazy(() => import("./components/modals/ResultModal.tsx"));
 
-function modals() {
+function Modals() {
   return (
     <Suspense>
       <ConfirmModal />
@@ -14,4 +14,4 @@ function modals() {
   );
 }
 
-export default modals;
+export default Modals;
