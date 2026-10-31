@@ -31,6 +31,15 @@ Explore the global theatre at your own pace. Hover and click any territory to re
 - **State Management**: [Zustand](https://zustand-demo.pmnd.rs/) (Synchronized Mission Logic)
 - **Visuals**: [Vanilla CSS](https://developer.mozilla.org/en-US/docs/Web/CSS) (Tailored High-Density Aesthetics)
 
+## Game Session Snapshots
+
+The game store can export and restore a versioned, JSON-serializable gameplay
+snapshot with `createSessionSnapshot()` and `restoreSessionSnapshot(snapshot)`.
+Snapshots include mission progress and the active target, but intentionally omit
+transient feedback and locally unlocked progression. Unsupported or malformed
+snapshots are rejected. This provides a client-side state boundary; it does not
+implement networking or server-authoritative multiplayer.
+
 ---
 
 ## 🚀 Deployment

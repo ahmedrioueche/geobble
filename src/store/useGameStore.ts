@@ -4,6 +4,11 @@ import {
   createInitialGameState,
   type GameStateData,
 } from "./gameStateDefaults";
+import {
+  createGameSessionSnapshot,
+  restoreGameSessionSnapshot,
+} from "./gameSessionSnapshot";
+import type { GameSessionSnapshot } from "./gameSessionSnapshot";
 
 export type GameMode = "identify" | "reverse" | "pin";
 export type PinDirection = "locate" | "identify";
@@ -41,11 +46,13 @@ interface GameState extends GameStateData {
   setRevealed: (revealed: boolean) => void;
   resetGame: () => void;
   setStreakLost: (value: number | null) => void;
+  createSessionSnapshot: () => GameSessionSnapshot;
+  restoreSessionSnapshot: (snapshot: unknown) => void;
 }
 
 export const useGameStore = create<GameState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...createInitialGameState(),
       setScore: (score) => set({ score }),
       setStreak: (streak) =>
@@ -132,6 +139,14 @@ export const useGameStore = create<GameState>()(
       resetGame: () =>
         set((state) => createInitialGameState(state.unlockedStage)),
       setStreakLost: (streakLost) => set({ streakLost }),
+      createSessionSnapshot: () => createGameSessionSnapshot(get()),
+      restoreSessionSnapshot: (snapshot) =>
+        set(
+          restoreGameSessionSnapshot(
+            snapshot,
+            get().unlockedStage,
+          ),
+        ),
     }),
     {
       name: "geobble-storage",

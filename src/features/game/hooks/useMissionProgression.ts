@@ -6,6 +6,7 @@ import { getMissionStartSettings } from "../missionProgression";
 
 interface UseMissionProgressionProps {
   countries: CountryData[];
+  random?: () => number;
   generateChoices: (
     target: CountryData,
     subMode: "name" | "flag" | "capital",
@@ -15,6 +16,7 @@ interface UseMissionProgressionProps {
 
 export const useMissionProgression = ({
   countries,
+  random = Math.random,
   generateChoices,
   finishGame,
 }: UseMissionProgressionProps) => {
@@ -60,7 +62,7 @@ export const useMissionProgression = ({
       playedCountryCodes: state.playedCountryCodes,
       sessionPlayedCodes: state.sessionPlayedCodes,
     });
-    const target = pickRandom(targetPool);
+    const target = pickRandom(targetPool, random);
     if (!target) {
       finishGame();
       return;
@@ -81,6 +83,7 @@ export const useMissionProgression = ({
     }
   }, [
     countries,
+    random,
     finishGame,
     generateChoices,
     setCurrentCountry,
