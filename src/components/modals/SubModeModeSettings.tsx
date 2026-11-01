@@ -60,20 +60,22 @@ export const SubModeModeSettings: React.FC<SubModeModeSettingsProps> = ({
         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 mb-4 block">
           Starting Prompt
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {promptModes.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => onSubModeChange(id)}
               aria-pressed={subMode === id}
-              className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+              className={`p-3 rounded-xl border-2 transition-all flex items-center justify-start text-left gap-3 ${
                 subMode === id
-                  ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                  ? "border-[var(--color-accent)] bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                   : "border-white/5 bg-white/5 hover:border-white/20"
               }`}
             >
-              <Icon className={`w-5 h-5 ${subMode === id ? "text-primary" : "text-white/40"}`} />
-              <span className="font-bold text-[10px] sm:text-xs">{label}</span>
+              <Icon
+                className={`w-5 h-5 ${subMode === id ? "text-[var(--color-accent)]" : "text-white/40"}`}
+              />
+              <span className="flex-1 font-bold text-xs">{label}</span>
             </button>
           ))}
         </div>
@@ -89,16 +91,20 @@ export const SubModeModeSettings: React.FC<SubModeModeSettingsProps> = ({
               key={id}
               onClick={() => onDirectionChange(id)}
               aria-pressed={selectedDirection === id}
-              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+              className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
                 selectedDirection === id
-                  ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                  ? "border-[var(--color-accent)] bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                   : "border-white/5 bg-white/5 hover:border-white/20"
               }`}
             >
-              <Icon className={`w-6 h-6 ${selectedDirection === id ? "text-primary" : "text-white/40"}`} />
-              <span className="font-bold text-sm">{label}</span>
-              <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">
-                {description}
+              <Icon
+                className={`w-6 h-6 ${selectedDirection === id ? "text-[var(--color-accent)]" : "text-white/40"}`}
+              />
+              <span className="flex flex-1 flex-col gap-1 text-left">
+                <span className="font-bold text-sm">{label}</span>
+                <span className="text-[10px] opacity-60 uppercase font-bold tracking-wider leading-tight">
+                  {description}
+                </span>
               </span>
             </button>
           ))}

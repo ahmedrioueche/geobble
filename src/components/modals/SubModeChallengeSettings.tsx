@@ -56,51 +56,57 @@ export const SubModeChallengeSettings: React.FC<
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <button
             onClick={() => onTypeChange("world")}
-            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+            className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-start gap-3 ${
               selectedType === "world"
-                ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                ? "border-[var(--color-accent)] bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                 : "border-white/5 bg-white/5 hover:border-white/20"
             }`}
           >
             <Globe
-              className={`w-6 h-6 ${selectedType === "world" ? "text-primary" : "text-white/40"}`}
+              className={`w-6 h-6 ${selectedType === "world" ? "text-[var(--color-accent)]" : "text-white/40"}`}
             />
-            <div className="font-bold text-sm">ENTIRE WORLD</div>
-            <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-              Conquer them all
-            </div>
+            <span className="flex flex-1 flex-col gap-1 text-left">
+              <span className="font-bold text-sm">ENTIRE WORLD</span>
+              <span className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
+                Conquer them all
+              </span>
+            </span>
           </button>
           <button
             onClick={selectCount}
-            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+            className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-start gap-3 ${
               selectedType === "count"
-                ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                ? "border-[var(--color-accent)] bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                 : "border-white/5 bg-white/5 hover:border-white/20"
             }`}
           >
             <Hash
-              className={`w-6 h-6 ${selectedType === "count" ? "text-primary" : "text-white/40"}`}
+              className={`w-6 h-6 ${selectedType === "count" ? "text-[var(--color-accent)]" : "text-white/40"}`}
             />
-            <div className="font-bold text-sm">SET COUNT</div>
-            <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-              Fixed targets
-            </div>
+            <span className="flex flex-1 flex-col gap-1 text-left">
+              <span className="font-bold text-sm">SET COUNT</span>
+              <span className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
+                Fixed targets
+              </span>
+            </span>
           </button>
           <button
             onClick={selectTimer}
-            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+            className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-start gap-3 ${
               selectedType === "timer"
-                ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
+                ? "border-[var(--color-accent)] bg-primary/10 shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                 : "border-white/5 bg-white/5 hover:border-white/20"
             }`}
           >
             <Timer
-              className={`w-6 h-6 ${selectedType === "timer" ? "text-primary" : "text-white/40"}`}
+              className={`w-6 h-6 ${selectedType === "timer" ? "text-[var(--color-accent)]" : "text-white/40"}`}
             />
-            <div className="font-bold text-sm">TIME TRIAL</div>
-            <div className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
-              Beat the clock
-            </div>
+            <span className="flex flex-1 flex-col gap-1 text-left">
+              <span className="font-bold text-sm">TIME TRIAL</span>
+              <span className="text-[10px] opacity-50 uppercase font-bold tracking-wider leading-tight">
+                Beat the clock
+              </span>
+            </span>
           </button>
         </div>
       </div>
@@ -117,7 +123,7 @@ export const SubModeChallengeSettings: React.FC<
                 onClick={() => onValueChange(count)}
                 className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${
                   selectedValue === count
-                    ? "border-primary bg-primary text-white shadow-lg"
+                    ? "border-[var(--color-accent)] bg-primary text-white shadow-lg"
                     : "border-white/5 bg-white/5 hover:bg-white/10"
                 }`}
               >
@@ -140,7 +146,7 @@ export const SubModeChallengeSettings: React.FC<
                 onClick={() => onValueChange(time.value)}
                 className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${
                   selectedValue === time.value
-                    ? "border-primary bg-primary text-white shadow-lg"
+                    ? "border-[var(--color-accent)] bg-primary text-white shadow-lg"
                     : "border-white/5 bg-white/5 hover:bg-white/10"
                 }`}
               >
@@ -169,7 +175,7 @@ export const SubModeChallengeSettings: React.FC<
                     onClick={() => onStageChange(stage)}
                     className={`relative h-10 md:h-12 rounded-xl border-2 transition-all group flex items-center justify-center ${
                       isSelected
-                        ? "border-primary bg-primary/20"
+                        ? "border-[var(--color-accent)] bg-primary/20"
                         : isLocked
                           ? "border-white/5 bg-white/5 opacity-50 cursor-not-allowed"
                           : "border-white/5 bg-white/5 hover:border-white/20"
