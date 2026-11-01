@@ -37,7 +37,10 @@ World map topology is loaded and converted through a shared typed loader. It
 shares in-flight and successful results between map and country-data consumers,
 and allows failed loads to be retried. The store-connected map entry point
 passes gameplay and UI state into a separate view through typed props, keeping
-map rendering independent of local Zustand subscriptions.
+map rendering independent of local Zustand subscriptions. The view delegates
+SVG and overlay rendering to a presentational canvas component. Pin-mode map
+clicks convert pointer positions to geographic coordinates on the client; those
+coordinates are input data, not an authoritative result.
 
 The game store can export and restore a versioned, JSON-serializable gameplay
 snapshot with `createSessionSnapshot()` and `restoreSessionSnapshot(snapshot)`.

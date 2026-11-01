@@ -6,14 +6,14 @@ import type {
   GameMode,
   PinDirection,
 } from "../../store/gameSession";
+import { WorldMapCanvas } from "./WorldMapCanvas";
 import { useMapCamera } from "./useMapCamera";
-import { MapMarkers } from "./MapMarkers";
 import { useWorldMap } from "./useWorldMap";
-import { CountryLayer } from "./CountryLayer";
 import { useMapViewport } from "./useMapViewport";
 import { useMapCountryData } from "./useMapCountryData";
 import { useMapSonarPoint } from "./useMapSonarPoint";
 import { getMapMarkerState } from "./mapMarkerState";
+import { getCountryClickCoordinates } from "./mapInteraction";
 
 export interface WorldMapViewProps {
   onCountryClick?: (
@@ -97,14 +97,15 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
   const handleCountryClick = React.useCallback(
     (name: string, code: string, event: MouseEvent) => {
       if (onCountryClick) {
-        const invert = projection.invert;
-        const point =
-          mode === "pin" && gRef.current && invert
-            ? (invert(d3.pointer(event, gRef.current)) as
-                | [number, number]
-                | null)
+        const pointer =
+          mode === "pin" && gRef.current
+            ? d3.pointer(event, gRef.current)
             : null;
-        onCountryClick(name, code, point || undefined);
+        onCountryClick(
+          name,
+          code,
+          getCountryClickCoordinates(mode, pointer, projection),
+        );
       }
     },
     [onCountryClick, mode, projection],
@@ -142,48 +143,36 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
           {error ? error : "Establishing Orbital Link..."}
         </div>
       ) : (
-        <>
-          <svg
-            ref={svgRef}
-            width={dimensions.width}
-            height={dimensions.height}
-            className="w-full h-full select-none cursor-move"
-          >
-            <g ref={gRef} className="map-features">
-              <CountryLayer
-                features={features}
-                pathGenerator={pathGenerator}
-                idToCodeLookup={idToCodeLookup}
-                selectedCountry={selectedCountry}
-                selectedCountryCode={selectedCountryCode}
-                gameStatus={gameStatus}
-                mode={mode}
-                revealed={revealed}
-                feedback={feedback}
-                clickedCode={clickedCode}
-                clickedName={clickedName}
-                tempHighlightCode={tempHighlightCode}
-                onCountryClick={handleCountryClick}
-                getEffectiveGeometry={getEffectiveGeometry}
-              />
-              <MapMarkers
-                targetPinPoint={targetPinPoint}
-                guessPinPoint={guessPinPoint}
-                sonarPoint={sonarPoint}
-                feedback={feedback}
-                gameStatus={gameStatus}
-                pulseKey={pulseKey}
-                pinScale={pinScale}
-              />
-            </g>
-          </svg>
-
-          <div className="absolute bottom-6 left-6 pointer-events-none hidden md:block">
-            <span className="text-[10px] font-bold text-white/20 uppercase tracking-tight bg-slate-900/60 px-4 py-2 rounded-2xl backdrop-blur-md border border-white/5 shadow-2xl">
-              Drag to Pan • Scroll to Zoom
-            </span>
-          </div>
-        </>
+        <WorldMapCanvas
+          svgRef={svgRef}
+          groupRef={gRef}
+          dimensions={dimensions}
+          countryLayerProps={{
+            features,
+            pathGenerator,
+            idToCodeLookup,
+            selectedCountry,
+            selectedCountryCode,
+            gameStatus,
+            mode,
+            revealed,
+            feedback,
+            clickedCode,
+            clickedName,
+            tempHighlightCode,
+            onCountryClick: handleCountryClick,
+            getEffectiveGeometry,
+          }}
+          mapMarkerProps={{
+            targetPinPoint,
+            guessPinPoint,
+            sonarPoint,
+            feedback,
+            gameStatus,
+            pulseKey,
+            pinScale,
+          }}
+        />
       )}
     </div>
   );
