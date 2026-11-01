@@ -77,6 +77,15 @@ command IDs. A local handler validates these identities and delegates accepted
 actions to the same pure transition; its serializable events form an integration
 seam only and are not a network protocol or security boundary.
 
+The client also defines a transport-independent multiplayer room contract in
+`multiplayerRoomProtocol.ts` and an observable room-client lifecycle in
+`multiplayerRoomClient.ts`. It validates incoming room messages, tracks room
+snapshots by revision, submits commands against the latest known revision, and
+tracks acknowledgements and reconnect status. Tests exercise this boundary
+through a fake transport. This is client-side integration groundwork only:
+there is no server, live transport, authoritative validation, or playable
+multiplayer mode, and these client message checks are not a security boundary.
+
 The client store groups match-owned values under `session`, keeps local unlock
 progression outside that session, and stores feedback/notification details in a
 separate UI store. Session IDs persist through local save/resume; they are local
