@@ -1,30 +1,31 @@
 import React from "react";
-import type { CountryData } from "../../data/country-data";
 import { useGameStore } from "../../store/useGameStore";
 import { useGameUiStore } from "../../store/useGameUiStore";
 import { useMapUiStore } from "../../store/useMapUiStore";
 import { useShallow } from "zustand/react/shallow";
 import {
+  selectWorldMapMapUi,
   selectWorldMapSession,
   selectWorldMapUi,
 } from "./worldMapStoreSelectors";
-import { WorldMapView } from "./WorldMapView";
+import { WorldMapView, type WorldMapViewProps } from "./WorldMapView";
 import { useWorldMap } from "./useWorldMap";
 
-interface MapProps {
-  onCountryClick?: (
-    name: string,
-    code: string,
-    coordinates?: [number, number],
-  ) => void;
-  selectedCountry?: string;
-  selectedCountryCode?: string | null;
-  selectedCountryName?: string | null;
-  countries?: CountryData[];
-  missionId?: string | null;
-}
+type WorldMapWrapperProps = Omit<
+  WorldMapViewProps,
+  | "geoData"
+  | "projection"
+  | "loading"
+  | "error"
+  | "game"
+  | "gameUi"
+  | "mapUi"
+  | "countries"
+> & {
+  countries?: WorldMapViewProps["countries"];
+};
 
-export const WorldMap: React.FC<MapProps> = ({
+export const WorldMap: React.FC<WorldMapWrapperProps> = ({
   onCountryClick,
   selectedCountry,
   selectedCountryCode,
@@ -32,18 +33,9 @@ export const WorldMap: React.FC<MapProps> = ({
   missionId,
   countries = [],
 }) => {
-  const { gameStatus, mode, pinDirection, pinLocation, revealed } =
-    useGameStore(useShallow(selectWorldMapSession));
-  const { feedback, clickedCode, clickedName } = useGameUiStore(
-    useShallow(selectWorldMapUi),
-  );
-  const { pulseKey, sonarKey, tempHighlightCode } = useMapUiStore(
-    useShallow((state) => ({
-      pulseKey: state.pulseKey,
-      sonarKey: state.sonarKey,
-      tempHighlightCode: state.tempHighlightCode,
-    })),
-  );
+  const game = useGameStore(useShallow(selectWorldMapSession));
+  const gameUi = useGameUiStore(useShallow(selectWorldMapUi));
+  const mapUi = useMapUiStore(useShallow(selectWorldMapMapUi));
   const { geoData, projection, loading, error } = useWorldMap();
 
   return (
@@ -58,17 +50,9 @@ export const WorldMap: React.FC<MapProps> = ({
       selectedCountryName={selectedCountryName}
       countries={countries}
       missionId={missionId}
-      gameStatus={gameStatus}
-      mode={mode}
-      pinDirection={pinDirection}
-      pinLocation={pinLocation}
-      revealed={revealed}
-      feedback={feedback}
-      clickedCode={clickedCode}
-      clickedName={clickedName}
-      pulseKey={pulseKey}
-      sonarKey={sonarKey}
-      tempHighlightCode={tempHighlightCode}
+      game={game}
+      gameUi={gameUi}
+      mapUi={mapUi}
     />
   );
 };

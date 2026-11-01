@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getPinIdentifyCamera } from "./pinIdentifyCamera";
 
 describe("getPinIdentifyCamera", () => {
-  it("uses the moderate desktop zoom and centers the pin", () => {
+  it("uses a close desktop zoom that matches the country framing scale", () => {
     const point: [number, number] = [400, 200];
     const { transform } = getPinIdentifyCamera(
       point,
@@ -11,11 +11,11 @@ describe("getPinIdentifyCamera", () => {
       { width: 1200, height: 800 },
     );
 
-    expect(transform.k).toBe(2.4);
+    expect(transform.k).toBe(4);
     expect(transform.apply(point)).toEqual([600, 400]);
   });
 
-  it("uses a moderate mobile zoom and positions the pin in the map-safe area", () => {
+  it("uses a mobile zoom that keeps the pin framed without over-zooming", () => {
     const point: [number, number] = [300, 180];
     const { transform } = getPinIdentifyCamera(
       point,
@@ -23,7 +23,7 @@ describe("getPinIdentifyCamera", () => {
       { width: 390, height: 844 },
     );
 
-    expect(transform.k).toBe(2.2);
+    expect(transform.k).toBe(2.8);
     expect(transform.apply(point)).toEqual([136.5, 548.6]);
   });
 
@@ -43,7 +43,7 @@ describe("getPinIdentifyCamera", () => {
     const point: [number, number] = [100, 50];
     const currentTransform = d3.zoomIdentity
       .translate(600, 400)
-      .scale(2.4)
+      .scale(4)
       .translate(-point[0], -point[1]);
 
     expect(

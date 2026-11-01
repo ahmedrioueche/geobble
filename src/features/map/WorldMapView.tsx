@@ -1,12 +1,12 @@
 import * as d3 from "d3";
 import React, { useRef } from "react";
 import type { CountryData } from "../../data/country-data";
-import type {
-  GameFeedback,
-  GameMode,
-  PinDirection,
-} from "../../store/gameSession";
 import type { CountryFeatureCollection } from "./useWorldMap";
+import type {
+  WorldMapGameState,
+  WorldMapGameUiState,
+  WorldMapMapUiState,
+} from "./worldMapStoreSelectors";
 import { WorldMapCanvas } from "./WorldMapCanvas";
 import { useMapCamera } from "./useMapCamera";
 import { useMapViewport } from "./useMapViewport";
@@ -30,17 +30,9 @@ export interface WorldMapViewProps {
   selectedCountryName?: string | null;
   countries: CountryData[];
   missionId?: string | null;
-  gameStatus: "idle" | "playing" | "finished";
-  mode: GameMode;
-  pinDirection: PinDirection;
-  pinLocation: [number, number] | null;
-  revealed: boolean;
-  feedback: GameFeedback;
-  clickedCode: string | null;
-  clickedName: string | null;
-  pulseKey: number;
-  sonarKey: number;
-  tempHighlightCode: string | null;
+  game: WorldMapGameState;
+  gameUi: WorldMapGameUiState;
+  mapUi: WorldMapMapUiState;
 }
 
 export const WorldMapView: React.FC<WorldMapViewProps> = ({
@@ -54,17 +46,9 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
   selectedCountryName,
   countries,
   missionId,
-  gameStatus,
-  mode,
-  pinDirection,
-  pinLocation,
-  revealed,
-  feedback,
-  clickedCode,
-  clickedName,
-  pulseKey,
-  sonarKey,
-  tempHighlightCode,
+  game: { gameStatus, mode, pinDirection, pinLocation, revealed },
+  gameUi: { feedback, clickedCode, clickedName },
+  mapUi: { pulseKey, sonarKey, tempHighlightCode },
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);

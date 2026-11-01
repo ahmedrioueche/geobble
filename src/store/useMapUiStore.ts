@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-interface MapUiState {
+export interface MapUiState {
   pulseKey: number;
   sonarKey: number;
   tempHighlightCode: string | null;

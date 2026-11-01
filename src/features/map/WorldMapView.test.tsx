@@ -37,17 +37,23 @@ const props: WorldMapViewProps = {
   loading: false,
   error: null,
   countries: [],
-  gameStatus: "playing",
-  mode: "reverse",
-  pinDirection: "identify",
-  pinLocation: null,
-  revealed: true,
-  feedback: "wrong",
-  clickedCode: "CAN",
-  clickedName: "Canada",
-  pulseKey: 3,
-  sonarKey: 2,
-  tempHighlightCode: "FRA",
+  game: {
+    gameStatus: "playing",
+    mode: "reverse",
+    pinDirection: "identify",
+    pinLocation: null,
+    revealed: true,
+  },
+  gameUi: {
+    feedback: "wrong",
+    clickedCode: "CAN",
+    clickedName: "Canada",
+  },
+  mapUi: {
+    pulseKey: 3,
+    sonarKey: 2,
+    tempHighlightCode: "FRA",
+  },
 };
 
 beforeEach(() => {

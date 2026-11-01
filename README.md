@@ -36,9 +36,10 @@ Explore the global theatre at your own pace. Hover and click any territory to re
 World map topology is loaded and converted through a shared typed loader. It
 shares in-flight and successful results between map and country-data consumers,
 and allows failed loads to be retried. The store-connected map entry point
-owns the map-resource hook and passes map data, loading/error status, gameplay,
-and UI state into a separate view through typed props. This keeps map rendering
-independent of local Zustand subscriptions and resource loading. The view
+owns the map-resource hook and passes map data, loading/error status, and
+gameplay, game-feedback, and map-UI state groups into a separate view through
+typed props. This keeps map rendering independent of local Zustand
+subscriptions and resource loading. The view
 delegates SVG and overlay rendering to a presentational canvas component.
 Pin-mode map clicks convert pointer positions to geographic coordinates on the
 client; those coordinates are input data, not an authoritative result.

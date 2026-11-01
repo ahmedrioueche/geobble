@@ -71,6 +71,15 @@ describe("WorldMap", () => {
         projection,
         loading: false,
         error: null,
+        game: {
+          gameStatus: "playing",
+          mode: "pin",
+          pinDirection: "locate",
+          pinLocation: [10, 20],
+          revealed: false,
+        },
+        gameUi: { feedback: null, clickedCode: null, clickedName: null },
+        mapUi: { pulseKey: 0, sonarKey: 0, tempHighlightCode: null },
       }),
     );
   });

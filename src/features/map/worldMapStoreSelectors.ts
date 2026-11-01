@@ -1,4 +1,5 @@
 import type { GameSessionState, GameUiState } from "../../store/gameSession";
+import type { MapUiState } from "../../store/useMapUiStore";
 
 type WorldMapSessionSource = {
   session: Pick<
@@ -31,3 +32,22 @@ export const selectWorldMapUi = ({
   clickedCode,
   clickedName,
 });
+
+type WorldMapMapUiSource = Pick<
+  MapUiState,
+  "pulseKey" | "sonarKey" | "tempHighlightCode"
+>;
+
+export const selectWorldMapMapUi = ({
+  pulseKey,
+  sonarKey,
+  tempHighlightCode,
+}: WorldMapMapUiSource) => ({
+  pulseKey,
+  sonarKey,
+  tempHighlightCode,
+});
+
+export type WorldMapGameState = ReturnType<typeof selectWorldMapSession>;
+export type WorldMapGameUiState = ReturnType<typeof selectWorldMapUi>;
+export type WorldMapMapUiState = ReturnType<typeof selectWorldMapMapUi>;

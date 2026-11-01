@@ -22,7 +22,7 @@ export const getPinIdentifyCamera = (
   const targetCenterY = isMobile
     ? dimensions.height * 0.65
     : dimensions.height / 2;
-  const targetScale = Math.max(currentTransform.k, isMobile ? 2.2 : 2.4);
+  const targetScale = Math.max(currentTransform.k, isMobile ? 2.8 : 4);
   const screenPoint = currentTransform.apply(point);
   const isCentered =
     Math.abs(screenPoint[0] - targetCenterX) < dimensions.width * 0.12 &&
