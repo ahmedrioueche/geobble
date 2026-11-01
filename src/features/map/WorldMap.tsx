@@ -9,6 +9,7 @@ import {
   selectWorldMapUi,
 } from "./worldMapStoreSelectors";
 import { WorldMapView } from "./WorldMapView";
+import { useWorldMap } from "./useWorldMap";
 
 interface MapProps {
   onCountryClick?: (
@@ -43,9 +44,14 @@ export const WorldMap: React.FC<MapProps> = ({
       tempHighlightCode: state.tempHighlightCode,
     })),
   );
+  const { geoData, projection, loading, error } = useWorldMap();
 
   return (
     <WorldMapView
+      geoData={geoData}
+      projection={projection}
+      loading={loading}
+      error={error}
       onCountryClick={onCountryClick}
       selectedCountry={selectedCountry}
       selectedCountryCode={selectedCountryCode}

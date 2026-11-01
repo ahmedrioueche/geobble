@@ -6,9 +6,9 @@ import type {
   GameMode,
   PinDirection,
 } from "../../store/gameSession";
+import type { CountryFeatureCollection } from "./useWorldMap";
 import { WorldMapCanvas } from "./WorldMapCanvas";
 import { useMapCamera } from "./useMapCamera";
-import { useWorldMap } from "./useWorldMap";
 import { useMapViewport } from "./useMapViewport";
 import { useMapCountryData } from "./useMapCountryData";
 import { useMapSonarPoint } from "./useMapSonarPoint";
@@ -16,6 +16,10 @@ import { getMapMarkerState } from "./mapMarkerState";
 import { getCountryClickCoordinates } from "./mapInteraction";
 
 export interface WorldMapViewProps {
+  geoData: CountryFeatureCollection | null;
+  projection: d3.GeoProjection;
+  loading: boolean;
+  error: string | null;
   onCountryClick?: (
     name: string,
     code: string,
@@ -40,6 +44,10 @@ export interface WorldMapViewProps {
 }
 
 export const WorldMapView: React.FC<WorldMapViewProps> = ({
+  geoData,
+  projection,
+  loading,
+  error,
   onCountryClick,
   selectedCountry,
   selectedCountryCode,
@@ -58,7 +66,6 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
   sonarKey,
   tempHighlightCode,
 }) => {
-  const { geoData, loading, error, projection } = useWorldMap();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const { containerRef, dimensions, pathGenerator } = useMapViewport({

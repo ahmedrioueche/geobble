@@ -24,14 +24,11 @@ export const useWorldMap = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [availableCodes, setAvailableCodes] = useState<string[]>([]);
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         const mapData = await loadWorldMapData();
         setGeoData(mapData.geoData);
-        setAvailableCodes([...mapData.availableMapIds]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
@@ -50,5 +47,5 @@ export const useWorldMap = () => {
     return d3.geoPath().projection(projection);
   }, [projection]);
 
-  return { geoData, projection, pathGenerator, loading, error, availableCodes };
+  return { geoData, projection, pathGenerator, loading, error };
 };

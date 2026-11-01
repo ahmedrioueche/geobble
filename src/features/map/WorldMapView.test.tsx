@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import * as d3 from "d3";
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorldMapView, type WorldMapViewProps } from "./WorldMapView";
@@ -7,7 +8,6 @@ import { WorldMapView, type WorldMapViewProps } from "./WorldMapView";
 const mocks = vi.hoisted(() => ({
   countryLayer: vi.fn<(props: Record<string, unknown>) => null>(() => null),
   mapMarkers: vi.fn<(props: Record<string, unknown>) => null>(() => null),
-  useWorldMap: vi.fn(),
   useMapViewport: vi.fn(),
   useMapCountryData: vi.fn(),
   useMapCamera: vi.fn(),
@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./CountryLayer", () => ({ CountryLayer: mocks.countryLayer }));
 vi.mock("./MapMarkers", () => ({ MapMarkers: mocks.mapMarkers }));
-vi.mock("./useWorldMap", () => ({ useWorldMap: mocks.useWorldMap }));
 vi.mock("./useMapViewport", () => ({
   useMapViewport: mocks.useMapViewport,
 }));
@@ -33,6 +32,10 @@ vi.mock("./mapMarkerState", () => ({
 }));
 
 const props: WorldMapViewProps = {
+  geoData: null,
+  projection: d3.geoNaturalEarth1(),
+  loading: false,
+  error: null,
   countries: [],
   gameStatus: "playing",
   mode: "reverse",
@@ -49,12 +52,6 @@ const props: WorldMapViewProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.useWorldMap.mockReturnValue({
-    geoData: null,
-    loading: false,
-    error: null,
-    projection: {},
-  });
   mocks.useMapViewport.mockReturnValue({
     containerRef: { current: null },
     dimensions: { width: 800, height: 600 },
@@ -80,6 +77,12 @@ describe("WorldMapView", () => {
   it("uses explicit gameplay and UI props to configure the map layers", () => {
     render(<WorldMapView {...props} />);
 
+    expect(mocks.useMapViewport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geoData: null,
+        projection: props.projection,
+      }),
+    );
     expect(mocks.useMapCamera).toHaveBeenCalledWith(
       expect.objectContaining({
         gameStatus: "playing",
