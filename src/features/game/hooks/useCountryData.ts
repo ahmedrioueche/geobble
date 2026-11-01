@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchCountries, type CountryData } from "../../../data/country-data";
-
-interface WorldMapData {
-  objects: {
-    countries: {
-      geometries: Array<{ id?: string | number }>;
-    };
-  };
-}
+import { loadWorldMapData } from "../../map/worldMapData";
 
 export const useCountryData = () => {
   const [countries, setCountries] = useState<CountryData[]>([]);
@@ -16,25 +9,17 @@ export const useCountryData = () => {
   useEffect(() => {
     const initData = async () => {
       try {
-        const [countryResponse, mapResponse] = await Promise.all([
+        const [countryResponse, mapData] = await Promise.all([
           fetchCountries(),
-          fetch("/data/world.json"),
+          loadWorldMapData(),
         ]);
 
-        if (!mapResponse.ok) throw new Error("Failed to load map data");
-        const mapData: WorldMapData = await mapResponse.json();
-
-        const availableMapIds = new Set(
-          mapData.objects.countries.geometries.map((geometry) =>
-            geometry.id?.toString(),
-          ),
-        );
         const filtered = countryResponse.filter(
           (country) =>
-            availableMapIds.has(country.cca3) ||
-            availableMapIds.has(country.cca2) ||
-            availableMapIds.has(country.ccn3) ||
-            availableMapIds.has(
+            mapData.availableMapIds.has(country.cca3) ||
+            mapData.availableMapIds.has(country.cca2) ||
+            mapData.availableMapIds.has(country.ccn3) ||
+            mapData.availableMapIds.has(
               parseInt(country.ccn3 || "0", 10)?.toString(),
             ),
         );

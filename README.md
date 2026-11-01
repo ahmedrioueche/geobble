@@ -33,6 +33,12 @@ Explore the global theatre at your own pace. Hover and click any territory to re
 
 ## Game Session Snapshots
 
+World map topology is loaded and converted through a shared typed loader. It
+shares in-flight and successful results between map and country-data consumers,
+and allows failed loads to be retried. The store-connected map entry point
+passes gameplay and UI state into a separate view through typed props, keeping
+map rendering independent of local Zustand subscriptions.
+
 The game store can export and restore a versioned, JSON-serializable gameplay
 snapshot with `createSessionSnapshot()` and `restoreSessionSnapshot(snapshot)`.
 Target selection and answer-choice generation share a seeded random stream; its

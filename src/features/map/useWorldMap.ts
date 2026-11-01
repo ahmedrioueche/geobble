@@ -1,7 +1,7 @@
 import * as d3 from "d3";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { useEffect, useMemo, useState } from "react";
-import { feature } from "topojson-client";
+import { loadWorldMapData } from "./worldMapData";
 
 export interface CountryProperties {
   name: string;
@@ -24,25 +24,14 @@ export const useWorldMap = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const availableCodes = useMemo(() => {
-    if (!geoData) return [];
-    return geoData.features.map(({ id }) => id);
-  }, [geoData]);
+  const [availableCodes, setAvailableCodes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("/data/world.json");
-        if (!response.ok) throw new Error("Failed to fetch map data");
-        const data = await response.json();
-
-        // Convert topojson back to geojson
-        // world-atlas v2 uses 'countries' key
-        const geojson = feature(
-          data,
-          data.objects.countries,
-        ) as unknown as CountryFeatureCollection;
-        setGeoData(geojson);
+        const mapData = await loadWorldMapData();
+        setGeoData(mapData.geoData);
+        setAvailableCodes([...mapData.availableMapIds]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
