@@ -45,12 +45,14 @@ export const useChoiceGeneration = ({
         countries,
         random,
       );
-      setChoiceCodes(selectedCountries.map((country) => country.cca3));
-      setChoices(
-        selectedCountries
-          .map((country) => getChoiceValue(country, currentSubMode))
-          .sort((a, b) => a.localeCompare(b)),
-      );
+      const options = selectedCountries
+        .map((country) => ({
+          code: country.cca3,
+          value: getChoiceValue(country, currentSubMode),
+        }))
+        .sort((first, second) => first.value.localeCompare(second.value));
+      setChoiceCodes(options.map((option) => option.code));
+      setChoices(options.map((option) => option.value));
     },
     [countries, random, setChoices, setChoiceCodes],
   );
@@ -61,15 +63,19 @@ export const useChoiceGeneration = ({
       gameStatus === "playing" &&
       currentCountryCode
     ) {
-      const { choiceCodes } = useGameStore.getState();
+      const { choiceCodes } = useGameStore.getState().session;
       if (choiceCodes.length > 0) {
-        const updatedChoices = choiceCodes
+        const options = choiceCodes
           .map((code) => {
             const country = countries.find((item) => item.cca3 === code);
-            return country ? getChoiceValue(country, subMode) : "Unknown";
+            return {
+              code,
+              value: country ? getChoiceValue(country, subMode) : "Unknown",
+            };
           })
-          .sort((a, b) => a.localeCompare(b));
-        setChoices(updatedChoices);
+          .sort((first, second) => first.value.localeCompare(second.value));
+        setChoices(options.map((option) => option.value));
+        setChoiceCodes(options.map((option) => option.code));
       }
     }
   }, [
@@ -80,6 +86,7 @@ export const useChoiceGeneration = ({
     currentCountryCode,
     countries,
     setChoices,
+    setChoiceCodes,
   ]);
 
   return generateChoices;

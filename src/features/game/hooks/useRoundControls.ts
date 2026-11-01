@@ -1,14 +1,13 @@
 import { useMemo } from "react";
 import { useMapUiStore } from "../../../store/useMapUiStore";
-import type { RoundAction } from "../gameRules";
+import type { GameCommandInput } from "../gameProtocol";
 import { createRoundControls } from "../roundControls";
 
 interface UseRoundControlsProps {
   currentCountry: { name: string } | undefined;
-  mode: "identify" | "reverse" | "pin";
   clearAdvanceTimer: () => void;
-  applyRoundAction: (
-    action: RoundAction,
+  applyGameCommand: (
+    command: GameCommandInput,
     clickedName: string,
     clickedCode?: string | null,
   ) => void;
@@ -20,9 +19,8 @@ interface UseRoundControlsProps {
 
 export const useRoundControls = ({
   currentCountry,
-  mode,
   clearAdvanceTimer,
-  applyRoundAction,
+  applyGameCommand,
   nextQuestion,
   clearClickedCountry,
   startNewMission,
@@ -34,9 +32,8 @@ export const useRoundControls = ({
     () =>
       createRoundControls({
         currentCountry,
-        mode,
         clearAdvanceTimer,
-        applyRoundAction,
+        applyGameCommand,
         nextQuestion,
         clearClickedCountry,
         startNewMission,
@@ -45,9 +42,8 @@ export const useRoundControls = ({
       }),
     [
       currentCountry,
-      mode,
       clearAdvanceTimer,
-      applyRoundAction,
+      applyGameCommand,
       nextQuestion,
       clearClickedCountry,
       startNewMission,

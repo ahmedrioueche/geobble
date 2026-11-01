@@ -10,22 +10,42 @@ import {
 import BaseModal from "./BaseModal";
 import { SubModeChallengeSettings } from "./SubModeChallengeSettings";
 import { SubModeModeSettings } from "./SubModeModeSettings";
+import { useShallow } from "zustand/react/shallow";
 
 const SubModeModal: React.FC = () => {
-  const { currentModal, subModeProps, closeModal } = useModalStore();
+  const { currentModal, subModeProps, closeModal } = useModalStore(
+    useShallow((state) => ({
+      currentModal: state.currentModal,
+      subModeProps: state.subModeProps,
+      closeModal: state.closeModal,
+    })),
+  );
   const {
     setChallenge,
-    mode,
     setMode,
-    subMode,
     setSubMode,
-    pinDirection,
     setPinDirection,
     setDifficultyStage,
-    unlockedStage,
-    challengeType,
-    challengeValue,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((state) => ({
+      setChallenge: state.setChallenge,
+      setMode: state.setMode,
+      setSubMode: state.setSubMode,
+      setPinDirection: state.setPinDirection,
+      setDifficultyStage: state.setDifficultyStage,
+    })),
+  );
+  const { mode, subMode, pinDirection, challengeType, challengeValue } =
+    useGameStore(
+      useShallow((state) => ({
+        mode: state.session.mode,
+        subMode: state.session.subMode,
+        pinDirection: state.session.pinDirection,
+        challengeType: state.session.challengeType,
+        challengeValue: state.session.challengeValue,
+      })),
+    );
+  const unlockedStage = useGameStore((state) => state.unlockedStage);
 
   const [selectedType, setSelectedType] = useState<ChallengeType>(
     challengeType || "world",

@@ -3,10 +3,9 @@ import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
 import { useMapUiStore } from "../../../store/useMapUiStore";
 import {
-  isCorrectAnswer,
   resolveMapCountry,
-  type RoundAction,
 } from "../gameRules";
+import type { GameCommandInput } from "../gameProtocol";
 
 interface UseAnswerSelectionProps {
   countries: CountryData[];
@@ -14,10 +13,9 @@ interface UseAnswerSelectionProps {
   gameStatus: "idle" | "playing" | "finished";
   mode: "identify" | "reverse" | "pin";
   pinDirection: "locate" | "identify";
-  subMode: "name" | "flag" | "capital";
   feedback: "correct" | "wrong" | null;
-  applyRoundAction: (
-    action: RoundAction,
+  applyGameCommand: (
+    command: GameCommandInput,
     clickedName: string,
     clickedCode?: string | null,
   ) => void;
@@ -29,9 +27,8 @@ export const useAnswerSelection = ({
   gameStatus,
   mode,
   pinDirection,
-  subMode,
   feedback,
-  applyRoundAction,
+  applyGameCommand,
 }: UseAnswerSelectionProps) => {
   const [clickedCountry, setClickedCountry] = useState<CountryData | null>(null);
   const setPinLocation = useGameStore((state) => state.setPinLocation);
@@ -55,14 +52,10 @@ export const useAnswerSelection = ({
         if (!currentCountry) return;
         if (isPinLocate && coordinates) setPinLocation(coordinates);
 
-        applyRoundAction(
+        applyGameCommand(
           {
             type: "answer",
-            isCorrect: isCorrectAnswer(
-              { type: "map", country: countryData },
-              currentCountry,
-              subMode,
-            ),
+            answerCountryCode: countryData?.cca3 ?? null,
             ignoreIncorrectWhenRevealed: true,
           },
           name,
@@ -84,29 +77,22 @@ export const useAnswerSelection = ({
       countries,
       gameStatus,
       currentCountry,
-      subMode,
       setPinLocation,
-      applyRoundAction,
+      applyGameCommand,
       setTempHighlightCode,
     ],
   );
 
   const handleChoiceSelect = useCallback(
-    (choice: string) => {
-      if (feedback || !currentCountry) return;
-      applyRoundAction(
-        {
-          type: "answer",
-          isCorrect: isCorrectAnswer(
-            { type: "choice", value: choice },
-            currentCountry,
-            subMode,
-          ),
-        },
+    (countryCode: string, choice: string) => {
+      if (feedback || !currentCountry || countryCode.length === 0) return;
+      applyGameCommand(
+        { type: "answer", answerCountryCode: countryCode },
         choice,
+        countryCode,
       );
     },
-    [feedback, currentCountry, subMode, applyRoundAction],
+    [feedback, currentCountry, applyGameCommand],
   );
 
   return {

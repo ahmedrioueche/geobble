@@ -9,16 +9,27 @@ import {
   restoreGameSessionSnapshot,
 } from "./gameSessionSnapshot";
 import type { GameSessionSnapshot } from "./gameSessionSnapshot";
+import {
+  createGameSessionId,
+  type ChallengeType,
+  type GameMode,
+  type GameSessionState,
+  type PinDirection,
+  type SubMode,
+} from "./gameSession";
 import { createRandomSeed, getNextSeededRandom } from "./seededRandom";
+import { systemGameClock } from "./gameClock";
 import { createSafeBrowserStorage } from "./safeBrowserStorage";
+import { useGameUiStore } from "./useGameUiStore";
 
-export type GameMode = "identify" | "reverse" | "pin";
-export type PinDirection = "locate" | "identify";
-export type SubMode = "name" | "flag" | "capital";
-export type ChallengeType = "world" | "count" | "timer";
+export type {
+  ChallengeType,
+  GameMode,
+  PinDirection,
+  SubMode,
+} from "./gameSession";
 
 interface GameState extends GameStateData {
-  // Actions
   setScore: (score: number) => void;
   setStreak: (streak: number) => void;
   setMode: (mode: GameMode) => void;
@@ -33,145 +44,236 @@ interface GameState extends GameStateData {
   recordSessionCode: (code: string) => void;
   recordAttempt: (isCorrect: boolean) => void;
   unlockNextStage: () => void;
-  startNewMission: () => void;
+  startNewMission: (options?: { seed?: number; now?: number }) => void;
   setGameStatus: (status: "idle" | "playing" | "finished") => void;
   setCurrentCountry: (code: string | null) => void;
   setChoices: (choices: string[]) => void;
   setChoiceCodes: (codes: string[]) => void;
   setMissionId: (id: string | null) => void;
-  setFeedback: (
-    feedback: "correct" | "wrong" | null,
-    clickedName?: string | null,
-    clickedCode?: string | null,
-  ) => void;
   skipQuestion: (next: () => void) => void;
   setRevealed: (revealed: boolean) => void;
   setPendingAdvanceAt: (timestamp: number | null) => void;
   resetGame: () => void;
-  setStreakLost: (value: number | null) => void;
   nextRandom: () => number;
   createSessionSnapshot: () => GameSessionSnapshot;
   restoreSessionSnapshot: (snapshot: unknown) => void;
 }
 
+const updateSession = (
+  session: GameSessionState,
+  changes: Partial<GameSessionState>,
+): GameSessionState => ({ ...session, ...changes });
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       ...createInitialGameState(),
-      setScore: (score) => set({ score }),
+      setScore: (score) =>
+        set((state) => ({
+          session: updateSession(state.session, { score }),
+        })),
       setStreak: (streak) =>
         set((state) => ({
-          streak,
-          maxStreak: Math.max(state.maxStreak || 0, streak),
+          session: updateSession(state.session, {
+            streak,
+            maxStreak: Math.max(state.session.maxStreak, streak),
+          }),
         })),
       nextRandom: () => {
         let value = 0;
         set((state) => {
-          const next = getNextSeededRandom(state.randomState);
+          const next = getNextSeededRandom(state.session.randomState);
           value = next.value;
-          return { randomState: next.state };
+          return {
+            session: updateSession(state.session, { randomState: next.state }),
+          };
         });
         return value;
       },
-      setMode: (mode) => set({ mode }),
-      setPinDirection: (pinDirection) => set({ pinDirection }),
-      setPinLocation: (pinLocation) => set({ pinLocation }),
-      setSubMode: (subMode) => set({ subMode }),
+      setMode: (mode) =>
+        set((state) => ({
+          session: updateSession(state.session, { mode }),
+        })),
+      setPinDirection: (pinDirection) =>
+        set((state) => ({
+          session: updateSession(state.session, { pinDirection }),
+        })),
+      setPinLocation: (pinLocation) =>
+        set((state) => ({
+          session: updateSession(state.session, { pinLocation }),
+        })),
+      setSubMode: (subMode) =>
+        set((state) => ({
+          session: updateSession(state.session, { subMode }),
+        })),
       setChallenge: (challengeType, challengeValue) =>
-        set({
-          challengeType,
-          challengeValue,
-          baseChallengeValue: challengeValue, // Store the primary selection
-          timeRemaining: challengeType === "timer" ? challengeValue : 0,
-        }),
-      setTimeRemaining: (timeRemaining) => set({ timeRemaining }),
-      setDifficultyStage: (difficultyStage) => set({ difficultyStage }),
-      setTotalLevels: (totalLevels) => set({ totalLevels }),
+        set((state) => ({
+          session: updateSession(state.session, {
+            challengeType,
+            challengeValue,
+            baseChallengeValue: challengeValue,
+            timeRemaining: challengeType === "timer" ? challengeValue : 0,
+            timerDeadlineAt: null,
+          }),
+        })),
+      setTimeRemaining: (timeRemaining) =>
+        set((state) => ({
+          session: updateSession(state.session, { timeRemaining }),
+        })),
+      setDifficultyStage: (difficultyStage) =>
+        set((state) => ({
+          session: updateSession(state.session, { difficultyStage }),
+        })),
+      setTotalLevels: (totalLevels) =>
+        set((state) => ({
+          session: updateSession(state.session, { totalLevels }),
+        })),
       recordPlayedCountry: (code) =>
         set((state) => ({
-          playedCountryCodes: [...state.playedCountryCodes, code],
-          sessionPlayedCodes: Array.from(
-            new Set([...state.sessionPlayedCodes, code]),
-          ),
-          totalQuestions: state.totalQuestions + 1,
+          session: updateSession(state.session, {
+            playedCountryCodes: [...state.session.playedCountryCodes, code],
+            sessionPlayedCodes: Array.from(
+              new Set([...state.session.sessionPlayedCodes, code]),
+            ),
+            totalQuestions: state.session.totalQuestions + 1,
+          }),
         })),
       recordSessionCode: (code) =>
         set((state) => ({
-          sessionPlayedCodes: Array.from(
-            new Set([...state.sessionPlayedCodes, code]),
-          ),
+          session: updateSession(state.session, {
+            sessionPlayedCodes: Array.from(
+              new Set([...state.session.sessionPlayedCodes, code]),
+            ),
+          }),
         })),
       recordAttempt: (isCorrect) =>
         set((state) => ({
-          totalAttempts: state.totalAttempts + 1,
-          correctAttempts: isCorrect
-            ? state.correctAttempts + 1
-            : state.correctAttempts,
+          session: updateSession(state.session, {
+            totalAttempts: state.session.totalAttempts + 1,
+            correctAttempts: isCorrect
+              ? state.session.correctAttempts + 1
+              : state.session.correctAttempts,
+          }),
         })),
       unlockNextStage: () =>
         set((state) => {
-          if (state.difficultyStage === state.unlockedStage) {
+          if (state.session.difficultyStage === state.unlockedStage) {
             return { unlockedStage: Math.min(state.unlockedStage + 1, 225) };
           }
           return {};
         }),
-      startNewMission: () =>
+      startNewMission: (options) => {
+        const now = options?.now ?? systemGameClock();
+        const seed = options?.seed ?? createRandomSeed();
+        if (!Number.isFinite(now) || now < 0) {
+          throw new RangeError("Game session start time must be nonnegative");
+        }
+        if (
+          !Number.isSafeInteger(seed) ||
+          seed < 0 ||
+          seed > 0xffffffff
+        ) {
+          throw new RangeError("Game session seed must be an unsigned 32-bit integer");
+        }
         set((state) => ({
-          score: 0,
-          streak: 0,
-          randomState: createRandomSeed(),
-          pendingAdvanceAt: null,
-          maxStreak: 0,
-          totalQuestions: 0,
-          totalAttempts: 0,
-          correctAttempts: 0,
-          playedCountryCodes: [],
-          gameStatus: "playing",
-          pinLocation: null,
-          timeRemaining:
-            state.challengeType === "timer" ? state.challengeValue : 0,
-          streakLost: null,
-          startTime: Date.now(),
+          session: updateSession(state.session, {
+            id: createGameSessionId(),
+            lastCommandId: 0,
+            timerDeadlineAt:
+              state.session.challengeType === "timer"
+                ? now + state.session.challengeValue * 1000
+                : null,
+            score: 0,
+            streak: 0,
+            randomState: seed,
+            pendingAdvanceAt: null,
+            maxStreak: 0,
+            totalQuestions: 0,
+            totalAttempts: 0,
+            correctAttempts: 0,
+            playedCountryCodes: [],
+            gameStatus: "playing",
+            pinLocation: null,
+            timeRemaining:
+              state.session.challengeType === "timer"
+                ? state.session.challengeValue
+                : 0,
+            startTime: now,
+          }),
+        }));
+        useGameUiStore.getState().resetGameUi();
+      },
+      setGameStatus: (gameStatus) =>
+        set((state) => ({
+          session: updateSession(state.session, {
+            gameStatus,
+            id:
+              gameStatus === "playing"
+                ? (state.session.id ?? createGameSessionId())
+                : state.session.id,
+            timerDeadlineAt:
+              gameStatus !== "playing"
+                ? null
+                : (state.session.timerDeadlineAt ??
+                  (state.session.challengeType === "timer"
+                    ? systemGameClock() +
+                      state.session.timeRemaining * 1000
+                    : null)),
+            ...(gameStatus === "playing" ? {} : { pendingAdvanceAt: null }),
+          }),
         })),
-      setGameStatus: (status) =>
-        set({
-          gameStatus: status,
-          ...(status === "playing" ? {} : { pendingAdvanceAt: null }),
-        }),
-      setCurrentCountry: (code) => set({ currentCountryCode: code }),
-      setChoices: (choices) => set({ choices }),
-      setChoiceCodes: (choiceCodes) => set({ choiceCodes }),
-      setMissionId: (id) => set({ missionId: id }),
-      setFeedback: (feedback, clickedName = null, clickedCode = null) =>
-        set({ feedback, clickedName, clickedCode }),
+      setCurrentCountry: (currentCountryCode) =>
+        set((state) => ({
+          session: updateSession(state.session, { currentCountryCode }),
+        })),
+      setChoices: (choices) =>
+        set((state) => ({
+          session: updateSession(state.session, { choices }),
+        })),
+      setChoiceCodes: (choiceCodes) =>
+        set((state) => ({
+          session: updateSession(state.session, { choiceCodes }),
+        })),
+      setMissionId: (missionId) =>
+        set((state) => ({
+          session: updateSession(state.session, { missionId }),
+        })),
       skipQuestion: (next) => {
-        set({
-          streak: 0,
-          revealed: false,
-          feedback: null,
-          clickedName: null,
-          clickedCode: null,
-        });
+        set((state) => ({
+          session: updateSession(state.session, {
+            streak: 0,
+            revealed: false,
+          }),
+        }));
+        useGameUiStore.getState().setFeedback(null);
         next();
       },
-      setRevealed: (revealed) => set({ revealed }),
-      setPendingAdvanceAt: (pendingAdvanceAt) => set({ pendingAdvanceAt }),
-      resetGame: () =>
-        set((state) => createInitialGameState(state.unlockedStage)),
-      setStreakLost: (streakLost) => set({ streakLost }),
-      createSessionSnapshot: () => createGameSessionSnapshot(get()),
-      restoreSessionSnapshot: (snapshot) =>
-        set(
-          restoreGameSessionSnapshot(
-            snapshot,
-            get().unlockedStage,
-          ),
-        ),
+      setRevealed: (revealed) =>
+        set((state) => ({
+          session: updateSession(state.session, { revealed }),
+        })),
+      setPendingAdvanceAt: (pendingAdvanceAt) =>
+        set((state) => ({
+          session: updateSession(state.session, { pendingAdvanceAt }),
+        })),
+      resetGame: () => {
+        set((state) => createInitialGameState(state.unlockedStage));
+        useGameUiStore.getState().resetGameUi();
+      },
+      createSessionSnapshot: () => createGameSessionSnapshot(get().session),
+      restoreSessionSnapshot: (snapshot) => {
+        const restored = restoreGameSessionSnapshot(
+          snapshot,
+          get().unlockedStage,
+        );
+        set(restored);
+        useGameUiStore.getState().resetGameUi();
+      },
     }),
     {
       name: "geobble-storage",
       storage: createJSONStorage(createSafeBrowserStorage),
-      partialize: (state) => ({ unlockedStage: state.unlockedStage }), // Only persist the unlock progress
+      partialize: (state) => ({ unlockedStage: state.unlockedStage }),
     },
   ),
 );

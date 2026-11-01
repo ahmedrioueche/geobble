@@ -6,11 +6,13 @@ import { TargetPanel } from "./TargetPanel";
 import { TargetSplash } from "./TargetSplash";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
+import { useGameUiStore } from "../../../store/useGameUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 interface TacticalInterfaceProps {
   currentCountry: CountryData | undefined;
   countries: CountryData[];
-  onChoiceSelect: (choice: string) => void;
+  onChoiceSelect: (countryCode: string, choice: string) => void;
   onReveal: () => void;
 }
 
@@ -25,11 +27,26 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
     mode,
     pinDirection,
     subMode,
-    feedback,
-    clickedName,
     choices,
+    choiceCodes,
     revealed,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((state) => ({
+      gameStatus: state.session.gameStatus,
+      mode: state.session.mode,
+      pinDirection: state.session.pinDirection,
+      subMode: state.session.subMode,
+      choices: state.session.choices,
+      choiceCodes: state.session.choiceCodes,
+      revealed: state.session.revealed,
+    })),
+  );
+  const { feedback, clickedName } = useGameUiStore(
+    useShallow((state) => ({
+      feedback: state.feedback,
+      clickedName: state.clickedName,
+    })),
+  );
   const shouldAnimateTarget =
     mode === "identify" || (mode === "pin" && pinDirection === "locate");
   const targetKey = currentCountry
@@ -111,6 +128,7 @@ export const TacticalInterface: React.FC<TacticalInterfaceProps> = ({
                 <div className="shadow-2xl rounded-3xl bg-slate-900/95 backdrop-blur-3xl border border-white/10 p-3 w-fit">
                   <ChoicePanel
                     choices={choices}
+                    choiceCodes={choiceCodes}
                     onChoice={onChoiceSelect}
                     disabled={!!feedback}
                     countries={countries}

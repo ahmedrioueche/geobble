@@ -3,6 +3,7 @@ import React from "react";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
 import { useMapUiStore } from "../../../store/useMapUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 interface TargetPanelProps {
   country: CountryData | undefined;
@@ -17,7 +18,14 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
   onReveal,
   isJustDocked = false,
 }) => {
-  const { mode, pinDirection, subMode, revealed } = useGameStore();
+  const { mode, pinDirection, subMode, revealed } = useGameStore(
+    useShallow((state) => ({
+      mode: state.session.mode,
+      pinDirection: state.session.pinDirection,
+      subMode: state.session.subMode,
+      revealed: state.session.revealed,
+    })),
+  );
   const triggerSonar = useMapUiStore((state) => state.triggerSonar);
   const isPinIdentify = mode === "pin" && pinDirection === "identify";
 

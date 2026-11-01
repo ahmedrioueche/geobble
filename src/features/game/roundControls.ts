@@ -1,4 +1,4 @@
-import type { RoundAction } from "./gameRules";
+import type { GameCommandInput } from "./gameProtocol";
 
 interface CurrentTarget {
   name: string;
@@ -6,10 +6,9 @@ interface CurrentTarget {
 
 interface RoundControlDependencies {
   currentCountry: CurrentTarget | undefined;
-  mode: "identify" | "reverse" | "pin";
   clearAdvanceTimer: () => void;
-  applyRoundAction: (
-    action: RoundAction,
+  applyGameCommand: (
+    command: GameCommandInput,
     clickedName: string,
     clickedCode?: string | null,
   ) => void;
@@ -22,9 +21,8 @@ interface RoundControlDependencies {
 
 export const createRoundControls = ({
   currentCountry,
-  mode,
   clearAdvanceTimer,
-  applyRoundAction,
+  applyGameCommand,
   nextQuestion,
   clearClickedCountry,
   startNewMission,
@@ -39,14 +37,14 @@ export const createRoundControls = ({
   skip: () => {
     clearAdvanceTimer();
     if (currentCountry) {
-      applyRoundAction({ type: "skip" }, currentCountry.name);
+      applyGameCommand({ type: "skip" }, currentCountry.name);
     } else {
       nextQuestion();
     }
   },
   reveal: () => {
     clearAdvanceTimer();
-    applyRoundAction({ type: "reveal", loseStreak: mode === "identify" }, "");
+    applyGameCommand({ type: "reveal" }, "");
     triggerPulse();
   },
 });

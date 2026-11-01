@@ -64,7 +64,10 @@ const countries: CountryData[] = [
 describe("game session snapshots", () => {
   it("round-trips gameplay state while excluding transient feedback and local unlock progress", () => {
     const state = {
-      ...createInitialGameState(4),
+      ...createInitialGameState(4).session,
+      id: "session-test",
+      lastCommandId: 7,
+      timerDeadlineAt: 43000,
       score: 120,
       streak: 3,
       randomState: 987654321,
@@ -85,20 +88,20 @@ describe("game session snapshots", () => {
       choices: ["France", "Canada"],
       choiceCodes: ["FRA", "CAN"],
       missionId: "mission-8",
-      feedback: "wrong" as const,
-      clickedName: "Canada",
-      clickedCode: "CAN",
       revealed: true,
-      streakLost: 3,
     };
 
-    const snapshot = createGameSessionSnapshot(state);
+    const snapshot = createGameSessionSnapshot(state, 1000);
     const restored = restoreGameSessionSnapshot(
       JSON.parse(JSON.stringify(snapshot)),
       7,
+      1000,
     );
 
-    expect(restored).toMatchObject({
+    expect(restored.session).toMatchObject({
+      id: "session-test",
+      lastCommandId: 7,
+      timerDeadlineAt: 43000,
       score: 120,
       streak: 3,
       randomState: 987654321,
@@ -119,12 +122,8 @@ describe("game session snapshots", () => {
       choiceCodes: ["FRA", "CAN"],
       missionId: "mission-8",
       revealed: true,
-      unlockedStage: 7,
-      feedback: null,
-      clickedName: null,
-      clickedCode: null,
-      streakLost: null,
     });
+    expect(restored.unlockedStage).toBe(7);
     expect(snapshot).not.toHaveProperty("feedback");
     expect(snapshot).not.toHaveProperty("clickedCode");
     expect(snapshot).not.toHaveProperty("streakLost");
@@ -133,7 +132,7 @@ describe("game session snapshots", () => {
 
   it("continues with the same target and distractors after restoring a snapshot", () => {
     const snapshot = createGameSessionSnapshot({
-      ...createInitialGameState(),
+      ...createInitialGameState().session,
       randomState: 123456789,
       gameStatus: "playing",
     });
@@ -160,7 +159,7 @@ describe("game session snapshots", () => {
       JSON.parse(JSON.stringify(snapshot)),
       1,
     );
-    const resumed = continueSession(restored.randomState);
+    const resumed = continueSession(restored.session.randomState);
 
     expect(resumed).toEqual(uninterrupted);
   });
@@ -168,7 +167,7 @@ describe("game session snapshots", () => {
   it("counts offline time against a resumed timer challenge", () => {
     const snapshot = createGameSessionSnapshot(
       {
-        ...createInitialGameState(),
+        ...createInitialGameState().session,
         challengeType: "timer",
         challengeValue: 30,
         timeRemaining: 5,
@@ -177,12 +176,61 @@ describe("game session snapshots", () => {
       1000,
     );
 
-    expect(restoreGameSessionSnapshot(snapshot, 1, 4500).timeRemaining).toBe(2);
-    expect(restoreGameSessionSnapshot(snapshot, 1, 7000).timeRemaining).toBe(0);
+    expect(
+      restoreGameSessionSnapshot(snapshot, 1, 4500).session.timeRemaining,
+    ).toBe(2);
+    expect(
+      restoreGameSessionSnapshot(snapshot, 1, 7000).session.timeRemaining,
+    ).toBe(0);
+
+    const legacySnapshot = { ...snapshot };
+    delete legacySnapshot.timerDeadlineAt;
+    expect(
+      restoreGameSessionSnapshot(legacySnapshot, 1, 4500).session
+        .timerDeadlineAt,
+    ).toBe(6000);
+  });
+
+  it("preserves an active timer deadline and derives remaining time at save and restore", () => {
+    const snapshot = createGameSessionSnapshot(
+      {
+        ...createInitialGameState().session,
+        challengeType: "timer",
+        challengeValue: 30,
+        timeRemaining: 30,
+        timerDeadlineAt: 31000,
+        gameStatus: "playing",
+      },
+      6000,
+    );
+
+    expect(snapshot.timeRemaining).toBe(25);
+    expect(snapshot.timerDeadlineAt).toBe(31000);
+
+    const restored = restoreGameSessionSnapshot(snapshot, 1, 16000);
+    expect(restored.session.timerDeadlineAt).toBe(31000);
+    expect(restored.session.timeRemaining).toBe(15);
+  });
+
+  it("assigns an ID when restoring a legacy active snapshot without one", () => {
+    const snapshot = createGameSessionSnapshot({
+      ...createInitialGameState().session,
+      gameStatus: "playing",
+    });
+    const legacySnapshot = { ...snapshot };
+    delete legacySnapshot.id;
+
+    const restored = restoreGameSessionSnapshot(legacySnapshot, 1);
+    const resumedSnapshot = createGameSessionSnapshot(restored.session);
+
+    expect(restored.session.id).toBeTruthy();
+    expect(resumedSnapshot.id).toBe(restored.session.id);
   });
 
   it("rejects unsupported, malformed, and invalid local progression values", () => {
-    const snapshot = createGameSessionSnapshot(createInitialGameState());
+    const snapshot = createGameSessionSnapshot(
+      createInitialGameState().session,
+    );
 
     expect(() =>
       restoreGameSessionSnapshot({ ...snapshot, version: 2 }, 1),
@@ -192,6 +240,12 @@ describe("game session snapshots", () => {
     ).toThrow(InvalidGameSessionSnapshotError);
     expect(() =>
       restoreGameSessionSnapshot({ ...snapshot, randomState: 0x100000000 }, 1),
+    ).toThrow(InvalidGameSessionSnapshotError);
+    expect(() =>
+      restoreGameSessionSnapshot(
+        { ...snapshot, lastCommandId: Number.MAX_SAFE_INTEGER + 1 },
+        1,
+      ),
     ).toThrow(InvalidGameSessionSnapshotError);
     expect(() =>
       restoreGameSessionSnapshot({ ...snapshot, pinLocation: [181, 0] }, 1),
@@ -212,9 +266,43 @@ describe("game session snapshots", () => {
     useGameStore.getState().setScore(0);
     useGameStore.getState().restoreSessionSnapshot(snapshot);
 
-    expect(useGameStore.getState().score).toBe(50);
-    expect(useGameStore.getState().gameStatus).toBe("playing");
+    expect(useGameStore.getState().session.score).toBe(50);
+    expect(useGameStore.getState().session.gameStatus).toBe("playing");
     expect(useGameStore.getState().nextRandom()).toBe(expectedNextRandom);
     useGameStore.getState().resetGame();
+  });
+
+  it("creates a fresh session identity when starting a new mission", () => {
+    const store = useGameStore.getState();
+    store.resetGame();
+    store.startNewMission();
+    const firstId = useGameStore.getState().session.id;
+    useGameStore.setState((state) => ({
+      session: { ...state.session, lastCommandId: 9 },
+    }));
+    store.startNewMission();
+
+    expect(firstId).toBeTruthy();
+    expect(useGameStore.getState().session.id).toBeTruthy();
+    expect(useGameStore.getState().session.id).not.toBe(firstId);
+    expect(useGameStore.getState().session.lastCommandId).toBe(0);
+    store.resetGame();
+  });
+
+  it("replays target and choice selection from an explicit session seed", () => {
+    const store = useGameStore.getState();
+    const getSequence = () => {
+      store.startNewMission({ seed: 123456, now: 1000 });
+      const random = () => useGameStore.getState().nextRandom();
+      const target = pickRandom(countries, random);
+      if (!target) throw new Error("Expected a target country");
+      const choices = generateChoiceCountries(target, countries, random).map(
+        (country) => country.cca3,
+      );
+      return { target: target.cca3, choices };
+    };
+
+    expect(getSequence()).toEqual(getSequence());
+    store.resetGame();
   });
 });

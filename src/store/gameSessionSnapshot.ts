@@ -1,38 +1,21 @@
-import type { GameStateData } from "./gameStateDefaults";
-import { createInitialGameState } from "./gameStateDefaults";
+import type { GameSessionState } from "./gameSession";
+import { createGameSessionId } from "./gameSession";
+import {
+  createInitialGameSession,
+  createInitialGameState,
+} from "./gameStateDefaults";
+import { getRemainingSeconds, systemGameClock } from "./gameClock";
 
 export const GAME_SESSION_STORAGE_KEY = "geobble-active-session";
 
-type GameSessionData = Pick<
-  GameStateData,
-  | "score"
-  | "streak"
-  | "randomState"
-  | "maxStreak"
-  | "mode"
-  | "pinDirection"
-  | "pinLocation"
-  | "subMode"
-  | "challengeType"
-  | "challengeValue"
-  | "baseChallengeValue"
-  | "timeRemaining"
-  | "difficultyStage"
-  | "totalLevels"
-  | "totalQuestions"
-  | "totalAttempts"
-  | "correctAttempts"
-  | "playedCountryCodes"
-  | "sessionPlayedCodes"
-  | "gameStatus"
-  | "currentCountryCode"
-  | "choices"
-  | "choiceCodes"
-  | "missionId"
-  | "revealed"
-  | "pendingAdvanceAt"
-  | "startTime"
->;
+type GameSessionData = Omit<
+  GameSessionState,
+  "id" | "lastCommandId" | "timerDeadlineAt"
+> & {
+  id?: string | null;
+  lastCommandId?: number;
+  timerDeadlineAt?: number | null;
+};
 
 export interface GameSessionSnapshot extends GameSessionData {
   version: 1;
@@ -81,6 +64,16 @@ const isGameSessionSnapshot = (
 
   return (
     isNonnegativeNumber(value.savedAt) &&
+    (value.id === undefined ||
+      value.id === null ||
+      (typeof value.id === "string" && value.id.length > 0)) &&
+    (value.lastCommandId === undefined ||
+      (typeof value.lastCommandId === "number" &&
+        Number.isSafeInteger(value.lastCommandId) &&
+        value.lastCommandId >= 0)) &&
+    (value.timerDeadlineAt === undefined ||
+      value.timerDeadlineAt === null ||
+      isNonnegativeNumber(value.timerDeadlineAt)) &&
     isNonnegativeInteger(value.score) &&
     isNonnegativeInteger(value.streak) &&
     isNonnegativeInteger(value.randomState) &&
@@ -123,45 +116,60 @@ export class InvalidGameSessionSnapshotError extends Error {
 }
 
 export const createGameSessionSnapshot = (
-  state: GameStateData,
-  savedAt = Date.now(),
-): GameSessionSnapshot => ({
-  version: 1,
-  savedAt,
-  score: state.score,
-  streak: state.streak,
-  randomState: state.randomState,
-  maxStreak: state.maxStreak,
-  mode: state.mode,
-  pinDirection: state.pinDirection,
-  pinLocation: state.pinLocation ? [...state.pinLocation] : null,
-  subMode: state.subMode,
-  challengeType: state.challengeType,
-  challengeValue: state.challengeValue,
-  baseChallengeValue: state.baseChallengeValue,
-  timeRemaining: state.timeRemaining,
-  difficultyStage: state.difficultyStage,
-  totalLevels: state.totalLevels,
-  totalQuestions: state.totalQuestions,
-  totalAttempts: state.totalAttempts,
-  correctAttempts: state.correctAttempts,
-  playedCountryCodes: [...state.playedCountryCodes],
-  sessionPlayedCodes: [...state.sessionPlayedCodes],
-  gameStatus: state.gameStatus,
-  currentCountryCode: state.currentCountryCode,
-  choices: [...state.choices],
-  choiceCodes: [...state.choiceCodes],
-  missionId: state.missionId,
-  revealed: state.revealed,
-  pendingAdvanceAt: state.pendingAdvanceAt,
-  startTime: state.startTime,
-});
+  state: GameSessionState,
+  savedAt = systemGameClock(),
+): GameSessionSnapshot => {
+  const isActiveTimer =
+    state.challengeType === "timer" && state.gameStatus === "playing";
+  const timerDeadlineAt = isActiveTimer
+    ? (state.timerDeadlineAt ??
+      savedAt + state.timeRemaining * 1000)
+    : state.timerDeadlineAt;
+
+  return {
+    version: 1,
+    savedAt,
+    id: state.id,
+    lastCommandId: state.lastCommandId,
+    timerDeadlineAt,
+    score: state.score,
+    streak: state.streak,
+    randomState: state.randomState,
+    maxStreak: state.maxStreak,
+    mode: state.mode,
+    pinDirection: state.pinDirection,
+    pinLocation: state.pinLocation ? [...state.pinLocation] : null,
+    subMode: state.subMode,
+    challengeType: state.challengeType,
+    challengeValue: state.challengeValue,
+    baseChallengeValue: state.baseChallengeValue,
+    timeRemaining:
+      isActiveTimer && timerDeadlineAt !== null
+        ? getRemainingSeconds(timerDeadlineAt, savedAt)
+        : state.timeRemaining,
+    difficultyStage: state.difficultyStage,
+    totalLevels: state.totalLevels,
+    totalQuestions: state.totalQuestions,
+    totalAttempts: state.totalAttempts,
+    correctAttempts: state.correctAttempts,
+    playedCountryCodes: [...state.playedCountryCodes],
+    sessionPlayedCodes: [...state.sessionPlayedCodes],
+    gameStatus: state.gameStatus,
+    currentCountryCode: state.currentCountryCode,
+    choices: [...state.choices],
+    choiceCodes: [...state.choiceCodes],
+    missionId: state.missionId,
+    revealed: state.revealed,
+    pendingAdvanceAt: state.pendingAdvanceAt,
+    startTime: state.startTime,
+  };
+};
 
 export const restoreGameSessionSnapshot = (
   value: unknown,
   unlockedStage: number,
-  now = Date.now(),
-): GameStateData => {
+  now = systemGameClock(),
+): ReturnType<typeof createInitialGameState> => {
   if (
     !isGameSessionSnapshot(value) ||
     !isNonnegativeInteger(unlockedStage) ||
@@ -171,42 +179,54 @@ export const restoreGameSessionSnapshot = (
     throw new InvalidGameSessionSnapshotError();
   }
 
-  const initialState = createInitialGameState(unlockedStage);
+  const session = createInitialGameSession();
+  const isActiveTimer =
+    value.challengeType === "timer" && value.gameStatus === "playing";
+  const timerDeadlineAt =
+    value.timerDeadlineAt === undefined
+      ? isActiveTimer
+        ? value.savedAt + value.timeRemaining * 1000
+        : null
+      : value.timerDeadlineAt;
   return {
-    ...initialState,
-    score: value.score,
-    streak: value.streak,
-    randomState: value.randomState,
-    maxStreak: value.maxStreak,
-    mode: value.mode,
-    pinDirection: value.pinDirection,
-    pinLocation: value.pinLocation ? [...value.pinLocation] : null,
-    subMode: value.subMode,
-    challengeType: value.challengeType,
-    challengeValue: value.challengeValue,
-    baseChallengeValue: value.baseChallengeValue,
-    timeRemaining:
-      value.challengeType === "timer" && value.gameStatus === "playing"
-        ? Math.max(
-            0,
-            value.timeRemaining -
-              Math.max(0, Math.floor((now - value.savedAt) / 1000)),
-          )
-        : value.timeRemaining,
-    difficultyStage: value.difficultyStage,
-    totalLevels: value.totalLevels,
-    totalQuestions: value.totalQuestions,
-    totalAttempts: value.totalAttempts,
-    correctAttempts: value.correctAttempts,
-    playedCountryCodes: [...value.playedCountryCodes],
-    sessionPlayedCodes: [...value.sessionPlayedCodes],
-    gameStatus: value.gameStatus,
-    currentCountryCode: value.currentCountryCode,
-    choices: [...value.choices],
-    choiceCodes: [...value.choiceCodes],
-    missionId: value.missionId,
-    revealed: value.revealed,
-    pendingAdvanceAt: value.pendingAdvanceAt,
-    startTime: value.startTime,
+    unlockedStage,
+    session: {
+      ...session,
+      id:
+        value.id ??
+        (value.gameStatus === "playing" ? createGameSessionId() : null),
+      lastCommandId: value.lastCommandId ?? 0,
+      timerDeadlineAt,
+      score: value.score,
+      streak: value.streak,
+      randomState: value.randomState,
+      maxStreak: value.maxStreak,
+      mode: value.mode,
+      pinDirection: value.pinDirection,
+      pinLocation: value.pinLocation ? [...value.pinLocation] : null,
+      subMode: value.subMode,
+      challengeType: value.challengeType,
+      challengeValue: value.challengeValue,
+      baseChallengeValue: value.baseChallengeValue,
+      timeRemaining:
+        isActiveTimer && timerDeadlineAt !== null
+          ? getRemainingSeconds(timerDeadlineAt, now)
+          : value.timeRemaining,
+      difficultyStage: value.difficultyStage,
+      totalLevels: value.totalLevels,
+      totalQuestions: value.totalQuestions,
+      totalAttempts: value.totalAttempts,
+      correctAttempts: value.correctAttempts,
+      playedCountryCodes: [...value.playedCountryCodes],
+      sessionPlayedCodes: [...value.sessionPlayedCodes],
+      gameStatus: value.gameStatus,
+      currentCountryCode: value.currentCountryCode,
+      choices: [...value.choices],
+      choiceCodes: [...value.choiceCodes],
+      missionId: value.missionId,
+      revealed: value.revealed,
+      pendingAdvanceAt: value.pendingAdvanceAt,
+      startTime: value.startTime,
+    },
   };
 };

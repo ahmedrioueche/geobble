@@ -39,11 +39,34 @@ Target selection and answer-choice generation share a seeded random stream; its
 state is included so the same session can continue with the same sequence after
 a restore. An in-progress game is saved locally and can be resumed from the
 mode-selection menu. Pending round advances resume with their remaining delay,
-and timer challenges account for time spent away. Snapshots include mission
-progress and the active target, but intentionally omit transient feedback and
-locally unlocked progression. Unsupported or malformed snapshots are rejected.
-This provides a client-side state boundary; it does not implement networking or
-server-authoritative multiplayer.
+and timer challenges use a persisted deadline to account for time spent away
+without accumulating interval drift. Session start accepts an explicit seed
+and clock in addition to production defaults, so gameplay sequences can be
+reproduced in tests or by a future host. Snapshots include mission progress and
+the active target, but intentionally omit transient feedback and locally
+unlocked progression. Unsupported or malformed snapshots are rejected. This
+provides a deterministic client-side simulation boundary; it does not implement
+networking or server authority, and client state is not trusted.
+
+Round actions are evaluated by a pure transition function that returns updated
+round state and declarative effects. The client applies the state and handles
+audio and advance timers; multiplayer transport and server authority remain
+separate work.
+
+Gameplay inputs use typed commands with session, mission, and increasing
+command IDs. A local handler validates these identities and delegates accepted
+actions to the same pure transition; its serializable events form an integration
+seam only and are not a network protocol or security boundary.
+
+The client store groups match-owned values under `session`, keeps local unlock
+progression outside that session, and stores feedback/notification details in a
+separate UI store. Session IDs persist through local save/resume; they are local
+identifiers, not multiplayer room or player identities.
+
+Saved sessions are accessed through a `GameSessionRepository` boundary. Solo
+play currently uses a localStorage adapter; a future remote adapter can replace
+it without making gameplay hooks depend on browser storage. The repository
+boundary does not itself provide networking or synchronization.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
+import { useGameUiStore } from "../../../store/useGameUiStore";
 import { getTargetPool, isCountChallengeComplete, pickRandom } from "../gameRules";
 import { getMissionStartSettings } from "../missionProgression";
 
@@ -23,7 +24,7 @@ export const useMissionProgression = ({
   const setCurrentCountry = useGameStore((state) => state.setCurrentCountry);
   const recordPlayedCountry = useGameStore((state) => state.recordPlayedCountry);
   const setMissionId = useGameStore((state) => state.setMissionId);
-  const setFeedback = useGameStore((state) => state.setFeedback);
+  const setFeedback = useGameUiStore((state) => state.setFeedback);
   const setRevealed = useGameStore((state) => state.setRevealed);
   const setPendingAdvanceAt = useGameStore(
     (state) => state.setPendingAdvanceAt,
@@ -37,20 +38,20 @@ export const useMissionProgression = ({
 
   const nextQuestion = useCallback(() => {
     const state = useGameStore.getState();
-    if (countries.length === 0 || state.gameStatus !== "playing") return;
+    if (countries.length === 0 || state.session.gameStatus !== "playing") return;
     if (
       isCountChallengeComplete(
-        state.challengeType,
-        state.challengeValue,
-        state.totalAttempts,
+        state.session.challengeType,
+        state.session.challengeValue,
+        state.session.totalAttempts,
       )
     ) {
       return;
     }
 
     if (
-      state.challengeType === "world" &&
-      state.totalQuestions >= countries.length
+      state.session.challengeType === "world" &&
+      state.session.totalQuestions >= countries.length
     ) {
       finishGame();
       return;
@@ -58,12 +59,12 @@ export const useMissionProgression = ({
 
     const targetPool = getTargetPool({
       countries,
-      challengeType: state.challengeType,
-      challengeValue: state.challengeValue,
-      difficultyStage: state.difficultyStage,
+      challengeType: state.session.challengeType,
+      challengeValue: state.session.challengeValue,
+      difficultyStage: state.session.difficultyStage,
       unlockedStage: state.unlockedStage,
-      playedCountryCodes: state.playedCountryCodes,
-      sessionPlayedCodes: state.sessionPlayedCodes,
+      playedCountryCodes: state.session.playedCountryCodes,
+      sessionPlayedCodes: state.session.sessionPlayedCodes,
     });
     const target = pickRandom(targetPool, random);
     if (!target) {
@@ -77,13 +78,15 @@ export const useMissionProgression = ({
     setPinLocation(null);
     setCurrentCountry(target.cca3);
     recordPlayedCountry(target.cca3);
-    setMissionId(Date.now().toString());
+    setMissionId(
+      `${state.session.id ?? "session"}:${state.session.totalQuestions + 1}`,
+    );
 
     if (
-      state.mode === "reverse" ||
-      (state.mode === "pin" && state.pinDirection === "identify")
+      state.session.mode === "reverse" ||
+      (state.session.mode === "pin" && state.session.pinDirection === "identify")
     ) {
-      generateChoices(target, state.subMode);
+      generateChoices(target, state.session.subMode);
     }
   }, [
     countries,
@@ -102,16 +105,16 @@ export const useMissionProgression = ({
   const startGame = useCallback(() => {
     const state = useGameStore.getState();
     const { totalLevels, challengeValue } = getMissionStartSettings({
-      challengeType: state.challengeType,
-      baseChallengeValue: state.baseChallengeValue,
-      challengeValue: state.challengeValue,
-      difficultyStage: state.difficultyStage,
+      challengeType: state.session.challengeType,
+      baseChallengeValue: state.session.baseChallengeValue,
+      challengeValue: state.session.challengeValue,
+      difficultyStage: state.session.difficultyStage,
     });
 
     setTotalLevels(totalLevels);
     if (
-      state.challengeType === "count" &&
-      challengeValue !== state.challengeValue
+      state.session.challengeType === "count" &&
+      challengeValue !== state.session.challengeValue
     ) {
       setChallenge("count", challengeValue);
     }

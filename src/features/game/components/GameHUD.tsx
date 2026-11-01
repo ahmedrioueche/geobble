@@ -2,6 +2,10 @@ import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import { getTierRanges } from "../../../data/difficulty-ranking";
 import { useGameStore } from "../../../store/useGameStore";
+import {
+  systemGameClock,
+  type GameClock,
+} from "../../../store/gameClock";
 import { formatDuration } from "../../../utils/time";
 import {
   DesktopHudStats,
@@ -9,12 +13,14 @@ import {
   MobileHudStats,
   SubModeSelector,
 } from "./GameHudSections";
+import { useShallow } from "zustand/react/shallow";
 
 interface GameHUDProps {
   onStart: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   totalCountries?: number;
+  clock?: GameClock;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -22,14 +28,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   isFullscreen,
   onToggleFullscreen,
   totalCountries = 0,
+  clock = systemGameClock,
 }) => {
   const {
     score,
     streak,
     gameStatus,
     subMode,
-    setSubMode,
-    resetGame,
     challengeType,
     challengeValue,
     timeRemaining,
@@ -39,7 +44,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     startTime,
     difficultyStage,
     totalLevels,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((state) => ({
+      score: state.session.score,
+      streak: state.session.streak,
+      gameStatus: state.session.gameStatus,
+      subMode: state.session.subMode,
+      challengeType: state.session.challengeType,
+      challengeValue: state.session.challengeValue,
+      timeRemaining: state.session.timeRemaining,
+      totalQuestions: state.session.totalQuestions,
+      correctAttempts: state.session.correctAttempts,
+      totalAttempts: state.session.totalAttempts,
+      startTime: state.session.startTime,
+      difficultyStage: state.session.difficultyStage,
+      totalLevels: state.session.totalLevels,
+    })),
+  );
+  const setSubMode = useGameStore((state) => state.setSubMode);
+  const resetGame = useGameStore((state) => state.resetGame);
 
   const sliceSize = challengeType === "count" ? challengeValue || 30 : 30;
   const currentTierRanges = getTierRanges(sliceSize);
@@ -62,13 +85,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     let interval: ReturnType<typeof setInterval> | undefined;
     if (gameStatus === "playing" && startTime) {
       interval = setInterval(() => {
-        setElapsed(Date.now() - startTime);
+        setElapsed(clock() - startTime);
       }, 1000);
     } else {
       setElapsed(0);
     }
     return () => clearInterval(interval);
-  }, [gameStatus, startTime]);
+  }, [gameStatus, startTime, clock]);
 
   const isTimerMode = challengeType === "timer";
   const displayTime = isTimerMode

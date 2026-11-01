@@ -1,9 +1,15 @@
 import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useGameStore } from "../../../store/useGameStore";
+import { useGameUiStore } from "../../../store/useGameUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 export const StreakLostToast: React.FC = () => {
-  const { streakLost, setStreakLost } = useGameStore();
+  const { streakLost, setStreakLost } = useGameUiStore(
+    useShallow((state) => ({
+      streakLost: state.streakLost,
+      setStreakLost: state.setStreakLost,
+    })),
+  );
 
   useEffect(() => {
     if (streakLost !== null) {

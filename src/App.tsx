@@ -22,6 +22,7 @@ function App() {
   } = useSavedGameSession();
 
   const {
+    clock,
     clickedCountry,
     setClickedCountry,
     handleCountryClick,
@@ -77,6 +78,7 @@ function App() {
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
         totalCountries={countries.length}
+        clock={clock}
       />
 
       {/* Bottom-left Start Game Hero Button (desktop only) */}

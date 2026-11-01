@@ -7,11 +7,19 @@ describe("createInitialGameState", () => {
     const second = createInitialGameState(4);
 
     expect(first.unlockedStage).toBe(4);
-    expect(first.gameStatus).toBe("idle");
-    expect(first.randomState).toBe(0);
-    expect(first.playedCountryCodes).toEqual([]);
-    expect(first.playedCountryCodes).not.toBe(second.playedCountryCodes);
-    expect(first.sessionPlayedCodes).not.toBe(second.sessionPlayedCodes);
-    expect(first.choices).not.toBe(second.choices);
+    expect(first.session.gameStatus).toBe("idle");
+    expect(first.session.id).toBeNull();
+    expect(first.session.randomState).toBe(0);
+    expect(first.session.playedCountryCodes).toEqual([]);
+    expect(first.session.playedCountryCodes).not.toBe(
+      second.session.playedCountryCodes,
+    );
+    expect(first.session.sessionPlayedCodes).not.toBe(
+      second.session.sessionPlayedCodes,
+    );
+    expect(first.session.choices).not.toBe(second.session.choices);
+    expect(first.session).not.toHaveProperty("feedback");
+    expect(first.session).not.toHaveProperty("clickedName");
+    expect(first.session).not.toHaveProperty("streakLost");
   });
 });

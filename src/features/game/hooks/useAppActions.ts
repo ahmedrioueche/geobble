@@ -1,39 +1,67 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useGameStore } from "../../../store/useGameStore";
 import { useGameLogic } from "../useGameLogic";
-import {
-  shouldAdvanceRound,
-  type RoundAction,
-} from "../gameRules";
+import { shouldAdvanceRound } from "../gameRules";
 import { useAnswerSelection } from "./useAnswerSelection";
 import { useRoundControls } from "./useRoundControls";
 import {
   createTimeoutController,
-  executeRoundAction,
+  executeRoundEffects,
 } from "../roundActionExecutor";
+import { useGameUiStore } from "../../../store/useGameUiStore";
+import type { GameCommandInput } from "../gameProtocol";
+import { handleGameCommand } from "../gameCommandHandler";
+import {
+  systemGameClock,
+  type GameClock,
+} from "../../../store/gameClock";
+import { useShallow } from "zustand/react/shallow";
 
-export const useAppActions = () => {
+interface UseAppActionsOptions {
+  clock?: GameClock;
+  seed?: number;
+}
+
+export const useAppActions = ({
+  clock = systemGameClock,
+  seed,
+}: UseAppActionsOptions = {}) => {
+  const clockRef = useRef(clock);
+  useEffect(() => {
+    clockRef.current = clock;
+  }, [clock]);
+  const readNow = useCallback(() => clockRef.current(), []);
   const {
     gameStatus,
     mode,
     pinDirection,
-    subMode,
     choices,
-    feedback,
     missionId,
     revealed,
-    setFeedback,
-    setRevealed,
-    score,
-    setScore,
-    streak,
-    setStreak,
-    startNewMission,
-    recordAttempt,
-    setStreakLost,
     pendingAdvanceAt,
+  } = useGameStore(
+    useShallow((state) => ({
+      gameStatus: state.session.gameStatus,
+      mode: state.session.mode,
+      pinDirection: state.session.pinDirection,
+      choices: state.session.choices,
+      missionId: state.session.missionId,
+      revealed: state.session.revealed,
+      pendingAdvanceAt: state.session.pendingAdvanceAt,
+    })),
+  );
+  const feedback = useGameUiStore((state) => state.feedback);
+  const {
+    setRevealed,
+    startNewMission,
     setPendingAdvanceAt,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((state) => ({
+      setRevealed: state.setRevealed,
+      startNewMission: state.startNewMission,
+      setPendingAdvanceAt: state.setPendingAdvanceAt,
+    })),
+  );
 
   const {
     countries,
@@ -41,7 +69,7 @@ export const useAppActions = () => {
     nextQuestion,
     currentCountry,
     startGame,
-  } = useGameLogic();
+  } = useGameLogic(readNow);
 
   const roundAdvanceTimerRef = useRef<
     ReturnType<typeof createTimeoutController> | null
@@ -54,7 +82,7 @@ export const useAppActions = () => {
   const clearRoundAdvanceTimer = useCallback(() => {
     roundAdvanceTimerRef.current?.clear();
     scheduledAdvanceAtRef.current = null;
-    if (useGameStore.getState().pendingAdvanceAt !== null) {
+    if (useGameStore.getState().session.pendingAdvanceAt !== null) {
       setPendingAdvanceAt(null);
     }
   }, [setPendingAdvanceAt]);
@@ -65,16 +93,16 @@ export const useAppActions = () => {
       roundAdvanceTimerRef.current?.clear();
       scheduledAdvanceAtRef.current = timestamp;
       roundAdvanceTimerRef.current?.schedule(
-        Math.max(0, timestamp - Date.now()),
+        Math.max(0, timestamp - readNow()),
         () => {
           scheduledAdvanceAtRef.current = null;
           setPendingAdvanceAt(null);
           const freshState = useGameStore.getState();
           if (
             shouldAdvanceRound(
-              freshState.challengeType,
-              freshState.challengeValue,
-              freshState.totalAttempts,
+              freshState.session.challengeType,
+              freshState.session.challengeValue,
+              freshState.session.totalAttempts,
             )
           ) {
             nextQuestion();
@@ -82,7 +110,7 @@ export const useAppActions = () => {
         },
       );
     },
-    [nextQuestion, setPendingAdvanceAt],
+    [nextQuestion, readNow, setPendingAdvanceAt],
   );
 
   useEffect(() => {
@@ -103,11 +131,11 @@ export const useAppActions = () => {
 
   const scheduleAdvance = useCallback(
     (delayMs: number) => {
-      const timestamp = Date.now() + delayMs;
+      const timestamp = readNow() + delayMs;
       setPendingAdvanceAt(timestamp);
       scheduleAdvanceAt(timestamp);
     },
-    [scheduleAdvanceAt, setPendingAdvanceAt],
+    [readNow, scheduleAdvanceAt, setPendingAdvanceAt],
   );
 
   useEffect(() => {
@@ -123,50 +151,51 @@ export const useAppActions = () => {
     audio.play().catch(() => {}); // Ignore silent playback blocks
   }, []);
 
-  const applyRoundAction = useCallback(
+  const applyGameCommand = useCallback(
     (
-      action: RoundAction,
+      commandInput: GameCommandInput,
       clickedName: string,
       clickedCode: string | null = null,
     ) => {
-      executeRoundAction(
-        action,
-        { score, streak, revealed },
-        clickedName,
-        clickedCode,
+      const currentState = useGameStore.getState();
+      const currentUiState = useGameUiStore.getState();
+      if (!currentState.session.id || !currentState.session.missionId) return;
+
+      const command = {
+        ...commandInput,
+        sessionId: currentState.session.id,
+        commandId: currentState.session.lastCommandId + 1,
+        missionId: currentState.session.missionId,
+      };
+      const result = handleGameCommand(
+        command,
         {
-          recordAttempt,
-          playFeedback: (feedbackType) =>
-            playAudio(
-              feedbackType === "correct"
-                ? "/audio/correct.mp3"
-                : "/audio/wrong.mp3",
-            ),
-          setFeedback,
-          setScore,
-          setStreak,
-          setStreakLost,
-          setRevealed,
-          clearAdvanceTimer: clearRoundAdvanceTimer,
-          scheduleAdvance,
-          nextQuestion,
+          session: currentState.session,
+          ui: currentUiState,
         },
+        { clickedName, clickedCode },
       );
+      if (!result.accepted) return;
+
+      useGameStore.setState({ session: result.session });
+      useGameUiStore.setState(result.ui);
+      executeRoundEffects(result.effects, {
+        playFeedback: (feedbackType) =>
+          playAudio(
+            feedbackType === "correct"
+              ? "/audio/correct.mp3"
+              : "/audio/wrong.mp3",
+          ),
+        clearAdvanceTimer: clearRoundAdvanceTimer,
+        scheduleAdvance,
+        nextQuestion,
+      });
     },
     [
       clearRoundAdvanceTimer,
       nextQuestion,
       playAudio,
-      recordAttempt,
-      revealed,
       scheduleAdvance,
-      score,
-      setFeedback,
-      setRevealed,
-      setScore,
-      setStreak,
-      setStreakLost,
-      streak,
     ],
   );
 
@@ -181,23 +210,26 @@ export const useAppActions = () => {
     gameStatus,
     mode,
     pinDirection,
-    subMode,
     feedback,
-    applyRoundAction,
+    applyGameCommand,
   });
 
   const { start, skip, reveal } = useRoundControls({
     currentCountry,
-    mode,
     clearAdvanceTimer: clearRoundAdvanceTimer,
-    applyRoundAction,
+    applyGameCommand,
     nextQuestion,
     clearClickedCountry: () => setClickedCountry(null),
-    startNewMission,
+    startNewMission: () =>
+      startNewMission({
+        now: readNow(),
+        ...(seed === undefined ? {} : { seed }),
+      }),
     startGame,
   });
 
   return {
+    clock: readNow,
     clickedCountry,
     setClickedCountry,
     handleCountryClick,

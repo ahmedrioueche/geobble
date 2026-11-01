@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { CountryData } from "../../data/country-data";
 import { useGameStore } from "../../store/useGameStore";
-import { executeRoundAction } from "./roundActionExecutor";
+import { useGameUiStore } from "../../store/useGameUiStore";
 import { isCorrectAnswer, resolveMapCountry } from "./gameRules";
+import { transitionRoundAction } from "./roundTransition";
 
 const canada: CountryData = {
   name: "Canada",
@@ -24,36 +25,24 @@ const resetPlayingGame = () => {
 };
 
 const runRoundAction = (
-  action: Parameters<typeof executeRoundAction>[0],
+  action: Parameters<typeof transitionRoundAction>[0],
   clickedName: string,
   clickedCode: string | null = null,
 ) => {
   const store = useGameStore.getState();
-  return executeRoundAction(
+  const ui = useGameUiStore.getState();
+  const transition = transitionRoundAction(
     action,
-    {
-      score: store.score,
-      streak: store.streak,
-      revealed: store.revealed,
-    },
+    store.session,
+    ui,
     clickedName,
     clickedCode,
-    {
-      recordAttempt: (correct) =>
-        useGameStore.getState().recordAttempt(correct),
-      playFeedback: vi.fn(),
-      setFeedback: (feedback, name, code) =>
-        useGameStore.getState().setFeedback(feedback, name, code),
-      setScore: (score) => useGameStore.getState().setScore(score),
-      setStreak: (streak) => useGameStore.getState().setStreak(streak),
-      setStreakLost: (value) => useGameStore.getState().setStreakLost(value),
-      setRevealed: (revealed) =>
-        useGameStore.getState().setRevealed(revealed),
-      clearAdvanceTimer: vi.fn(),
-      scheduleAdvance: vi.fn(),
-      nextQuestion: vi.fn(),
-    },
   );
+  useGameStore.setState((current) => ({
+    session: { ...current.session, ...transition.state },
+  }));
+  useGameUiStore.setState(transition.ui);
+  return transition;
 };
 
 afterEach(() => {
@@ -79,14 +68,15 @@ describe("gameplay round integration", () => {
       "CAN",
     );
 
-    const state = useGameStore.getState();
+    const state = useGameStore.getState().session;
+    const ui = useGameUiStore.getState();
     expect(state.score).toBe(30);
     expect(state.streak).toBe(3);
     expect(state.totalAttempts).toBe(1);
     expect(state.correctAttempts).toBe(1);
-    expect(state.feedback).toBe("correct");
-    expect(state.clickedName).toBe("Canada");
-    expect(state.clickedCode).toBe("CAN");
+    expect(ui.feedback).toBe("correct");
+    expect(ui.clickedName).toBe("Canada");
+    expect(ui.clickedCode).toBe("CAN");
   });
 
   it("integrates a Reverse flag choice with correct-answer scoring", () => {
@@ -101,11 +91,11 @@ describe("gameplay round integration", () => {
     );
     runRoundAction({ type: "answer", isCorrect }, canada.cca2);
 
-    const state = useGameStore.getState();
+    const state = useGameStore.getState().session;
     expect(state.score).toBe(10);
     expect(state.streak).toBe(1);
     expect(state.correctAttempts).toBe(1);
-    expect(state.feedback).toBe("correct");
+    expect(useGameUiStore.getState().feedback).toBe("correct");
   });
 
   it("integrates a Pin Locate miss, saving the guess and revealing the target", () => {
@@ -130,13 +120,14 @@ describe("gameplay round integration", () => {
       "FRA",
     );
 
-    const state = useGameStore.getState();
+    const state = useGameStore.getState().session;
+    const ui = useGameUiStore.getState();
     expect(state.pinLocation).toEqual(guess);
     expect(state.score).toBe(0);
     expect(state.streak).toBe(0);
     expect(state.totalAttempts).toBe(1);
     expect(state.correctAttempts).toBe(0);
-    expect(state.feedback).toBe("wrong");
+    expect(ui.feedback).toBe("wrong");
     expect(state.revealed).toBe(true);
   });
 });

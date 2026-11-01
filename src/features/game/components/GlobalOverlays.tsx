@@ -14,7 +14,7 @@ export const GlobalOverlays: React.FC<GlobalOverlaysProps> = ({
   clickedCountry,
   onClosePopup,
 }) => {
-  const { gameStatus } = useGameStore();
+  const gameStatus = useGameStore((state) => state.session.gameStatus);
 
   return (
     <div className="absolute inset-0 pointer-events-none z-50">

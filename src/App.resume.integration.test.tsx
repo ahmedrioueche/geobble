@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, act, cleanup } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  act,
+  cleanup,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CountryData } from "./data/country-data";
 import { GAME_SESSION_STORAGE_KEY } from "./store/gameSessionSnapshot";
@@ -82,11 +88,13 @@ vi.mock("./features/game/components/TacticalInterface", () => ({
     onChoiceSelect,
   }: {
     currentCountry: CountryData | undefined;
-    onChoiceSelect: (value: string) => void;
+    onChoiceSelect: (countryCode: string, value: string) => void;
   }) => (
     <button
       onClick={() => {
-        if (currentCountry) onChoiceSelect(currentCountry.cca2);
+        if (currentCountry) {
+          onChoiceSelect(currentCountry.cca3, currentCountry.cca2);
+        }
       }}
     >
       Answer current target
@@ -131,40 +139,55 @@ afterEach(() => {
 });
 
 describe("App saved-game resume flow", () => {
-  it("reloads an active game, resumes it from the mode menu, and continues the round", () => {
+  const flushAsyncSessionWork = async () => {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  it("reloads an active game, resumes it from the mode menu, and continues the round", async () => {
     const firstRender = render(<App />);
 
     act(() => {
       window.dispatchEvent(new Event("game:start-mission"));
     });
 
-    const firstTarget = useGameStore.getState().currentCountryCode;
+    const firstTarget = useGameStore.getState().session.currentCountryCode;
+    const firstSessionId = useGameStore.getState().session.id;
     expect(firstTarget).toBeDefined();
+    expect(firstSessionId).toBeTruthy();
     useGameStore.getState().setScore(40);
 
+    await flushAsyncSessionWork();
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).not.toBeNull();
     const savedValue = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY);
     expect(savedValue).not.toBeNull();
+    expect(JSON.parse(savedValue!).id).toBe(firstSessionId);
     firstRender.unmount();
 
     useGameStore.getState().resetGame();
     const secondRender = render(<App />);
+    await flushAsyncSessionWork();
 
     fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Resume saved game" }));
 
-    expect(useGameStore.getState().gameStatus).toBe("playing");
-    expect(useGameStore.getState().score).toBe(40);
-    expect(useGameStore.getState().currentCountryCode).toBe(firstTarget);
+    expect(useGameStore.getState().session.gameStatus).toBe("playing");
+    expect(useGameStore.getState().session.score).toBe(40);
+    expect(useGameStore.getState().session.currentCountryCode).toBe(firstTarget);
+    expect(useGameStore.getState().session.id).toBe(firstSessionId);
 
     fireEvent.click(screen.getByRole("button", { name: "Answer current target" }));
-    expect(useGameStore.getState().correctAttempts).toBe(1);
+    expect(useGameStore.getState().session.correctAttempts).toBe(1);
     act(() => vi.advanceTimersByTime(1200));
-    expect(useGameStore.getState().currentCountryCode).not.toBe(firstTarget);
-    expect(useGameStore.getState().totalQuestions).toBe(2);
+    expect(useGameStore.getState().session.currentCountryCode).not.toBe(firstTarget);
+    expect(useGameStore.getState().session.totalQuestions).toBe(2);
     secondRender.unmount();
   });
 
-  it("keeps an active game playable and displays a save error when storage is full", () => {
+  it("keeps an active game playable and displays a save error when storage is full", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let storageAvailable = false;
     const originalSetItem = Storage.prototype.setItem;
@@ -184,23 +207,26 @@ describe("App saved-game resume flow", () => {
       window.dispatchEvent(new Event("game:start-mission"));
     });
 
-    expect(useGameStore.getState().gameStatus).toBe("playing");
+    await flushAsyncSessionWork();
+
+    expect(useGameStore.getState().session.gameStatus).toBe("playing");
 
     fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
     expect(screen.getByRole("alert").textContent).toContain(
       "Your game could not be saved on this device.",
     );
     fireEvent.click(screen.getByRole("button", { name: "Answer current target" }));
-    expect(useGameStore.getState().correctAttempts).toBe(1);
+    expect(useGameStore.getState().session.correctAttempts).toBe(1);
 
     storageAvailable = true;
     fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry save" }));
 
+    await flushAsyncSessionWork();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("button", { name: "Resume saved game" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Resume saved game" }));
-    expect(useGameStore.getState().gameStatus).toBe("playing");
-    expect(useGameStore.getState().correctAttempts).toBe(1);
+    expect(useGameStore.getState().session.gameStatus).toBe("playing");
+    expect(useGameStore.getState().session.correctAttempts).toBe(1);
   });
 });

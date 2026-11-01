@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CountryData } from "../../data/country-data";
 import { useModalStore } from "../../store/modal";
 import { useGameStore } from "../../store/useGameStore";
+import { useGameUiStore } from "../../store/useGameUiStore";
 import { useAppActions } from "./hooks/useAppActions";
 
 const { useCountryDataMock } = vi.hoisted(() => ({
@@ -112,8 +113,9 @@ describe("useAppActions gameplay flows", () => {
     act(() => mounted.result.current.handleFinalStart());
 
     const targetCode = mounted.result.current.currentCountry?.cca3;
+    const firstMissionId = useGameStore.getState().session.missionId;
     expect(targetCode).toBeDefined();
-    expect(useGameStore.getState().totalQuestions).toBe(1);
+    expect(useGameStore.getState().session.totalQuestions).toBe(1);
 
     act(() =>
       mounted.result.current.handleCountryClick(
@@ -121,13 +123,15 @@ describe("useAppActions gameplay flows", () => {
         targetCode!,
       ),
     );
-    expect(useGameStore.getState().feedback).toBe("correct");
-    expect(useGameStore.getState().score).toBe(10);
+    expect(useGameUiStore.getState().feedback).toBe("correct");
+    expect(useGameStore.getState().session.score).toBe(10);
+    expect(useGameStore.getState().session.lastCommandId).toBe(1);
 
     act(() => vi.advanceTimersByTime(1200));
-    expect(useGameStore.getState().currentCountryCode).not.toBe(targetCode);
-    expect(useGameStore.getState().feedback).toBeNull();
-    expect(useGameStore.getState().totalQuestions).toBe(2);
+    expect(useGameStore.getState().session.currentCountryCode).not.toBe(targetCode);
+    expect(useGameUiStore.getState().feedback).toBeNull();
+    expect(useGameStore.getState().session.totalQuestions).toBe(2);
+    expect(useGameStore.getState().session.missionId).not.toBe(firstMissionId);
     mounted.unmount();
   });
 
@@ -141,11 +145,13 @@ describe("useAppActions gameplay flows", () => {
     const target = mounted.result.current.currentCountry;
     expect(target).toBeDefined();
 
-    act(() => mounted.result.current.handleChoiceSelect(target!.cca2));
+    act(() =>
+      mounted.result.current.handleChoiceSelect(target!.cca3, target!.cca2),
+    );
 
-    expect(useGameStore.getState().feedback).toBe("correct");
-    expect(useGameStore.getState().correctAttempts).toBe(1);
-    expect(useGameStore.getState().score).toBe(10);
+    expect(useGameUiStore.getState().feedback).toBe("correct");
+    expect(useGameStore.getState().session.correctAttempts).toBe(1);
+    expect(useGameStore.getState().session.score).toBe(10);
     mounted.unmount();
   });
 
@@ -159,11 +165,14 @@ describe("useAppActions gameplay flows", () => {
     expect(mounted.result.current.choices).toContain(target!.capital[0]);
 
     act(() =>
-      mounted.result.current.handleChoiceSelect(target!.capital[0]),
+      mounted.result.current.handleChoiceSelect(
+        target!.cca3,
+        target!.capital[0],
+      ),
     );
 
-    expect(useGameStore.getState().feedback).toBe("correct");
-    expect(useGameStore.getState().score).toBe(10);
+    expect(useGameUiStore.getState().feedback).toBe("correct");
+    expect(useGameStore.getState().session.score).toBe(10);
     mounted.unmount();
   });
 
@@ -175,10 +184,10 @@ describe("useAppActions gameplay flows", () => {
     act(() => mounted.result.current.handleFinalStart());
     act(() => mounted.result.current.handleCountryClick("France", "FRA", guess));
 
-    expect(useGameStore.getState().pinLocation).toEqual(guess);
-    expect(useGameStore.getState().feedback).toBe("wrong");
-    expect(useGameStore.getState().revealed).toBe(true);
-    expect(useGameStore.getState().totalAttempts).toBe(1);
+    expect(useGameStore.getState().session.pinLocation).toEqual(guess);
+    expect(useGameUiStore.getState().feedback).toBe("wrong");
+    expect(useGameStore.getState().session.revealed).toBe(true);
+    expect(useGameStore.getState().session.totalAttempts).toBe(1);
     mounted.unmount();
   });
 
@@ -187,18 +196,18 @@ describe("useAppActions gameplay flows", () => {
     const mounted = renderHook(() => useAppActions());
 
     act(() => mounted.result.current.handleFinalStart());
-    const firstTarget = useGameStore.getState().currentCountryCode;
+    const firstTarget = useGameStore.getState().session.currentCountryCode;
     act(() => mounted.result.current.handleReveal());
-    expect(useGameStore.getState().revealed).toBe(true);
-    expect(useGameStore.getState().feedback).toBeNull();
+    expect(useGameStore.getState().session.revealed).toBe(true);
+    expect(useGameUiStore.getState().feedback).toBeNull();
 
     act(() => vi.advanceTimersByTime(2500));
-    expect(useGameStore.getState().currentCountryCode).not.toBe(firstTarget);
+    expect(useGameStore.getState().session.currentCountryCode).not.toBe(firstTarget);
 
     act(() => mounted.result.current.skipQuestion());
-    expect(useGameStore.getState().revealed).toBe(true);
-    expect(useGameStore.getState().streak).toBe(0);
-    expect(useGameStore.getState().totalAttempts).toBe(2);
+    expect(useGameStore.getState().session.revealed).toBe(true);
+    expect(useGameStore.getState().session.streak).toBe(0);
+    expect(useGameStore.getState().session.totalAttempts).toBe(2);
     mounted.unmount();
   });
 
@@ -220,7 +229,7 @@ describe("useAppActions gameplay flows", () => {
         wrongCountry!.cca3,
       ),
     );
-    expect(useGameStore.getState().pendingAdvanceAt).toBe(Date.now() + 2000);
+    expect(useGameStore.getState().session.pendingAdvanceAt).toBe(Date.now() + 2000);
 
     const snapshot = useGameStore.getState().createSessionSnapshot();
     firstMount.unmount();
@@ -229,11 +238,11 @@ describe("useAppActions gameplay flows", () => {
 
     const resumedMount = renderHook(() => useAppActions());
     act(() => vi.advanceTimersByTime(1999));
-    expect(useGameStore.getState().currentCountryCode).toBe(target!.cca3);
+    expect(useGameStore.getState().session.currentCountryCode).toBe(target!.cca3);
 
     act(() => vi.advanceTimersByTime(1));
-    expect(useGameStore.getState().currentCountryCode).not.toBe(target!.cca3);
-    expect(useGameStore.getState().pendingAdvanceAt).toBeNull();
+    expect(useGameStore.getState().session.currentCountryCode).not.toBe(target!.cca3);
+    expect(useGameStore.getState().session.pendingAdvanceAt).toBeNull();
     resumedMount.unmount();
   });
 
@@ -243,13 +252,15 @@ describe("useAppActions gameplay flows", () => {
     const mounted = renderHook(() => useAppActions());
 
     act(() => mounted.result.current.handleFinalStart());
-    const targetName = mounted.result.current.currentCountry?.name;
-    expect(targetName).toBeDefined();
-    act(() => mounted.result.current.handleChoiceSelect(targetName!));
+    const target = mounted.result.current.currentCountry;
+    expect(target).toBeDefined();
+    act(() =>
+      mounted.result.current.handleChoiceSelect(target!.cca3, target!.name),
+    );
     act(() => vi.advanceTimersByTime(1500));
 
     const state = useGameStore.getState();
-    expect(state.gameStatus).toBe("finished");
+    expect(state.session.gameStatus).toBe("finished");
     expect(useModalStore.getState().currentModal).toBe("result");
     expect(useModalStore.getState().resultProps?.correctAnswers).toBe(1);
     mounted.unmount();
@@ -261,11 +272,33 @@ describe("useAppActions gameplay flows", () => {
     const mounted = renderHook(() => useAppActions());
 
     act(() => mounted.result.current.handleFinalStart());
-    act(() => vi.advanceTimersByTime(2000));
+    act(() => vi.advanceTimersByTime(1000));
 
-    expect(useGameStore.getState().timeRemaining).toBe(0);
-    expect(useGameStore.getState().gameStatus).toBe("finished");
+    expect(useGameStore.getState().session.timeRemaining).toBe(0);
+    expect(useGameStore.getState().session.gameStatus).toBe("finished");
     expect(useModalStore.getState().currentModal).toBe("result");
+    mounted.unmount();
+  });
+
+  it("updates and expires a timer from its deadline after a delayed clock tick", () => {
+    setGameMode("reverse");
+    useGameStore.getState().setChallenge("timer", 5);
+    let now = 1000;
+    const mounted = renderHook(() =>
+      useAppActions({ clock: () => now, seed: 123 }),
+    );
+
+    act(() => mounted.result.current.handleFinalStart());
+    expect(useGameStore.getState().session.timerDeadlineAt).toBe(6000);
+
+    now = 4500;
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useGameStore.getState().session.timeRemaining).toBe(2);
+
+    now = 7000;
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useGameStore.getState().session.timeRemaining).toBe(0);
+    expect(useGameStore.getState().session.gameStatus).toBe("finished");
     mounted.unmount();
   });
 });

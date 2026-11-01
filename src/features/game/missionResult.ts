@@ -1,5 +1,6 @@
 import { getTierRanges } from "../../data/difficulty-ranking";
 import type { ChallengeType } from "../../store/useGameStore";
+import { systemGameClock } from "../../store/gameClock";
 
 interface MissionResultInput {
   score: number;
@@ -28,7 +29,7 @@ export const buildMissionResult = ({
   countriesCount,
   startTime,
   totalLevels,
-  now = Date.now(),
+  now = systemGameClock(),
 }: MissionResultInput) => {
   const accuracy = totalAttempts > 0 ? correctAttempts / totalAttempts : 0;
   const isVictory =

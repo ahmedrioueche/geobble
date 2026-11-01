@@ -3,9 +3,8 @@ import { createRoundControls } from "./roundControls";
 
 const createDependencies = () => ({
   currentCountry: { name: "Canada" },
-  mode: "identify" as const,
   clearAdvanceTimer: vi.fn(),
-  applyRoundAction: vi.fn(),
+  applyGameCommand: vi.fn(),
   nextQuestion: vi.fn(),
   clearClickedCountry: vi.fn(),
   startNewMission: vi.fn(),
@@ -32,7 +31,7 @@ describe("createRoundControls", () => {
     createRoundControls(dependencies).skip();
 
     expect(dependencies.clearAdvanceTimer).toHaveBeenCalledOnce();
-    expect(dependencies.applyRoundAction).toHaveBeenCalledWith(
+    expect(dependencies.applyGameCommand).toHaveBeenCalledWith(
       { type: "skip" },
       "Canada",
     );
@@ -49,26 +48,19 @@ describe("createRoundControls", () => {
 
     expect(dependencies.clearAdvanceTimer).toHaveBeenCalledOnce();
     expect(dependencies.nextQuestion).toHaveBeenCalledOnce();
-    expect(dependencies.applyRoundAction).not.toHaveBeenCalled();
+    expect(dependencies.applyGameCommand).not.toHaveBeenCalled();
   });
 
-  it("reveals with identify-only streak loss and triggers the map pulse", () => {
+  it("dispatches reveal and triggers the map pulse", () => {
     const identifyDependencies = createDependencies();
 
     createRoundControls(identifyDependencies).reveal();
 
     expect(identifyDependencies.clearAdvanceTimer).toHaveBeenCalledOnce();
-    expect(identifyDependencies.applyRoundAction).toHaveBeenCalledWith(
-      { type: "reveal", loseStreak: true },
+    expect(identifyDependencies.applyGameCommand).toHaveBeenCalledWith(
+      { type: "reveal" },
       "",
     );
     expect(identifyDependencies.triggerPulse).toHaveBeenCalledOnce();
-
-    const pinDependencies = { ...createDependencies(), mode: "pin" as const };
-    createRoundControls(pinDependencies).reveal();
-    expect(pinDependencies.applyRoundAction).toHaveBeenCalledWith(
-      { type: "reveal", loseStreak: false },
-      "",
-    );
   });
 });

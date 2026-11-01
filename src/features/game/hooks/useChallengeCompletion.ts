@@ -1,17 +1,21 @@
 import { useEffect } from "react";
 import { useGameStore, type ChallengeType } from "../../../store/useGameStore";
 import {
-  isChallengeComplete,
-  isCountChallengeComplete,
-} from "../gameRules";
+  getRemainingSeconds,
+  systemGameClock,
+  type GameClock,
+} from "../../../store/gameClock";
+import { isCountChallengeComplete } from "../gameRules";
 
 interface UseChallengeCompletionProps {
   gameStatus: "idle" | "playing" | "finished";
   challengeType: ChallengeType;
   challengeValue: number;
   totalAttempts: number;
+  timerDeadlineAt: number | null;
   finishGame: () => void;
   setTimeRemaining: (time: number) => void;
+  clock?: GameClock;
 }
 
 export const useChallengeCompletion = ({
@@ -19,8 +23,10 @@ export const useChallengeCompletion = ({
   challengeType,
   challengeValue,
   totalAttempts,
+  timerDeadlineAt,
   finishGame,
   setTimeRemaining,
+  clock = systemGameClock,
 }: UseChallengeCompletionProps) => {
   useEffect(() => {
     if (
@@ -28,7 +34,7 @@ export const useChallengeCompletion = ({
       isCountChallengeComplete(challengeType, challengeValue, totalAttempts)
     ) {
       const timer = setTimeout(() => {
-        if (useGameStore.getState().gameStatus === "playing") {
+        if (useGameStore.getState().session.gameStatus === "playing") {
           finishGame();
         }
       }, 1500);
@@ -37,32 +43,52 @@ export const useChallengeCompletion = ({
   }, [gameStatus, challengeType, totalAttempts, challengeValue, finishGame]);
 
   useEffect(() => {
-    if (gameStatus !== "playing" || challengeType !== "timer") return;
+    if (
+      gameStatus !== "playing" ||
+      challengeType !== "timer" ||
+      timerDeadlineAt === null
+    ) {
+      return;
+    }
 
-    const timer: ReturnType<typeof setInterval> = setInterval(() => {
-      const { timeRemaining, totalAttempts: currentAttempts } =
-        useGameStore.getState();
+    const updateTimeRemaining = () => {
+      const currentSession = useGameStore.getState().session;
       if (
-        isChallengeComplete(
-          challengeType,
-          challengeValue,
-          currentAttempts,
-          timeRemaining,
-        )
+        currentSession.gameStatus !== "playing" ||
+        currentSession.timerDeadlineAt !== timerDeadlineAt
       ) {
-        finishGame();
-        clearInterval(timer);
-      } else {
-        setTimeRemaining(timeRemaining - 1);
+        return;
       }
-    }, 1000);
 
-    return () => clearInterval(timer);
+      const remaining = getRemainingSeconds(timerDeadlineAt, clock());
+      setTimeRemaining(remaining);
+      if (remaining === 0) {
+        finishGame();
+      }
+    };
+
+    updateTimeRemaining();
+    if (getRemainingSeconds(timerDeadlineAt, clock()) === 0) return;
+
+    const timer: ReturnType<typeof setInterval> = setInterval(
+      updateTimeRemaining,
+      1000,
+    );
+    const deadlineTimer: ReturnType<typeof setTimeout> = setTimeout(
+      updateTimeRemaining,
+      Math.max(0, timerDeadlineAt - clock()),
+    );
+
+    return () => {
+      clearInterval(timer);
+      clearTimeout(deadlineTimer);
+    };
   }, [
     gameStatus,
     challengeType,
-    challengeValue,
+    timerDeadlineAt,
     finishGame,
     setTimeRemaining,
+    clock,
   ]);
 };

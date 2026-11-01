@@ -93,10 +93,10 @@ describe("getMissionStartSettings", () => {
     );
 
     act(() => mounted.result.current.nextQuestion());
-    expect(useGameStore.getState().currentCountryCode).toBe("USA");
+    expect(useGameStore.getState().session.currentCountryCode).toBe("USA");
 
     act(() => mounted.result.current.nextQuestion());
-    expect(useGameStore.getState().currentCountryCode).toBe("CAN");
+    expect(useGameStore.getState().session.currentCountryCode).toBe("CAN");
     mounted.unmount();
     useGameStore.getState().resetGame();
   });

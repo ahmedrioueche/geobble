@@ -1,48 +1,14 @@
-import type {
-  ChallengeType,
-  GameMode,
-  PinDirection,
-  SubMode,
-} from "./useGameStore";
+import type { GameSessionState } from "./gameSession";
 
 export interface GameStateData {
-  score: number;
-  streak: number;
-  randomState: number;
-  mode: GameMode;
-  pinDirection: PinDirection;
-  pinLocation: [number, number] | null;
-  subMode: SubMode;
-  challengeType: ChallengeType;
-  challengeValue: number;
-  timeRemaining: number;
-  difficultyStage: number;
-  totalLevels: number;
+  session: GameSessionState;
   unlockedStage: number;
-  totalQuestions: number;
-  totalAttempts: number;
-  correctAttempts: number;
-  playedCountryCodes: string[];
-  sessionPlayedCodes: string[];
-  gameStatus: "idle" | "playing" | "finished";
-  currentCountryCode: string | null;
-  choices: string[];
-  choiceCodes: string[];
-  missionId: string | null;
-  feedback: "correct" | "wrong" | null;
-  clickedName: string | null;
-  clickedCode: string | null;
-  revealed: boolean;
-  pendingAdvanceAt: number | null;
-  streakLost: number | null;
-  startTime: number | null;
-  maxStreak: number;
-  baseChallengeValue: number;
 }
 
-export const createInitialGameState = (
-  unlockedStage = 1,
-): GameStateData => ({
+export const createInitialGameSession = (): GameSessionState => ({
+  id: null,
+  lastCommandId: 0,
+  timerDeadlineAt: null,
   score: 0,
   streak: 0,
   randomState: 0,
@@ -55,7 +21,6 @@ export const createInitialGameState = (
   timeRemaining: 0,
   difficultyStage: 1,
   totalLevels: 0,
-  unlockedStage,
   totalQuestions: 0,
   totalAttempts: 0,
   correctAttempts: 0,
@@ -66,13 +31,16 @@ export const createInitialGameState = (
   choices: [],
   choiceCodes: [],
   missionId: null,
-  feedback: null,
-  clickedName: null,
-  clickedCode: null,
   revealed: false,
   pendingAdvanceAt: null,
-  streakLost: null,
   startTime: null,
   maxStreak: 0,
   baseChallengeValue: 0,
+});
+
+export const createInitialGameState = (
+  unlockedStage = 1,
+): GameStateData => ({
+  session: createInitialGameSession(),
+  unlockedStage,
 });

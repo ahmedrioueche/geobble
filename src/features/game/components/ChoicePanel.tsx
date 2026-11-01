@@ -3,10 +3,13 @@ import React from "react";
 import { Button } from "../../../components/atoms/Button";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
+import { useGameUiStore } from "../../../store/useGameUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 interface ChoicePanelProps {
   choices: string[];
-  onChoice: (choice: string) => void;
+  choiceCodes: string[];
+  onChoice: (countryCode: string, choice: string) => void;
   disabled?: boolean;
   countries: CountryData[];
   subModeOverride?: SubMode;
@@ -14,12 +17,25 @@ interface ChoicePanelProps {
 
 export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   choices,
+  choiceCodes,
   onChoice,
   disabled,
   countries,
   subModeOverride,
 }) => {
-  const { subMode, currentCountryCode, feedback, clickedName, revealed } = useGameStore();
+  const { subMode, currentCountryCode, revealed } = useGameStore(
+    useShallow((state) => ({
+      subMode: state.session.subMode,
+      currentCountryCode: state.session.currentCountryCode,
+      revealed: state.session.revealed,
+    })),
+  );
+  const { feedback, clickedName } = useGameUiStore(
+    useShallow((state) => ({
+      feedback: state.feedback,
+      clickedName: state.clickedName,
+    })),
+  );
   const activeSubMode = subModeOverride || subMode;
 
   const targetCountry = React.useMemo(() => 
@@ -38,12 +54,8 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
   return (
     <div className="grid grid-cols-1 gap-2 md:gap-3 w-full max-w-[440px] md:max-w-[600px] md:ml-auto md:mr-0 mx-auto">
       {choices.map((choice, i) => {
-        const country = countries.find((c) =>
-          activeSubMode === "flag"
-            ? c.cca2 === choice
-            : activeSubMode === "capital"
-              ? c.capital[0] === choice
-              : c.name === choice,
+        const country = countries.find(
+          (item) => item.cca3 === choiceCodes[i],
         );
 
         const isCorrect = isCorrectChoice(choice);
@@ -75,7 +87,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
 
             <Button
               variant="outline"
-              onClick={() => onChoice(choice)}
+              onClick={() => onChoice(choiceCodes[i] ?? "", choice)}
               disabled={disabled}
               className={`w-full h-12 md:h-14 border-white/20 bg-slate-900/90 shadow-lg transition-all group/choice flex items-center justify-center p-2 min-w-0 ${
                 (feedback === 'correct' || revealed) && isCorrect

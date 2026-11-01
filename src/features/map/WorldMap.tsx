@@ -2,6 +2,7 @@ import * as d3 from "d3";
 import React, { useRef } from "react";
 import type { CountryData } from "../../data/country-data";
 import { useGameStore } from "../../store/useGameStore";
+import { useGameUiStore } from "../../store/useGameUiStore";
 import { useMapUiStore } from "../../store/useMapUiStore";
 import { useMapCamera } from "./useMapCamera";
 import { MapMarkers } from "./MapMarkers";
@@ -11,6 +12,11 @@ import { useMapViewport } from "./useMapViewport";
 import { useMapCountryData } from "./useMapCountryData";
 import { useMapSonarPoint } from "./useMapSonarPoint";
 import { getMapMarkerState } from "./mapMarkerState";
+import { useShallow } from "zustand/react/shallow";
+import {
+  selectWorldMapSession,
+  selectWorldMapUi,
+} from "./worldMapStoreSelectors";
 
 interface MapProps {
   onCountryClick?: (name: string, code: string, coordinates?: [number, number]) => void;
@@ -30,17 +36,18 @@ export const WorldMap: React.FC<MapProps> = ({
   countries = [],
 }) => {
   const { geoData, loading, error, projection } = useWorldMap();
-  const {
-    gameStatus,
-    feedback,
-    clickedCode,
-    clickedName,
-    mode,
-    pinDirection,
-    pinLocation,
-    revealed,
-  } = useGameStore();
-  const { pulseKey, sonarKey, tempHighlightCode } = useMapUiStore();
+  const { gameStatus, mode, pinDirection, pinLocation, revealed } =
+    useGameStore(useShallow(selectWorldMapSession));
+  const { feedback, clickedCode, clickedName } = useGameUiStore(
+    useShallow(selectWorldMapUi),
+  );
+  const { pulseKey, sonarKey, tempHighlightCode } = useMapUiStore(
+    useShallow((state) => ({
+      pulseKey: state.pulseKey,
+      sonarKey: state.sonarKey,
+      tempHighlightCode: state.tempHighlightCode,
+    })),
+  );
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const { containerRef, dimensions, pathGenerator } = useMapViewport({

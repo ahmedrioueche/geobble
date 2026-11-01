@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import React, { useEffect, useState } from "react";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
+import { useGameUiStore } from "../../../store/useGameUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 interface TargetSplashProps {
   currentCountry: CountryData | undefined;
@@ -14,8 +16,16 @@ export const TargetSplash: React.FC<TargetSplashProps> = ({
   onDockStart,
   onDockComplete,
 }) => {
-  const { gameStatus, mode, pinDirection, subMode, feedback, revealed } =
-    useGameStore();
+  const { gameStatus, mode, pinDirection, subMode, revealed } = useGameStore(
+    useShallow((state) => ({
+      gameStatus: state.session.gameStatus,
+      mode: state.session.mode,
+      pinDirection: state.session.pinDirection,
+      subMode: state.session.subMode,
+      revealed: state.session.revealed,
+    })),
+  );
+  const feedback = useGameUiStore((state) => state.feedback);
   const shouldAnimateTarget =
     mode === "identify" || (mode === "pin" && pinDirection === "locate");
   const [isVisible, setIsVisible] = useState(false);

@@ -6,10 +6,23 @@ import { ResultSummary } from "./ResultSummary";
 import { useModalStore } from "../../store/modal";
 import { useGameStore } from "../../store/useGameStore";
 import { useMapUiStore } from "../../store/useMapUiStore";
+import { useShallow } from "zustand/react/shallow";
 
 const ResultModal: React.FC = () => {
-  const { currentModal, resultProps, closeModal } = useModalStore();
-  const { resetGame, startNewMission, setDifficultyStage } = useGameStore();
+  const { currentModal, resultProps, closeModal } = useModalStore(
+    useShallow((state) => ({
+      currentModal: state.currentModal,
+      resultProps: state.resultProps,
+      closeModal: state.closeModal,
+    })),
+  );
+  const { resetGame, startNewMission, setDifficultyStage } = useGameStore(
+    useShallow((state) => ({
+      resetGame: state.resetGame,
+      startNewMission: state.startNewMission,
+      setDifficultyStage: state.setDifficultyStage,
+    })),
+  );
   const resetMapUi = useMapUiStore((state) => state.resetMapUi);
 
   const {
