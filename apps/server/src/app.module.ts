@@ -1,10 +1,27 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { validateEnvironment } from './config/server-configuration.js';
+import { HealthModule } from './health/health.module.js';
+import { RoomsModule } from './rooms/rooms.module.js';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnvironment,
+    }),
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.getOrThrow<string>('mongoUri'),
+        serverSelectionTimeoutMS: 10_000,
+        maxPoolSize: 10,
+        autoIndex: true,
+      }),
+    }),
+    HealthModule,
+    RoomsModule,
+  ],
 })
 export class AppModule {}
