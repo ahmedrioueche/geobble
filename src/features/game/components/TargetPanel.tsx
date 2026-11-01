@@ -60,11 +60,11 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
           <motion.div
             initial={{ opacity: 0, x: -15, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 max-w-[280px] sm:max-w-[320px] md:max-w-none"
+            className="absolute right-[105%] top-1/2 -translate-y-1/2 pointer-events-none bg-emerald-500/10 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/20 shadow-2xl z-50 w-max"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] leading-tight text-emerald-400">
+              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] leading-tight text-emerald-400 whitespace-nowrap">
                 {country.name}
               </span>
             </div>
