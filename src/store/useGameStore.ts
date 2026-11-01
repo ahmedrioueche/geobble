@@ -16,9 +16,12 @@ import {
   type GameSessionState,
   type PinDirection,
   type SubMode,
-} from "./gameSession";
-import { createRandomSeed, getNextSeededRandom } from "./seededRandom";
-import { systemGameClock } from "./gameClock";
+} from "../features/game/domain/gameSession";
+import {
+  createRandomSeed,
+  getNextSeededRandom,
+} from "../features/game/domain/seededRandom";
+import { systemGameClock } from "../features/game/domain/gameClock";
 import { createSafeBrowserStorage } from "./safeBrowserStorage";
 import { useGameUiStore } from "./useGameUiStore";
 
@@ -27,7 +30,7 @@ export type {
   GameMode,
   PinDirection,
   SubMode,
-} from "./gameSession";
+} from "../features/game/domain/gameSession";
 
 interface GameState extends GameStateData {
   setScore: (score: number) => void;

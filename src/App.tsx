@@ -5,10 +5,10 @@ import { GameHUD } from "./features/game/components/GameHUD";
 import { GlobalOverlays } from "./features/game/components/GlobalOverlays";
 import { ModeSelection } from "./features/game/components/ModeSelection";
 import { TacticalInterface } from "./features/game/components/TacticalInterface";
-import { useAppActions } from "./features/game/hooks/useAppActions";
+import { useAppActions } from "./features/game/application/hooks/useAppActions";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
-import { useSavedGameSession } from "./features/game/hooks/useSavedGameSession";
+import { useSavedGameSession } from "./features/game/application/hooks/useSavedGameSession";
 import Modals from "./modals";
 
 function App() {

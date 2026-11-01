@@ -68,7 +68,7 @@ const { useCountryDataMock } = vi.hoisted(() => ({
   useCountryDataMock: vi.fn(),
 }));
 
-vi.mock("./features/game/hooks/useCountryData", () => ({
+vi.mock("./features/game/application/hooks/useCountryData", () => ({
   useCountryData: useCountryDataMock,
 }));
 

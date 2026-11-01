@@ -1,10 +1,15 @@
-import type { GameSessionState } from "./gameSession";
-import { createGameSessionId } from "./gameSession";
+import {
+  createGameSessionId,
+  type GameSessionState,
+} from "../features/game/domain/gameSession";
 import {
   createInitialGameSession,
   createInitialGameState,
 } from "./gameStateDefaults";
-import { getRemainingSeconds, systemGameClock } from "./gameClock";
+import {
+  getRemainingSeconds,
+  systemGameClock,
+} from "../features/game/domain/gameClock";
 
 export const GAME_SESSION_STORAGE_KEY = "geobble-active-session";
 

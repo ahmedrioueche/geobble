@@ -1,4 +1,7 @@
-import type { GameSessionState, GameUiState } from "../../store/gameSession";
+import type {
+  GameSessionState,
+  GameUiState,
+} from "../game/domain/gameSession";
 import type { MapUiState } from "../../store/useMapUiStore";
 
 type WorldMapSessionSource = {

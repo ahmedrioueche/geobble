@@ -5,7 +5,7 @@ import { useGameStore } from "../../../store/useGameStore";
 import {
   systemGameClock,
   type GameClock,
-} from "../../../store/gameClock";
+} from "../domain/gameClock";
 import { formatDuration } from "../../../utils/time";
 import {
   DesktopHudStats,

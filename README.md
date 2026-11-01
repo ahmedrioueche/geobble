@@ -33,6 +33,28 @@ Explore the global theatre at your own pace. Hover and click any territory to re
 
 ## Game Session Snapshots
 
+## Source structure
+
+Client code is organized by feature and responsibility:
+
+- `src/features/game/domain` contains framework-independent gameplay rules,
+  transitions, session types, and deterministic game utilities.
+- `src/features/game/application` coordinates solo gameplay, client stores,
+  persistence, and game hooks.
+- `src/features/game/components` contains the existing game UI.
+- `src/features/multiplayer/contracts` defines the client room message contract;
+  `src/features/multiplayer/application` owns its client lifecycle.
+- `src/features/map` remains responsible for map loading, interaction, and
+  rendering.
+- `src/store` contains client-side Zustand adapters and solo persistence.
+
+The dependency direction is intentional: game application and client stores
+may use the game domain, but the domain must not import React, Zustand, browser
+storage, or multiplayer application code. Multiplayer may depend on game
+domain types, while solo gameplay remains independent of multiplayer. This is
+a client-only structure; it does not add a server or live multiplayer
+transport.
+
 World map topology is loaded and converted through a shared typed loader. It
 shares in-flight and successful results between map and country-data consumers,
 and allows failed loads to be retried. The store-connected map entry point
@@ -68,9 +90,9 @@ next mission. React commits the resulting session and handles presentation and
 timed effects.
 
 Round actions are evaluated by a pure transition function that returns updated
-round state and declarative effects. The client applies the state and handles
-audio and advance timers; multiplayer transport and server authority remain
-separate work.
+round state and declarative effects. The client application applies the state
+and handles audio and advance timers; multiplayer transport and server
+authority remain separate work.
 
 Gameplay inputs use typed commands with session, mission, and increasing
 command IDs. A local handler validates these identities and delegates accepted
@@ -78,8 +100,8 @@ actions to the same pure transition; its serializable events form an integration
 seam only and are not a network protocol or security boundary.
 
 The client also defines a transport-independent multiplayer room contract in
-`multiplayerRoomProtocol.ts` and an observable room-client lifecycle in
-`multiplayerRoomClient.ts`. It validates incoming room messages, tracks room
+`src/features/multiplayer/contracts` and an observable room-client lifecycle
+in `src/features/multiplayer/application`. It validates incoming room messages, tracks room
 snapshots by revision, submits commands against the latest known revision, and
 tracks acknowledgements and reconnect status. Tests exercise this boundary
 through a fake transport. This is client-side integration groundwork only:

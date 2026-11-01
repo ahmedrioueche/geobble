@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GameUiState } from "./gameSession";
+import type { GameUiState } from "../features/game/domain/gameSession";
 
 interface GameUiStore extends GameUiState {
   setFeedback: (

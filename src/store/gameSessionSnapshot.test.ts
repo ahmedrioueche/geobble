@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CountryData } from "../data/country-data";
-import { generateChoiceCountries, pickRandom } from "../features/game/gameRules";
+import {
+  generateChoiceCountries,
+  pickRandom,
+} from "../features/game/domain/gameRules";
 import { createInitialGameState } from "./gameStateDefaults";
 import {
   createGameSessionSnapshot,
@@ -8,7 +11,7 @@ import {
   restoreGameSessionSnapshot,
 } from "./gameSessionSnapshot";
 import { useGameStore } from "./useGameStore";
-import { getNextSeededRandom } from "./seededRandom";
+import { getNextSeededRandom } from "../features/game/domain/seededRandom";
 
 const countries: CountryData[] = [
   {

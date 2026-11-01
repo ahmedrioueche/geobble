@@ -1,5 +1,5 @@
 import type * as d3 from "d3";
-import type { GameMode } from "../../store/gameSession";
+import type { GameMode } from "../game/domain/gameSession";
 
 export const getCountryClickCoordinates = (
   mode: GameMode,
