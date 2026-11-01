@@ -189,6 +189,12 @@ describe("game session snapshots", () => {
       restoreGameSessionSnapshot(legacySnapshot, 1, 4500).session
         .timerDeadlineAt,
     ).toBe(6000);
+
+    const legacyNullDeadline = { ...snapshot, timerDeadlineAt: null };
+    expect(
+      restoreGameSessionSnapshot(legacyNullDeadline, 1, 4500).session
+        .timerDeadlineAt,
+    ).toBe(6000);
   });
 
   it("preserves an active timer deadline and derives remaining time at save and restore", () => {

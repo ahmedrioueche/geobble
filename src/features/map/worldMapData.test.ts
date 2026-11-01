@@ -42,6 +42,35 @@ describe("parseWorldMapTopology", () => {
     });
   });
 
+  it("keeps named countries without topology IDs renderable", () => {
+    const topologyWithoutId = {
+      ...topology,
+      objects: {
+        countries: {
+          ...topology.objects.countries,
+          geometries: [
+            ...topology.objects.countries.geometries,
+            {
+              type: "Polygon",
+              properties: { name: "Kosovo" },
+              arcs: [[0]],
+            },
+          ],
+        },
+      },
+    };
+
+    const data = parseWorldMapTopology(topologyWithoutId);
+
+    expect(data.availableMapIds).toEqual(new Set(["124"]));
+    expect(data.geoData.features).toHaveLength(2);
+    expect(data.geoData.features[1]).toMatchObject({
+      id: "Kosovo",
+      properties: { name: "Kosovo" },
+      geometry: { type: "Polygon" },
+    });
+  });
+
   it.each([
     null,
     {},
@@ -52,7 +81,7 @@ describe("parseWorldMapTopology", () => {
       objects: {
         countries: {
           type: "GeometryCollection",
-          geometries: [{ type: "Polygon", id: 124, properties: {} }],
+          geometries: [{ type: "Polygon", properties: {} }],
         },
       },
     },

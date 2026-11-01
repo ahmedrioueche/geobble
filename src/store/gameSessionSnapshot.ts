@@ -183,7 +183,7 @@ export const restoreGameSessionSnapshot = (
   const isActiveTimer =
     value.challengeType === "timer" && value.gameStatus === "playing";
   const timerDeadlineAt =
-    value.timerDeadlineAt === undefined
+    value.timerDeadlineAt === undefined || value.timerDeadlineAt === null
       ? isActiveTimer
         ? value.savedAt + value.timeRemaining * 1000
         : null

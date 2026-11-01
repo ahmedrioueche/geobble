@@ -27,7 +27,9 @@ const isGeometryCollection = (
       typeof geometry.type === "string" &&
       isRecord(geometry.properties) &&
       typeof geometry.properties.name === "string" &&
-      (typeof geometry.id === "string" || typeof geometry.id === "number"),
+      (geometry.id === undefined ||
+        typeof geometry.id === "string" ||
+        typeof geometry.id === "number"),
   );
 
 export const parseWorldMapTopology = (value: unknown): WorldMapData => {
@@ -47,16 +49,16 @@ export const parseWorldMapTopology = (value: unknown): WorldMapData => {
     topology.objects.countries,
   ) as FeatureCollection<Geometry, { name?: string }>;
   const features: CountryFeature[] = geoData.features.map((country) => {
-    if (
-      (typeof country.id !== "string" && typeof country.id !== "number") ||
-      typeof country.properties?.name !== "string"
-    ) {
-      throw new Error("World map country is missing its ID or name");
+    if (typeof country.properties?.name !== "string") {
+      throw new Error("World map country is missing its name");
     }
 
     return {
       ...country,
-      id: country.id.toString(),
+      id:
+        typeof country.id === "string" || typeof country.id === "number"
+          ? country.id.toString()
+          : country.properties.name,
       properties: { name: country.properties.name },
     };
   });
