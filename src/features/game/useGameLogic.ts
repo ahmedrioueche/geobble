@@ -2,10 +2,10 @@ import { useCallback } from "react";
 import { useModalStore } from "../../store/modal";
 import { useGameStore } from "../../store/useGameStore";
 import { useChallengeCompletion } from "./hooks/useChallengeCompletion";
-import { useChoiceGeneration } from "./hooks/useChoiceGeneration";
+import { useChoicePresentation } from "./hooks/useChoicePresentation";
 import { useCountryData } from "./hooks/useCountryData";
 import { useMissionProgression } from "./hooks/useMissionProgression";
-import { buildMissionResult } from "./missionResult";
+import { finishMission } from "./gameEngine";
 import {
   systemGameClock,
   type GameClock,
@@ -14,7 +14,6 @@ import { useShallow } from "zustand/react/shallow";
 
 export const useGameLogic = (clock: GameClock = systemGameClock) => {
   const {
-    score,
     currentCountryCode,
     mode,
     pinDirection,
@@ -22,17 +21,10 @@ export const useGameLogic = (clock: GameClock = systemGameClock) => {
     gameStatus,
     challengeType,
     challengeValue,
-    totalQuestions,
     totalAttempts,
-    correctAttempts,
-    difficultyStage,
-    startTime,
     timerDeadlineAt,
-    totalLevels,
-    maxStreak,
   } = useGameStore(
     useShallow((state) => ({
-      score: state.session.score,
       currentCountryCode: state.session.currentCountryCode,
       mode: state.session.mode,
       pinDirection: state.session.pinDirection,
@@ -40,87 +32,48 @@ export const useGameLogic = (clock: GameClock = systemGameClock) => {
       gameStatus: state.session.gameStatus,
       challengeType: state.session.challengeType,
       challengeValue: state.session.challengeValue,
-      totalQuestions: state.session.totalQuestions,
       totalAttempts: state.session.totalAttempts,
-      correctAttempts: state.session.correctAttempts,
-      difficultyStage: state.session.difficultyStage,
-      startTime: state.session.startTime,
       timerDeadlineAt: state.session.timerDeadlineAt,
-      totalLevels: state.session.totalLevels,
-      maxStreak: state.session.maxStreak,
     })),
   );
   const {
     setChoices,
     setChoiceCodes,
-    setGameStatus,
     setTimeRemaining,
     unlockNextStage,
-    nextRandom,
   } = useGameStore(
     useShallow((state) => ({
       setChoices: state.setChoices,
       setChoiceCodes: state.setChoiceCodes,
-      setGameStatus: state.setGameStatus,
       setTimeRemaining: state.setTimeRemaining,
       unlockNextStage: state.unlockNextStage,
-      nextRandom: state.nextRandom,
     })),
   );
   const openModal = useModalStore((state) => state.openModal);
 
   const { countries, loading } = useCountryData();
-  const generateChoices = useChoiceGeneration({
+  useChoicePresentation({
     countries,
     subMode,
     mode,
     pinDirection,
     gameStatus,
     currentCountryCode,
-    random: nextRandom,
     setChoices,
     setChoiceCodes,
   });
 
   const finishGame = useCallback(() => {
-    setGameStatus("finished");
-    const result = buildMissionResult({
-      score,
-      maxStreak,
-      totalAttempts,
-      correctAttempts,
-      challengeType,
-      challengeValue,
-      difficultyStage,
-      totalQuestions,
-      countriesCount: countries.length,
-      startTime,
-      now: clock(),
-      totalLevels,
-    });
+    const state = useGameStore.getState();
+    const transition = finishMission(state.session, countries.length, clock());
+    useGameStore.setState({ session: transition.session });
 
-    if (result.isVictory) {
+    if (transition.result.isVictory) {
       unlockNextStage();
     }
 
-    openModal("result", result);
-  }, [
-    setGameStatus,
-    totalQuestions,
-    totalAttempts,
-    correctAttempts,
-    challengeType,
-    challengeValue,
-    countries.length,
-    openModal,
-    score,
-    difficultyStage,
-    startTime,
-    totalLevels,
-    maxStreak,
-    clock,
-    unlockNextStage,
-  ]);
+    openModal("result", transition.result);
+  }, [countries.length, openModal, clock, unlockNextStage]);
 
   useChallengeCompletion({
     gameStatus,
@@ -135,8 +88,6 @@ export const useGameLogic = (clock: GameClock = systemGameClock) => {
 
   const { startGame, nextQuestion } = useMissionProgression({
     countries,
-    random: nextRandom,
-    generateChoices,
     finishGame,
   });
 

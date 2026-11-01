@@ -59,6 +59,14 @@ unlocked progression. Unsupported or malformed snapshots are rejected. This
 provides a deterministic client-side simulation boundary; it does not implement
 networking or server authority, and client state is not trusted.
 
+Mission start, target selection, choice generation, round advancement, and
+mission completion are evaluated by framework-independent game-engine
+transitions. They take the session and game data as input and return an updated
+session, selected target/choices, or a completion result. Seeded randomness is
+advanced as part of the transition, so the same session state produces the same
+next mission. React commits the resulting session and handles presentation and
+timed effects.
+
 Round actions are evaluated by a pure transition function that returns updated
 round state and declarative effects. The client applies the state and handles
 audio and advance timers; multiplayer transport and server authority remain
