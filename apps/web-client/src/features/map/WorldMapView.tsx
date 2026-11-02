@@ -33,6 +33,7 @@ export interface WorldMapViewProps {
   game: WorldMapGameState;
   gameUi: WorldMapGameUiState;
   mapUi: WorldMapMapUiState;
+  targetMapAnchor?: [number, number];
 }
 
 export const WorldMapView: React.FC<WorldMapViewProps> = ({
@@ -49,6 +50,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
   game: { gameStatus, mode, pinDirection, pinLocation, revealed },
   gameUi: { feedback, clickedCode, clickedName },
   mapUi: { pulseKey, sonarKey, tempHighlightCode },
+  targetMapAnchor,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
@@ -57,15 +59,18 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
     projection,
   });
 
-  const { features, idToCodeLookup, targetPinCoordinates } =
+  const { features, idToCodeLookup, targetPinCoordinates, targetCountryCode } =
     useMapCountryData({
       geoData,
       countries,
       mode,
       selectedCountryCode,
+      targetMapAnchor,
       pathGenerator,
       projection,
     });
+  const effectiveSelectedCountryCode =
+    selectedCountryCode ?? targetCountryCode;
 
   const { getEffectiveGeometry } = useMapCamera({
     svgRef,
@@ -79,8 +84,11 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
     mode,
     pinDirection,
     revealed,
-    selectedCountryCode,
-    targetPinCoordinates,
+    selectedCountryCode: effectiveSelectedCountryCode,
+    targetPinCoordinates:
+      mode === "pin" && targetMapAnchor
+        ? targetMapAnchor
+        : targetPinCoordinates,
     missionId,
     sonarKey,
   });
@@ -106,7 +114,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
     geoData,
     pathGenerator,
     idToCodeLookup,
-    selectedCountryCode,
+    selectedCountryCode: effectiveSelectedCountryCode,
     selectedCountryName,
     mode,
     revealed,
@@ -119,7 +127,10 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
     pinDirection,
     revealed,
     pinLocation,
-    targetPinCoordinates,
+    targetPinCoordinates:
+      mode === "pin" && targetMapAnchor
+        ? targetMapAnchor
+        : targetPinCoordinates,
     projection,
     mapWidth: dimensions.width,
   });
@@ -143,7 +154,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
             pathGenerator,
             idToCodeLookup,
             selectedCountry,
-            selectedCountryCode,
+            selectedCountryCode: effectiveSelectedCountryCode,
             gameStatus,
             mode,
             revealed,

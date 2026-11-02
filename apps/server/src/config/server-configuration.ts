@@ -118,7 +118,7 @@ export const validateEnvironment = (
 
   const apiUrl =
     env.REST_COUNTRIES_API_URL ??
-    'https://restcountries.com/v3.1/all?fields=name,cca2,cca3,ccn3,capital,region,subregion,flag,latlng';
+    'https://api.restcountries.com/countries/v5?response_fields=names.common,codes.alpha_2,codes.alpha_3,codes.numeric,capital,region,subregion,flag.emoji,coordinates.latlng';
   if (typeof apiUrl !== 'string' || !URL.canParse(apiUrl)) {
     throw new Error('REST_COUNTRIES_API_URL must be a valid URL');
   }
@@ -126,6 +126,12 @@ export const validateEnvironment = (
   const apiKey = env.REST_COUNTRIES_API_KEY;
   if (apiKey !== undefined && typeof apiKey !== 'string') {
     throw new Error('REST_COUNTRIES_API_KEY must be a string');
+  }
+  if (
+    new URL(apiUrl).hostname === 'api.restcountries.com' &&
+    (typeof apiKey !== 'string' || apiKey.trim().length === 0)
+  ) {
+    throw new Error('REST_COUNTRIES_API_KEY is required for REST Countries v5');
   }
 
   const config: ServerConfiguration = {

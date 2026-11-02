@@ -1,56 +1,69 @@
-import type { GameSessionState } from "../../game/domain/gameSession";
+import type {
+  ChallengeType,
+  GameMode,
+  PinDirection,
+  SubMode,
+} from "../../game/domain/gameSession";
 
-export type RoomGameState = Pick<
-  GameSessionState,
-  | "mode"
-  | "pinDirection"
-  | "subMode"
-  | "challengeType"
-  | "challengeValue"
-  | "timeRemaining"
-  | "score"
-  | "streak"
-  | "maxStreak"
-  | "totalQuestions"
-  | "totalAttempts"
-  | "correctAttempts"
-  | "gameStatus"
-  | "currentCountryCode"
-  | "choices"
-  | "choiceCodes"
-  | "missionId"
-  | "revealed"
-  | "pinLocation"
->;
+export interface RoomConfiguration {
+  mode: GameMode;
+  pinDirection: PinDirection;
+  subMode: SubMode;
+  challengeType: ChallengeType;
+  challengeValue: number;
+}
 
 export interface RoomPlayer {
   id: string;
   name: string;
+  isAdmin: boolean;
   ready: boolean;
   connected: boolean;
+  score: number;
+  streak: number;
+  maxStreak: number;
+  pinLocation: [number, number] | null;
+  answered: boolean;
+}
+
+export interface RoomRound {
+  missionId: string;
+  number: number;
+  prompt: {
+    type: "text" | "flag" | "instruction";
+    value: string;
+    mapAnchor?: [number, number];
+  };
+  choices: Array<{ id: string; label: string }>;
+  revealed: boolean;
+  answerReveal: { countryCode: string; countryName: string } | null;
 }
 
 export interface RoomSnapshot {
   roomId: string;
   revision: number;
   status: "waiting" | "playing" | "finished";
+  adminPlayerId: string;
+  config: RoomConfiguration;
+  pendingConfig: RoomConfiguration | null;
   players: RoomPlayer[];
-  game: RoomGameState;
+  game: {
+    startedAt: number | null;
+    timerDeadlineAt: number | null;
+    round: RoomRound | null;
+  };
 }
 
-export type RoomRequest =
-  | { type: "create-room"; requestId: string; playerName: string }
-  | {
-      type: "join-room";
-      requestId: string;
-      roomId: string;
-      playerName: string;
-    };
+export type RoomConnectInput =
+  | { type: "create"; playerName: string; config?: RoomConfiguration }
+  | { type: "join"; roomId: string; playerName: string };
 
 export type RoomCommandInput =
   | {
       type: "answer";
       answerCountryCode: string | null;
+      choiceId?: string;
+      pinLocation?: [number, number];
     }
   | { type: "reveal" }
   | { type: "skip" };
@@ -61,182 +74,171 @@ export type RoomCommand = RoomCommandInput & {
   missionId: string;
 };
 
-export type RoomServerMessage =
-  | {
-      type: "room-joined";
-      requestId: string;
-      playerId: string;
-      snapshot: RoomSnapshot;
-    }
-  | { type: "room-updated"; snapshot: RoomSnapshot }
+export interface RoomJoinedEvent {
+  requestId: string;
+  playerId: string;
+  reconnectToken: string;
+  nextCommandId: number;
+  snapshot: RoomSnapshot;
+}
+
+export type RoomServerEvent =
+  | { type: "joined"; payload: RoomJoinedEvent }
+  | { type: "updated"; snapshot: RoomSnapshot }
   | {
       type: "command-accepted";
-      roomId: string;
-      commandId: number;
-      revision: number;
+      payload: {
+        roomId: string;
+        commandId: number;
+        revision: number;
+        answerResult: boolean | null;
+      };
     }
   | {
       type: "command-rejected";
-      roomId: string;
-      commandId: number;
-      reason:
-        | "invalid-command"
-        | "stale-revision"
-        | "stale-mission"
-        | "duplicate"
-        | "not-allowed";
+      payload: {
+        roomId: string;
+        commandId: number | null;
+        reason: string;
+        revision?: number;
+      };
     }
   | {
-      type: "room-error";
-      requestId: string | null;
-      message: string;
+      type: "settings-accepted";
+      payload: { roomId: string; queued: boolean; revision: number };
     }
-  | { type: "room-left"; roomId: string };
+  | { type: "left"; payload: { roomId: string } }
+  | { type: "closed"; payload: { roomId: string } }
+  | {
+      type: "error";
+      payload: { requestId: string | null; message: string };
+    };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isNonemptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
+const isInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
-const isNonnegativeInteger = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isSafeInteger(value) &&
-  value >= 0;
+const isString = (value: unknown): value is string =>
+  typeof value === "string";
 
-const isNullableString = (value: unknown): value is string | null =>
-  value === null || typeof value === "string";
+const isNullableInteger = (value: unknown): value is number | null =>
+  value === null || isInteger(value);
 
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
+const isCoordinate = (value: unknown): value is [number, number] =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  typeof value[0] === "number" &&
+  Number.isFinite(value[0]) &&
+  value[0] >= -180 &&
+  value[0] <= 180 &&
+  typeof value[1] === "number" &&
+  Number.isFinite(value[1]) &&
+  value[1] >= -90 &&
+  value[1] <= 90;
 
-const isRoomGameState = (value: unknown): value is RoomGameState => {
-  if (!isRecord(value)) return false;
-  return (
-    ["identify", "reverse", "pin"].includes(String(value.mode)) &&
-    ["locate", "identify"].includes(String(value.pinDirection)) &&
-    ["name", "flag", "capital"].includes(String(value.subMode)) &&
-    ["world", "count", "timer"].includes(String(value.challengeType)) &&
-    typeof value.challengeValue === "number" &&
-    Number.isFinite(value.challengeValue) &&
-    value.challengeValue >= 0 &&
-    typeof value.timeRemaining === "number" &&
-    Number.isFinite(value.timeRemaining) &&
-    value.timeRemaining >= 0 &&
-    isNonnegativeInteger(value.score) &&
-    isNonnegativeInteger(value.streak) &&
-    isNonnegativeInteger(value.maxStreak) &&
-    isNonnegativeInteger(value.totalQuestions) &&
-    isNonnegativeInteger(value.totalAttempts) &&
-    isNonnegativeInteger(value.correctAttempts) &&
-    value.correctAttempts <= value.totalAttempts &&
-    ["idle", "playing", "finished"].includes(String(value.gameStatus)) &&
-    isNullableString(value.currentCountryCode) &&
-    isStringArray(value.choices) &&
-    isStringArray(value.choiceCodes) &&
-    (value.missionId === null || isNonemptyString(value.missionId)) &&
-    typeof value.revealed === "boolean" &&
-    (value.pinLocation === null ||
-      (Array.isArray(value.pinLocation) &&
-        value.pinLocation.length === 2 &&
-        typeof value.pinLocation[0] === "number" &&
-        Number.isFinite(value.pinLocation[0]) &&
-        value.pinLocation[0] >= -180 &&
-        value.pinLocation[0] <= 180 &&
-        typeof value.pinLocation[1] === "number" &&
-        Number.isFinite(value.pinLocation[1]) &&
-        value.pinLocation[1] >= -90 &&
-        value.pinLocation[1] <= 90))
-  );
-};
-
-const isRoomPlayer = (value: unknown): value is RoomPlayer =>
+const isConfiguration = (value: unknown): value is RoomConfiguration =>
   isRecord(value) &&
-  isNonemptyString(value.id) &&
-  typeof value.name === "string" &&
+  ["identify", "reverse", "pin"].includes(String(value.mode)) &&
+  ["locate", "identify"].includes(String(value.pinDirection)) &&
+  ["name", "flag", "capital"].includes(String(value.subMode)) &&
+  ["world", "count", "timer"].includes(String(value.challengeType)) &&
+  isInteger(value.challengeValue);
+
+const isPlayer = (value: unknown): value is RoomPlayer =>
+  isRecord(value) &&
+  isString(value.id) &&
+  isString(value.name) &&
+  typeof value.isAdmin === "boolean" &&
   typeof value.ready === "boolean" &&
-  typeof value.connected === "boolean";
+  typeof value.connected === "boolean" &&
+  isInteger(value.score) &&
+  isInteger(value.streak) &&
+  isInteger(value.maxStreak) &&
+  (value.pinLocation === null || isCoordinate(value.pinLocation)) &&
+  typeof value.answered === "boolean";
+
+const isRound = (value: unknown): value is RoomRound =>
+  isRecord(value) &&
+  isString(value.missionId) &&
+  isInteger(value.number) &&
+  isRecord(value.prompt) &&
+  ["text", "flag", "instruction"].includes(String(value.prompt.type)) &&
+  isString(value.prompt.value) &&
+  (value.prompt.mapAnchor === undefined || isCoordinate(value.prompt.mapAnchor)) &&
+  Array.isArray(value.choices) &&
+  value.choices.every(
+    (choice) =>
+      isRecord(choice) &&
+      isString(choice.id) &&
+      isString(choice.label),
+  ) &&
+  typeof value.revealed === "boolean" &&
+  (value.answerReveal === null ||
+    (isRecord(value.answerReveal) &&
+      isString(value.answerReveal.countryCode) &&
+      isString(value.answerReveal.countryName)));
 
 export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value) &&
-  isNonemptyString(value.roomId) &&
-  isNonnegativeInteger(value.revision) &&
+  isString(value.roomId) &&
+  isInteger(value.revision) &&
   ["waiting", "playing", "finished"].includes(String(value.status)) &&
+  isString(value.adminPlayerId) &&
+  isConfiguration(value.config) &&
+  (value.pendingConfig === null || isConfiguration(value.pendingConfig)) &&
   Array.isArray(value.players) &&
-  value.players.every(isRoomPlayer) &&
-  isRoomGameState(value.game);
+  value.players.every(isPlayer) &&
+  isRecord(value.game) &&
+  isNullableInteger(value.game.startedAt) &&
+  isNullableInteger(value.game.timerDeadlineAt) &&
+  (value.game.round === null || isRound(value.game.round));
 
-export const isRoomRequest = (value: unknown): value is RoomRequest => {
-  if (
-    !isRecord(value) ||
-    !isNonemptyString(value.requestId) ||
-    !isNonemptyString(value.playerName)
-  ) {
-    return false;
-  }
-  if (value.type === "create-room") return true;
-  return (
-    value.type === "join-room" &&
-    isNonemptyString(value.roomId)
-  );
-};
-
-export const isRoomCommand = (value: unknown): value is RoomCommand => {
-  if (
-    !isRecord(value) ||
-    !isNonnegativeInteger(value.commandId) ||
-    value.commandId < 1 ||
-    !isNonnegativeInteger(value.expectedRevision) ||
-    !isNonemptyString(value.missionId)
-  ) {
-    return false;
-  }
-  if (value.type === "reveal" || value.type === "skip") return true;
-  return (
-    value.type === "answer" &&
-    (value.answerCountryCode === null ||
-      isNonemptyString(value.answerCountryCode))
-  );
-};
-
-export const isRoomServerMessage = (
-  value: unknown,
-): value is RoomServerMessage => {
+export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
   if (!isRecord(value) || typeof value.type !== "string") return false;
+  if (value.type === "updated") return isRoomSnapshot(value.snapshot);
+  if (!isRecord(value.payload)) return false;
+
+  const payload = value.payload;
   switch (value.type) {
-    case "room-joined":
+    case "joined":
       return (
-        isNonemptyString(value.requestId) &&
-        isNonemptyString(value.playerId) &&
-        isRoomSnapshot(value.snapshot)
+        isString(payload.requestId) &&
+        isString(payload.playerId) &&
+        isString(payload.reconnectToken) &&
+        isInteger(payload.nextCommandId) &&
+        isRoomSnapshot(payload.snapshot)
       );
-    case "room-updated":
-      return isRoomSnapshot(value.snapshot);
     case "command-accepted":
       return (
-        isNonemptyString(value.roomId) &&
-        isNonnegativeInteger(value.commandId) &&
-        isNonnegativeInteger(value.revision)
+        isString(payload.roomId) &&
+        isInteger(payload.commandId) &&
+        isInteger(payload.revision) &&
+        (payload.answerResult === null ||
+          typeof payload.answerResult === "boolean")
       );
     case "command-rejected":
       return (
-        isNonemptyString(value.roomId) &&
-        isNonnegativeInteger(value.commandId) &&
-        [
-          "invalid-command",
-          "stale-revision",
-          "stale-mission",
-          "duplicate",
-          "not-allowed",
-        ].includes(String(value.reason))
+        isString(payload.roomId) &&
+        (payload.commandId === null || isInteger(payload.commandId)) &&
+        isString(payload.reason) &&
+        (payload.revision === undefined || isInteger(payload.revision))
       );
-    case "room-error":
+    case "settings-accepted":
       return (
-        (value.requestId === null || isNonemptyString(value.requestId)) &&
-        typeof value.message === "string"
+        isString(payload.roomId) &&
+        typeof payload.queued === "boolean" &&
+        isInteger(payload.revision)
       );
-    case "room-left":
-      return isNonemptyString(value.roomId);
+    case "left":
+    case "closed":
+      return isString(payload.roomId);
+    case "error":
+      return (
+        (payload.requestId === null || isString(payload.requestId)) &&
+        isString(payload.message)
+      );
     default:
       return false;
   }

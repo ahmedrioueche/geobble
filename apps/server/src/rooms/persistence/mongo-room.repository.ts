@@ -47,7 +47,7 @@ export class MongoRoomRepository implements RoomRepository {
             updatedAt: new Date(),
           },
         },
-        { new: true, runValidators: true },
+        { returnDocument: 'after', runValidators: true },
       )
       .select(
         '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',

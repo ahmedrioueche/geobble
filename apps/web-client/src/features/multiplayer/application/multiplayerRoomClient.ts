@@ -1,19 +1,25 @@
-import {
-  isRoomServerMessage,
-  type RoomCommand,
-  type RoomCommandInput,
-  type RoomRequest,
-  type RoomServerMessage,
-  type RoomSnapshot,
+import type {
+  RoomCommand,
+  RoomCommandInput,
+  RoomConfiguration,
+  RoomJoinedEvent,
+  RoomServerEvent,
+  RoomSnapshot,
 } from "../contracts/multiplayerRoomProtocol";
-import { createGameSessionId } from "../../game/domain/gameSession";
+import {
+  SocketIoRoomTransport,
+  type RoomTransportListener,
+  type RoomTransportStatus,
+} from "../infrastructure/socketIoRoomTransport";
 
-export type RoomConnectionStatus =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "reconnecting"
-  | "error";
+const CREDENTIALS_KEY = "geobble.multiplayer.reconnect";
+const REQUEST_TIMEOUT_MS = 12_000;
+
+interface StoredRoomCredentials {
+  roomId: string;
+  playerId: string;
+  reconnectToken: string;
+}
 
 export interface ActiveRoom {
   playerId: string;
@@ -21,283 +27,595 @@ export interface ActiveRoom {
 }
 
 export interface RoomClientState {
-  status: RoomConnectionStatus;
+  status: "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
   room: ActiveRoom | null;
   pendingCommandIds: number[];
   lastAcknowledgedRevision: number | null;
+  lastAnswerResult: boolean | null;
+  settingsAccepted: { queued: boolean; revision: number } | null;
   error: string | null;
-}
-
-export type RoomTransportStatus =
-  | "connected"
-  | "reconnecting"
-  | "disconnected";
-
-export interface RoomTransportListener {
-  onMessage: (message: unknown) => void;
-  onStatusChange: (status: RoomTransportStatus) => void;
-  onError: (error: unknown) => void;
+  reconnectAvailable: boolean;
+  reconnectRequired: boolean;
 }
 
 export interface RoomTransport {
-  connect: (request: RoomRequest, listener: RoomTransportListener) => Promise<void>;
-  sendCommand: (roomId: string, command: RoomCommand) => Promise<void>;
-  disconnect: () => Promise<void>;
+  connect: (listener: RoomTransportListener) => Promise<void>;
+  emit: (eventName: string, payload: unknown) => void;
+  disconnect: () => void;
 }
 
-type RemoveRequestId<Request> = Request extends RoomRequest
-  ? Omit<Request, "requestId">
-  : never;
-
-export type RoomConnectInput = RemoveRequestId<RoomRequest>;
+export interface RoomCredentialStorage {
+  read: () => StoredRoomCredentials | null;
+  write: (credentials: StoredRoomCredentials) => void;
+  clear: () => void;
+}
 
 export interface RoomClient {
   getState: () => RoomClientState;
   subscribe: (listener: (state: RoomClientState) => void) => () => void;
-  connect: (request: RoomConnectInput) => Promise<void>;
+  resume: () => Promise<void>;
+  retryReconnect: () => Promise<void>;
+  createRoom: (
+    playerName: string,
+    config?: RoomConfiguration,
+  ) => Promise<void>;
+  joinRoom: (roomId: string, playerName: string) => Promise<void>;
+  setReady: (ready: boolean) => void;
+  startRoom: () => void;
+  changeSettings: (config: RoomConfiguration) => void;
   submitCommand: (command: RoomCommandInput) => Promise<number>;
-  disconnect: () => Promise<void>;
+  leaveRoom: () => Promise<void>;
+  forgetReconnect: () => void;
+  disconnect: () => void;
 }
 
-const initialState = (): RoomClientState => ({
-  status: "disconnected",
-  room: null,
-  pendingCommandIds: [],
-  lastAcknowledgedRevision: null,
-  error: null,
+const getBrowserStorage = (): RoomCredentialStorage => ({
+  read: () => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(CREDENTIALS_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("roomId" in parsed) ||
+      typeof parsed.roomId !== "string" ||
+      !("playerId" in parsed) ||
+      typeof parsed.playerId !== "string" ||
+      !("reconnectToken" in parsed) ||
+      typeof parsed.reconnectToken !== "string"
+    ) {
+      window.localStorage.removeItem(CREDENTIALS_KEY);
+      return null;
+    }
+    return {
+      roomId: parsed.roomId,
+      playerId: parsed.playerId,
+      reconnectToken: parsed.reconnectToken,
+    };
+  },
+  write: (credentials) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
+  },
+  clear: () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(CREDENTIALS_KEY);
+    }
+  },
 });
 
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Room connection failed.";
+const makeRequestId = (): string => crypto.randomUUID();
 
 export const createRoomClient = (
-  transport: RoomTransport,
-  createId: () => string = createGameSessionId,
+  transport: RoomTransport = new SocketIoRoomTransport(),
+  storage: RoomCredentialStorage = getBrowserStorage(),
+  createId: () => string = makeRequestId,
 ): RoomClient => {
-  let state = initialState();
-  let connectionGeneration = 0;
-  let nextCommandId = 0;
-  let activeRequest: RoomRequest | null = null;
   const listeners = new Set<(state: RoomClientState) => void>();
+  const pendingJoins = new Map<
+    string,
+    {
+      resolve: (event: RoomJoinedEvent) => void;
+      reject: (error: Error) => void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
+  let credentials: StoredRoomCredentials | null = null;
+  let nextCommandId = 1;
+  let transportConnected = false;
+  let connecting: Promise<void> | null = null;
+  let reconnecting = false;
+  let reconnectRequestId: string | null = null;
+  let leaving:
+    | { roomId: string; resolve: () => void; timeout: ReturnType<typeof setTimeout> }
+    | null = null;
+  let state: RoomClientState = {
+    status: "disconnected",
+    room: null,
+    pendingCommandIds: [],
+    lastAcknowledgedRevision: null,
+    lastAnswerResult: null,
+    settingsAccepted: null,
+    error: null,
+    reconnectAvailable: false,
+    reconnectRequired: false,
+  };
+
+  try {
+    credentials = storage.read();
+    state = {
+      ...state,
+      reconnectAvailable: credentials !== null,
+      reconnectRequired: credentials !== null,
+    };
+  } catch {
+    state = {
+      ...state,
+      error: "Reconnect details could not be read from this browser.",
+    };
+  }
 
   const updateState = (changes: Partial<RoomClientState>) => {
     state = { ...state, ...changes };
     for (const listener of listeners) listener(state);
   };
 
-  const removePendingCommand = (commandId: number) => {
-    if (!state.pendingCommandIds.includes(commandId)) return;
-    updateState({
-      pendingCommandIds: state.pendingCommandIds.filter(
-        (pendingId) => pendingId !== commandId,
-      ),
-    });
+  const rejectPendingJoins = (requestId: string | null, message: string) => {
+    if (requestId) {
+      const pending = pendingJoins.get(requestId);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        pendingJoins.delete(requestId);
+        pending.reject(new Error(message));
+      }
+      return;
+    }
+    for (const pending of pendingJoins.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(message));
+    }
+    pendingJoins.clear();
   };
 
-  const handleMessage = (messageValue: unknown, generation: number) => {
-    if (generation !== connectionGeneration) return;
-    if (!isRoomServerMessage(messageValue)) {
-      updateState({ error: "Received an invalid room message." });
-      return;
-    }
-
-    const message: RoomServerMessage = messageValue;
-    if (message.type === "room-joined") {
-      if (
-        !activeRequest ||
-        message.requestId !== activeRequest.requestId ||
-        (activeRequest.type === "join-room" &&
-          message.snapshot.roomId !== activeRequest.roomId)
-      ) {
-        return;
-      }
+  const acceptJoinedRoom = (event: RoomJoinedEvent) => {
+    const pending = pendingJoins.get(event.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    pendingJoins.delete(event.requestId);
+    credentials = {
+      roomId: event.snapshot.roomId,
+      playerId: event.playerId,
+      reconnectToken: event.reconnectToken,
+    };
+    nextCommandId = event.nextCommandId;
+    try {
+      storage.write(credentials);
       updateState({
         status: "connected",
-        room: { playerId: message.playerId, snapshot: message.snapshot },
+        room: { playerId: event.playerId, snapshot: event.snapshot },
         pendingCommandIds: [],
         lastAcknowledgedRevision: null,
+        lastAnswerResult: null,
+        reconnectAvailable: true,
+        reconnectRequired: false,
         error: null,
       });
-      return;
+      pending.resolve(event);
+    } catch {
+      updateState({
+        status: "connected",
+        room: { playerId: event.playerId, snapshot: event.snapshot },
+        reconnectAvailable: false,
+        reconnectRequired: false,
+        error: "Room joined, but reconnect details could not be saved.",
+      });
+      pending.resolve(event);
     }
+  };
 
-    if (message.type === "room-updated") {
-      if (
-        !state.room ||
-        message.snapshot.roomId !== state.room.snapshot.roomId ||
-        message.snapshot.revision <= state.room.snapshot.revision
-      ) {
+  const beginReconnect = async () => {
+    if (!credentials || reconnecting || !transportConnected) return;
+    reconnecting = true;
+    const requestId = createId();
+    reconnectRequestId = requestId;
+    const reconnectCredentials = credentials;
+    updateState({
+      status: "reconnecting",
+      reconnectRequired: true,
+      error: null,
+    });
+    try {
+      await requestRoomJoin(requestId, "room:reconnect", {
+        requestId,
+        ...reconnectCredentials,
+      });
+    } catch (error) {
+      updateState({
+        status: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to reconnect to the room.",
+      });
+    } finally {
+      if (reconnectRequestId === requestId) reconnectRequestId = null;
+      reconnecting = false;
+    }
+  };
+
+  const handleEvent = (event: RoomServerEvent) => {
+    switch (event.type) {
+      case "joined":
+        acceptJoinedRoom(event.payload);
+        return;
+      case "updated":
+        if (
+          !state.room ||
+          state.room.snapshot.roomId !== event.snapshot.roomId ||
+          event.snapshot.revision <= state.room.snapshot.revision
+        ) {
+          return;
+        }
+        updateState({
+          room: { ...state.room, snapshot: event.snapshot },
+          lastAnswerResult: null,
+          error: null,
+        });
+        return;
+      case "command-accepted":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        updateState({
+          pendingCommandIds: state.pendingCommandIds.filter(
+            (id) => id !== event.payload.commandId,
+          ),
+          lastAcknowledgedRevision: event.payload.revision,
+          lastAnswerResult: event.payload.answerResult,
+          error: null,
+        });
+        return;
+      case "command-rejected":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        updateState({
+          pendingCommandIds:
+            event.payload.commandId === null
+              ? []
+              : state.pendingCommandIds.filter(
+                  (id) => id !== event.payload.commandId,
+                ),
+          error: `Command rejected: ${event.payload.reason}.`,
+        });
+        return;
+      case "settings-accepted":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        updateState({
+          settingsAccepted: {
+            queued: event.payload.queued,
+            revision: event.payload.revision,
+          },
+        });
+        return;
+      case "error":
+        rejectPendingJoins(event.payload.requestId, event.payload.message);
+        if (event.payload.requestId !== null) {
+          updateState({
+            status:
+              event.payload.requestId === reconnectRequestId
+                ? "error"
+                : state.room
+                  ? "connected"
+                  : transportConnected
+                    ? "connected"
+                    : "disconnected",
+            reconnectRequired:
+              event.payload.requestId === reconnectRequestId,
+            error: event.payload.message,
+          });
+          return;
+        }
+        updateState({
+          error: event.payload.message,
+        });
+        return;
+      case "left":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        if (leaving) {
+          clearTimeout(leaving.timeout);
+          leaving.resolve();
+          leaving = null;
+        }
+        credentials = null;
+        try {
+          storage.clear();
+        } catch {
+          updateState({ error: "Room left, but reconnect details could not be cleared." });
+        }
+        updateState({
+          status: "disconnected",
+          room: null,
+          pendingCommandIds: [],
+          reconnectAvailable: false,
+          reconnectRequired: false,
+        });
+        return;
+      case "closed":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        if (leaving) {
+          clearTimeout(leaving.timeout);
+          leaving.resolve();
+          leaving = null;
+        }
+        credentials = null;
+        try {
+          storage.clear();
+        } catch {
+          updateState({ error: "Room closed, but reconnect details could not be cleared." });
+        }
+        updateState({
+          status: "error",
+          room: null,
+          pendingCommandIds: [],
+          reconnectAvailable: false,
+          reconnectRequired: false,
+          error: "This room has closed.",
+        });
+    }
+  };
+
+  const listener: RoomTransportListener = {
+    onEvent: handleEvent,
+    onStatusChange: (status: RoomTransportStatus) => {
+      if (status === "connected") {
+        transportConnected = true;
+        if (credentials) {
+          void beginReconnect();
+        } else if (!state.room) {
+          updateState({ status: "connected", error: null });
+        }
         return;
       }
+      transportConnected = false;
       updateState({
-        room: { ...state.room, snapshot: message.snapshot },
-        error: null,
+        status: status === "reconnecting" ? "reconnecting" : "disconnected",
+        reconnectRequired: credentials !== null,
       });
-      return;
-    }
+    },
+    onError: (error) => updateState({ error: error.message }),
+  };
 
-    if (message.type === "command-accepted") {
-      if (
-        !state.room ||
-        message.roomId !== state.room.snapshot.roomId ||
-        !state.pendingCommandIds.includes(message.commandId)
-      ) {
-        return;
+  const connectTransport = async () => {
+    if (transportConnected) return;
+    if (!connecting) {
+      updateState({ status: "connecting", error: null });
+      connecting = transport
+        .connect(listener)
+        .then(() => {
+          transportConnected = true;
+        })
+        .catch((error: unknown) => {
+          updateState({
+            status: "error",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not connect to the room server.",
+          });
+          throw error;
+        })
+        .finally(() => {
+          connecting = null;
+        });
+    }
+    await connecting;
+  };
+
+  const requestRoomJoin = (
+    requestId: string,
+    eventName: string,
+    payload: unknown,
+  ): Promise<RoomJoinedEvent> =>
+    new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingJoins.delete(requestId);
+        reject(new Error("The room server did not respond in time."));
+      }, REQUEST_TIMEOUT_MS);
+      pendingJoins.set(requestId, { resolve, reject, timeout });
+      try {
+        transport.emit(eventName, payload);
+      } catch (error) {
+        clearTimeout(timeout);
+        pendingJoins.delete(requestId);
+        reject(
+          error instanceof Error
+            ? error
+            : new Error("Could not send the room request."),
+        );
       }
-      removePendingCommand(message.commandId);
-      updateState({
-        lastAcknowledgedRevision: Math.max(
-          state.lastAcknowledgedRevision ?? 0,
-          message.revision,
-        ),
-        error: null,
-      });
-      return;
-    }
+    });
 
-    if (message.type === "command-rejected") {
-      if (
-        !state.room ||
-        message.roomId !== state.room.snapshot.roomId ||
-        !state.pendingCommandIds.includes(message.commandId)
-      ) {
-        return;
-      }
-      removePendingCommand(message.commandId);
-      updateState({ error: `Command rejected: ${message.reason}.` });
-      return;
+  const requireRoom = (): ActiveRoom => {
+    if (!state.room || state.status !== "connected") {
+      throw new Error("Connect to a room before sending room actions.");
     }
+    return state.room;
+  };
 
-    if (message.type === "room-error") {
-      if (
-        message.requestId !== null &&
-        activeRequest?.requestId !== message.requestId
-      ) {
-        return;
-      }
-      updateState({
-        ...(state.room ? {} : { status: "error" }),
-        error: message.message,
-      });
-      return;
-    }
-
-    if (
-      message.type === "room-left" &&
-      state.room?.snapshot.roomId === message.roomId
-    ) {
-      updateState({
-        room: null,
-        pendingCommandIds: [],
-        lastAcknowledgedRevision: null,
-      });
-    }
+  const emitRequest = (eventName: string, payload: object) => {
+    const room = requireRoom();
+    transport.emit(eventName, {
+      requestId: createId(),
+      ...payload,
+    });
+    return room;
   };
 
   return {
     getState: () => state,
-
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-
-    connect: async (requestInput) => {
-      const requestId = createId();
-      const request: RoomRequest =
-        requestInput.type === "create-room"
-          ? {
-              type: "create-room",
-              playerName: requestInput.playerName,
-              requestId,
-            }
-          : {
-              type: "join-room",
-              roomId: requestInput.roomId,
-              playerName: requestInput.playerName,
-              requestId,
-            };
-      const generation = ++connectionGeneration;
-      activeRequest = request;
-      nextCommandId = 0;
-      updateState({
-        ...initialState(),
-        status: "connecting",
-      });
-
+    resume: async () => {
+      if (!credentials) return;
       try {
-        await transport.connect(request, {
-          onMessage: (message) => handleMessage(message, generation),
-          onStatusChange: (status) => {
-            if (generation !== connectionGeneration) return;
-            if (status === "disconnected") {
-              updateState({ status: "disconnected" });
-              return;
-            }
-            updateState({
-              status,
-              ...(status === "connected" ? { error: null } : {}),
-            });
-          },
-          onError: (error) => {
-            if (generation !== connectionGeneration) return;
-            updateState({ error: getErrorMessage(error) });
-          },
-        });
-      } catch (error) {
-        if (generation === connectionGeneration) {
-          updateState({
-            status: "error",
-            error: getErrorMessage(error),
-          });
-        }
-        throw error;
-      }
-    },
-
-    submitCommand: async (commandInput) => {
-      if (state.status !== "connected" || !state.room) {
-        throw new Error("Cannot submit a command without an active room.");
-      }
-      const missionId = state.room.snapshot.game.missionId;
-      if (!missionId) {
-        throw new Error("Cannot submit a command without an active mission.");
-      }
-
-      const command: RoomCommand = {
-        ...commandInput,
-        commandId: ++nextCommandId,
-        expectedRevision: state.room.snapshot.revision,
-        missionId,
-      };
-      const roomId = state.room.snapshot.roomId;
-      updateState({
-        pendingCommandIds: [...state.pendingCommandIds, command.commandId],
-        error: null,
-      });
-      try {
-        await transport.sendCommand(roomId, command);
-        return command.commandId;
-      } catch (error) {
-        removePendingCommand(command.commandId);
-        updateState({ error: getErrorMessage(error) });
-        throw error;
-      }
-    },
-
-    disconnect: async () => {
-      connectionGeneration += 1;
-      activeRequest = null;
-      updateState(initialState());
-      try {
-        await transport.disconnect();
+        await connectTransport();
+        await beginReconnect();
       } catch (error) {
         updateState({
           status: "error",
-          error: getErrorMessage(error),
+          reconnectRequired: true,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not resume the saved room.",
+        });
+      }
+    },
+    retryReconnect: async () => {
+      await connectTransport();
+      await beginReconnect();
+    },
+    createRoom: async (playerName, config) => {
+      if (credentials && !state.room) {
+        throw new Error("Reconnect to your saved room or forget it first.");
+      }
+      await connectTransport();
+      const requestId = createId();
+      updateState({ status: "connecting", error: null });
+      try {
+        await requestRoomJoin(requestId, "room:create", {
+          requestId,
+          playerName: playerName.trim(),
+          ...(config ? { config } : {}),
+        });
+      } catch (error) {
+        updateState({
+          status: transportConnected ? "connected" : "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not create the room.",
         });
         throw error;
       }
+    },
+    joinRoom: async (roomId, playerName) => {
+      if (credentials && !state.room) {
+        throw new Error("Reconnect to your saved room or forget it first.");
+      }
+      await connectTransport();
+      const requestId = createId();
+      updateState({ status: "connecting", error: null });
+      try {
+        await requestRoomJoin(requestId, "room:join", {
+          requestId,
+          roomId: roomId.trim().toUpperCase(),
+          playerName: playerName.trim(),
+        });
+      } catch (error) {
+        updateState({
+          status: transportConnected ? "connected" : "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not join the room.",
+        });
+        throw error;
+      }
+    },
+    setReady: (ready) => {
+      emitRequest("room:ready", { ready });
+    },
+    startRoom: () => {
+      emitRequest("room:start", {});
+    },
+    changeSettings: (config) => {
+      emitRequest("room:change-settings", { config });
+    },
+    submitCommand: async (input) => {
+      const room = requireRoom();
+      const missionId = room.snapshot.game.round?.missionId;
+      if (!missionId) throw new Error("There is no active round.");
+      const command: RoomCommand = {
+        ...input,
+        commandId: nextCommandId++,
+        expectedRevision: room.snapshot.revision,
+        missionId,
+      };
+      updateState({
+        pendingCommandIds: [...state.pendingCommandIds, command.commandId],
+        lastAnswerResult: null,
+        error: null,
+      });
+      try {
+        transport.emit("room:command", command);
+        return command.commandId;
+      } catch (error) {
+        updateState({
+          pendingCommandIds: state.pendingCommandIds.filter(
+            (id) => id !== command.commandId,
+          ),
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not send the room command.",
+        });
+        throw error;
+      }
+    },
+    leaveRoom: async () => {
+      const room = requireRoom();
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          leaving = null;
+          reject(new Error("The server did not confirm leaving the room."));
+        }, REQUEST_TIMEOUT_MS);
+        leaving = { roomId: room.snapshot.roomId, resolve, timeout };
+        try {
+          transport.emit("room:leave", { requestId: createId() });
+        } catch (error) {
+          clearTimeout(timeout);
+          leaving = null;
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("Could not leave the room."),
+          );
+        }
+      });
+    },
+    forgetReconnect: () => {
+      credentials = null;
+      try {
+        storage.clear();
+        updateState({
+          room: null,
+          reconnectAvailable: false,
+          reconnectRequired: false,
+          status: "disconnected",
+          error: null,
+        });
+      } catch {
+        updateState({ error: "Reconnect details could not be cleared." });
+      }
+    },
+    disconnect: () => {
+      for (const [requestId, pending] of pendingJoins) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error("Room connection was closed."));
+        pendingJoins.delete(requestId);
+      }
+      if (leaving) {
+        clearTimeout(leaving.timeout);
+        leaving.resolve();
+        leaving = null;
+      }
+      transport.disconnect();
+      transportConnected = false;
+      updateState({
+        status: "disconnected",
+        reconnectRequired: credentials !== null,
+      });
     },
   };
 };

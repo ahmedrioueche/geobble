@@ -7,6 +7,9 @@ import {
   selectWorldMapMapUi,
   selectWorldMapSession,
   selectWorldMapUi,
+  type WorldMapGameState,
+  type WorldMapGameUiState,
+  type WorldMapMapUiState,
 } from "./worldMapStoreSelectors";
 import { WorldMapView, type WorldMapViewProps } from "./WorldMapView";
 import { useWorldMap } from "./useWorldMap";
@@ -21,8 +24,13 @@ type WorldMapWrapperProps = Omit<
   | "gameUi"
   | "mapUi"
   | "countries"
+  | "targetMapAnchor"
 > & {
   countries?: WorldMapViewProps["countries"];
+  gameOverride?: WorldMapGameState;
+  gameUiOverride?: WorldMapGameUiState;
+  mapUiOverride?: WorldMapMapUiState;
+  targetMapAnchor?: [number, number];
 };
 
 export const WorldMap: React.FC<WorldMapWrapperProps> = ({
@@ -32,10 +40,14 @@ export const WorldMap: React.FC<WorldMapWrapperProps> = ({
   selectedCountryName,
   missionId,
   countries = [],
+  gameOverride,
+  gameUiOverride,
+  mapUiOverride,
+  targetMapAnchor,
 }) => {
-  const game = useGameStore(useShallow(selectWorldMapSession));
-  const gameUi = useGameUiStore(useShallow(selectWorldMapUi));
-  const mapUi = useMapUiStore(useShallow(selectWorldMapMapUi));
+  const storedGame = useGameStore(useShallow(selectWorldMapSession));
+  const storedGameUi = useGameUiStore(useShallow(selectWorldMapUi));
+  const storedMapUi = useMapUiStore(useShallow(selectWorldMapMapUi));
   const { geoData, projection, loading, error } = useWorldMap();
 
   return (
@@ -50,9 +62,10 @@ export const WorldMap: React.FC<WorldMapWrapperProps> = ({
       selectedCountryName={selectedCountryName}
       countries={countries}
       missionId={missionId}
-      game={game}
-      gameUi={gameUi}
-      mapUi={mapUi}
+      game={gameOverride ?? storedGame}
+      gameUi={gameUiOverride ?? storedGameUi}
+      mapUi={mapUiOverride ?? storedMapUi}
+      targetMapAnchor={targetMapAnchor}
     />
   );
 };

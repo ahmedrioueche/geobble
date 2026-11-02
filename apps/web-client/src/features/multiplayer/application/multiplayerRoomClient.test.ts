@@ -1,274 +1,425 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import {
+  isRoomServerEvent,
+  type RoomServerEvent,
+  type RoomSnapshot,
+} from "../contracts/multiplayerRoomProtocol";
 import {
   createRoomClient,
+  type RoomCredentialStorage,
   type RoomTransport,
-  type RoomTransportListener,
 } from "./multiplayerRoomClient";
-import type {
-  RoomCommand,
-  RoomRequest,
-  RoomSnapshot,
-} from "../contracts/multiplayerRoomProtocol";
-import { isRoomServerMessage } from "../contracts/multiplayerRoomProtocol";
+import type { RoomTransportListener } from "../infrastructure/socketIoRoomTransport";
 
 const createSnapshot = (
   changes: Partial<RoomSnapshot> = {},
 ): RoomSnapshot => ({
-  roomId: "room-1",
+  roomId: "ROOM2345",
   revision: 1,
-  status: "playing",
-  players: [
-    { id: "player-1", name: "Player", ready: true, connected: true },
-  ],
-  game: {
+  status: "waiting",
+  adminPlayerId: "player-1",
+  config: {
     mode: "identify",
     pinDirection: "locate",
     subMode: "name",
     challengeType: "world",
     challengeValue: 0,
-    timeRemaining: 0,
-    score: 0,
-    streak: 0,
-    maxStreak: 0,
-    totalQuestions: 1,
-    totalAttempts: 0,
-    correctAttempts: 0,
-    gameStatus: "playing",
-    currentCountryCode: "CAN",
-    choices: [],
-    choiceCodes: [],
-    missionId: "mission-1",
-    revealed: false,
-    pinLocation: null,
   },
+  pendingConfig: null,
+  players: [
+    {
+      id: "player-1",
+      name: "Ada",
+      isAdmin: true,
+      ready: true,
+      connected: true,
+      score: 0,
+      streak: 0,
+      maxStreak: 0,
+      pinLocation: null,
+      answered: false,
+    },
+    {
+      id: "player-2",
+      name: "Grace",
+      isAdmin: false,
+      ready: false,
+      connected: true,
+      score: 0,
+      streak: 0,
+      maxStreak: 0,
+      pinLocation: null,
+      answered: false,
+    },
+  ],
+  game: { startedAt: null, timerDeadlineAt: null, round: null },
   ...changes,
 });
 
 class FakeRoomTransport implements RoomTransport {
   listener: RoomTransportListener | null = null;
-  request: RoomRequest | null = null;
-  commands: Array<{ roomId: string; command: RoomCommand }> = [];
+  events: Array<{ eventName: string; payload: Record<string, unknown> }> = [];
   connectError: Error | null = null;
-  sendError: Error | null = null;
+  emitError: Error | null = null;
 
-  async connect(
-    request: RoomRequest,
-    listener: RoomTransportListener,
-  ): Promise<void> {
-    this.request = request;
+  async connect(listener: RoomTransportListener): Promise<void> {
     this.listener = listener;
     if (this.connectError) throw this.connectError;
   }
 
-  async sendCommand(roomId: string, command: RoomCommand): Promise<void> {
-    if (this.sendError) throw this.sendError;
-    this.commands.push({ roomId, command });
+  emit(eventName: string, payload: unknown): void {
+    if (this.emitError) throw this.emitError;
+    this.events.push({
+      eventName,
+      payload: payload as Record<string, unknown>,
+    });
   }
 
-  async disconnect(): Promise<void> {}
+  disconnect(): void {}
 
-  receive(message: unknown) {
-    this.listener?.onMessage(message);
+  receive(event: RoomServerEvent): void {
+    this.listener?.onEvent(event);
   }
 
-  setStatus(status: "connected" | "reconnecting" | "disconnected") {
+  setStatus(status: "connected" | "reconnecting" | "disconnected"): void {
     this.listener?.onStatusChange(status);
   }
 }
 
+class FakeStorage implements RoomCredentialStorage {
+  value: { roomId: string; playerId: string; reconnectToken: string } | null =
+    null;
+
+  read() {
+    return this.value;
+  }
+
+  write(credentials: {
+    roomId: string;
+    playerId: string;
+    reconnectToken: string;
+  }) {
+    this.value = credentials;
+  }
+
+  clear() {
+    this.value = null;
+  }
+}
+
+const createJoinedEvent = (
+  requestId: string,
+  snapshot = createSnapshot(),
+  reconnectToken = "private-token",
+  nextCommandId = 1,
+): RoomServerEvent => ({
+  type: "joined",
+  payload: {
+    requestId,
+    playerId: "player-1",
+    reconnectToken,
+    nextCommandId,
+    snapshot,
+  },
+});
+
 describe("multiplayer room protocol", () => {
-  it("validates room snapshots and rejects malformed server messages", () => {
-    const snapshot = createSnapshot();
+  it("validates the server snapshot and socket event shapes", () => {
+    const snapshot = createSnapshot({
+      status: "playing",
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Ottawa" },
+          choices: [{ id: "choice-1", label: "Canada" }],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+    expect(isRoomServerEvent({ type: "updated", snapshot })).toBe(true);
     expect(
-      isRoomServerMessage({
-        type: "room-updated",
-        snapshot,
-      }),
-    ).toBe(true);
-    expect(
-      isRoomServerMessage({
-        type: "room-updated",
+      isRoomServerEvent({
+        type: "updated",
         snapshot: { ...snapshot, revision: -1 },
       }),
     ).toBe(false);
     expect(
-      isRoomServerMessage({ type: "unrecognized-message" }),
-    ).toBe(false);
+      isRoomServerEvent({
+        type: "command-rejected",
+        payload: {
+          roomId: snapshot.roomId,
+          commandId: null,
+          reason: "invalid-command",
+        },
+      }),
+    ).toBe(true);
+    expect(isRoomServerEvent({ type: "unknown", payload: {} })).toBe(false);
   });
 });
 
 describe("createRoomClient", () => {
-  it("connects with a room request and adopts the matching room snapshot", async () => {
+  it("creates a room using the server protocol and keeps credentials out of UI state", async () => {
     const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    const updates: string[] = [];
-    client.subscribe((state) => updates.push(state.status));
+    const storage = new FakeStorage();
+    const client = createRoomClient(transport, storage, () => "request-1");
 
-    await client.connect({ type: "create-room", playerName: "Ada" });
-    expect(client.getState().status).toBe("connecting");
-    expect(transport.request).toEqual({
-      type: "create-room",
-      requestId: "request-1",
-      playerName: "Ada",
+    const joining = client.createRoom(" Ada ");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    expect(transport.events[0]).toEqual({
+      eventName: "room:create",
+      payload: { requestId: "request-1", playerName: "Ada" },
     });
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
 
-    transport.setStatus("connected");
-    transport.receive({
-      type: "room-joined",
-      requestId: "request-1",
-      playerId: "player-1",
-      snapshot: createSnapshot(),
-    });
     expect(client.getState()).toMatchObject({
       status: "connected",
       room: {
         playerId: "player-1",
-        snapshot: { roomId: "room-1", revision: 1 },
+        snapshot: { roomId: "ROOM2345" },
       },
+      reconnectAvailable: true,
     });
-    expect(updates).toContain("connecting");
-    expect(updates).toContain("connected");
+    expect(client.getState()).not.toHaveProperty("reconnectToken");
+    expect(storage.value).toEqual({
+      roomId: "ROOM2345",
+      playerId: "player-1",
+      reconnectToken: "private-token",
+    });
   });
 
-  it("submits commands against the latest known room revision and tracks responses", async () => {
+  it("sends authoritative commands and adopts server acknowledgements and snapshots", async () => {
     const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    await client.connect({ type: "join-room", roomId: "room-1", playerName: "Ada" });
+    const client = createRoomClient(transport, new FakeStorage(), () => "request-1");
+    const joining = client.joinRoom("room2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
+
     transport.receive({
-      type: "room-joined",
-      requestId: "request-1",
-      playerId: "player-1",
-      snapshot: createSnapshot(),
+      type: "updated",
+      snapshot: createSnapshot({
+        revision: 2,
+        status: "playing",
+        game: {
+          startedAt: 5,
+          timerDeadlineAt: null,
+          round: {
+            missionId: "mission-1",
+            number: 1,
+            prompt: { type: "instruction", value: "Identify the highlighted country" },
+            choices: [{ id: "choice-abc", label: "Canada" }],
+            revealed: false,
+            answerReveal: null,
+          },
+        },
+      }),
     });
 
     const commandId = await client.submitCommand({
       type: "answer",
-      answerCountryCode: "CAN",
+      answerCountryCode: null,
+      choiceId: "choice-abc",
     });
     expect(commandId).toBe(1);
-    expect(transport.commands[0]).toEqual({
-      roomId: "room-1",
-      command: {
+    expect(transport.events.at(-1)).toMatchObject({
+      eventName: "room:command",
+      payload: {
         type: "answer",
-        answerCountryCode: "CAN",
+        answerCountryCode: null,
+        choiceId: "choice-abc",
         commandId: 1,
-        expectedRevision: 1,
+        expectedRevision: 2,
         missionId: "mission-1",
       },
     });
-    expect(client.getState().pendingCommandIds).toEqual([1]);
 
     transport.receive({
       type: "command-accepted",
-      roomId: "room-1",
-      commandId: 1,
-      revision: 2,
+      payload: {
+        roomId: "ROOM2345",
+        commandId: 1,
+        revision: 3,
+        answerResult: true,
+      },
     });
     expect(client.getState()).toMatchObject({
       pendingCommandIds: [],
-      lastAcknowledgedRevision: 2,
+      lastAcknowledgedRevision: 3,
+      lastAnswerResult: true,
     });
-
-    transport.receive({
-      type: "room-updated",
-      snapshot: createSnapshot({ revision: 2, game: { ...createSnapshot().game, score: 10 } }),
-    });
-    expect(client.getState().room?.snapshot.game.score).toBe(10);
   });
 
-  it("ignores stale snapshots and updates from a different room", async () => {
+  it("reconnects with rotated credentials and replaces the stored token", async () => {
     const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    await client.connect({ type: "join-room", roomId: "room-1", playerName: "Ada" });
-    transport.receive({
-      type: "room-joined",
-      requestId: "request-1",
-      playerId: "player-1",
-      snapshot: createSnapshot(),
-    });
+    const storage = new FakeStorage();
+    const client = createRoomClient(transport, storage, () => "request-1");
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
 
-    transport.receive({
-      type: "room-updated",
-      snapshot: createSnapshot({ revision: 1, game: { ...createSnapshot().game, score: 50 } }),
+    transport.setStatus("reconnecting");
+    transport.setStatus("connected");
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:reconnect"),
+    );
+    expect(transport.events.at(-1)).toMatchObject({
+      eventName: "room:reconnect",
+      payload: {
+        requestId: "request-1",
+        roomId: "ROOM2345",
+        playerId: "player-1",
+        reconnectToken: "private-token",
+      },
     });
-    transport.receive({
-      type: "room-updated",
-      snapshot: createSnapshot({ roomId: "room-2", revision: 2 }),
-    });
-    expect(client.getState().room?.snapshot).toEqual(createSnapshot());
+    transport.receive(
+      createJoinedEvent("request-1", createSnapshot({ revision: 4 }), "rotated"),
+    );
+    await vi.waitFor(() => expect(storage.value?.reconnectToken).toBe("rotated"));
+    expect(storage.value?.reconnectToken).toBe("rotated");
+    expect(client.getState().room?.snapshot.revision).toBe(4);
   });
 
-  it("removes rejected commands and exposes transport errors", async () => {
+  it("allows retrying a failed reconnect and rotates credentials on success", async () => {
     const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    await client.connect({ type: "join-room", roomId: "room-1", playerName: "Ada" });
-    transport.receive({
-      type: "room-joined",
-      requestId: "request-1",
+    const storage = new FakeStorage();
+    storage.value = {
+      roomId: "ROOM2345",
       playerId: "player-1",
-      snapshot: createSnapshot(),
+      reconnectToken: "old-token",
+    };
+    let requestNumber = 0;
+    const client = createRoomClient(
+      transport,
+      storage,
+      () => `request-${++requestNumber}`,
+    );
+
+    const resuming = client.resume();
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:reconnect"),
+    );
+    transport.receive({
+      type: "error",
+      payload: {
+        requestId: "request-1",
+        message: "The player cannot reconnect yet.",
+      },
     });
+    await vi.waitFor(() =>
+      expect(client.getState()).toMatchObject({
+        status: "error",
+        reconnectRequired: true,
+      }),
+    );
+    await resuming;
+
+    const retrying = client.retryReconnect();
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.payload.requestId).toBe("request-2"),
+    );
+    transport.receive(
+      createJoinedEvent("request-2", createSnapshot({ revision: 3 }), "new-token"),
+    );
+    await vi.waitFor(() =>
+      expect(client.getState()).toMatchObject({
+        status: "connected",
+        reconnectRequired: false,
+        room: { snapshot: { revision: 3 } },
+      }),
+    );
+    await retrying;
+    expect(storage.value?.reconnectToken).toBe("new-token");
+  });
+
+  it("keeps room connectivity when a room action is rejected", async () => {
+    const transport = new FakeRoomTransport();
+    const client = createRoomClient(transport, new FakeStorage(), () => "request-1");
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
+
+    client.setReady(true);
+    transport.receive({
+      type: "error",
+      payload: {
+        requestId: "request-1",
+        message: "Room action rejected.",
+      },
+    });
+
+    expect(client.getState()).toMatchObject({
+      status: "connected",
+      room: { snapshot: { roomId: "ROOM2345" } },
+      error: "Room action rejected.",
+    });
+  });
+
+  it("clears room credentials after a confirmed leave", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    const client = createRoomClient(transport, storage, () => "request-1");
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
+
+    const leaving = client.leaveRoom();
+    await Promise.resolve();
+    expect(transport.events.at(-1)?.eventName).toBe("room:leave");
+    transport.receive({
+      type: "left",
+      payload: { roomId: "ROOM2345" },
+    });
+    await leaving;
+    expect(client.getState().room).toBeNull();
+    expect(storage.value).toBeNull();
+  });
+
+  it("surfaces command rejections and transport errors", async () => {
+    const transport = new FakeRoomTransport();
+    const client = createRoomClient(transport, new FakeStorage(), () => "request-1");
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1", createSnapshot({
+      status: "playing",
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Canada" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    })));
+    await joining;
 
     await client.submitCommand({ type: "skip" });
     transport.receive({
       type: "command-rejected",
-      roomId: "room-1",
-      commandId: 1,
-      reason: "stale-revision",
+      payload: {
+        roomId: "ROOM2345",
+        commandId: 1,
+        reason: "not-allowed",
+        revision: 1,
+      },
     });
-    expect(client.getState()).toMatchObject({
-      pendingCommandIds: [],
-      error: "Command rejected: stale-revision.",
-    });
+    expect(client.getState().error).toContain("not-allowed");
 
-    transport.sendError = new Error("offline");
+    transport.emitError = new Error("offline");
     await expect(client.submitCommand({ type: "reveal" })).rejects.toThrow(
       "offline",
     );
-    expect(client.getState()).toMatchObject({
-      pendingCommandIds: [],
-      error: "offline",
-    });
-  });
-
-  it("reports matching room request errors as connection errors", async () => {
-    const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    await client.connect({ type: "join-room", roomId: "room-1", playerName: "Ada" });
-
-    transport.receive({
-      type: "room-error",
-      requestId: "other-request",
-      message: "Ignore this response.",
-    });
-    expect(client.getState().status).toBe("connecting");
-
-    transport.receive({
-      type: "room-error",
-      requestId: "request-1",
-      message: "Room is full.",
-    });
-    expect(client.getState()).toMatchObject({
-      status: "error",
-      error: "Room is full.",
-    });
-  });
-
-  it("tracks reconnect lifecycle and disconnects without changing solo game state", async () => {
-    const transport = new FakeRoomTransport();
-    const client = createRoomClient(transport, () => "request-1");
-    await client.connect({ type: "join-room", roomId: "room-1", playerName: "Ada" });
-    transport.setStatus("connected");
-    transport.setStatus("reconnecting");
-    expect(client.getState().status).toBe("reconnecting");
-    transport.setStatus("connected");
-    await client.disconnect();
-    expect(client.getState()).toEqual({
-      status: "disconnected",
-      room: null,
-      pendingCommandIds: [],
-      lastAcknowledgedRevision: null,
-      error: null,
-    });
+    expect(client.getState().error).toBe("offline");
   });
 });

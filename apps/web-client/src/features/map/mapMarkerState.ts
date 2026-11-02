@@ -30,7 +30,8 @@ export const getMapMarkerState = ({
   projection,
   mapWidth,
 }: MapMarkerStateOptions): MapMarkerState => {
-  const isPinGame = mode === "pin" && gameStatus === "playing";
+  const isPinGame =
+    mode === "pin" && (gameStatus === "playing" || revealed);
   const showTargetPin =
     isPinGame &&
     (pinDirection === "identify" || (pinDirection === "locate" && revealed));

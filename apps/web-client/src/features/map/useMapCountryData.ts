@@ -14,6 +14,7 @@ interface UseMapCountryDataOptions {
   countries: CountryData[];
   mode: GameMode;
   selectedCountryCode?: string | null;
+  targetMapAnchor?: [number, number];
   pathGenerator: d3.GeoPath | null;
   projection: d3.GeoProjection;
 }
@@ -23,6 +24,7 @@ export const useMapCountryData = ({
   countries,
   mode,
   selectedCountryCode,
+  targetMapAnchor,
   pathGenerator,
   projection,
 }: UseMapCountryDataOptions) => {
@@ -33,10 +35,37 @@ export const useMapCountryData = ({
     return buildCountryCodeLookup(features, countries);
   }, [features, countries]);
 
+  const targetCountryCode = useMemo(() => {
+    if (
+      selectedCountryCode ||
+      !targetMapAnchor ||
+      !features ||
+      (mode !== "reverse" &&
+        !(mode === "pin" && targetMapAnchor !== undefined))
+    ) {
+      return selectedCountryCode ?? null;
+    }
+    const feature = features.find((countryFeature) =>
+      d3.geoContains(countryFeature, targetMapAnchor),
+    );
+    if (!feature) return null;
+    return (
+      idToCodeLookup[feature.id] ??
+      idToCodeLookup[feature.properties.name.toLowerCase()] ??
+      null
+    );
+  }, [
+    selectedCountryCode,
+    targetMapAnchor,
+    features,
+    mode,
+    idToCodeLookup,
+  ]);
+
   const targetPinCoordinates = useMemo((): [number, number] | null => {
     if (
       mode !== "pin" ||
-      !selectedCountryCode ||
+      !targetCountryCode ||
       !features ||
       !pathGenerator
     ) {
@@ -46,19 +75,24 @@ export const useMapCountryData = ({
     const feature = findCountryFeature(
       features,
       idToCodeLookup,
-      selectedCountryCode,
+      targetCountryCode,
     );
     if (!feature) return null;
 
     return findPinTargetCoordinates(feature, pathGenerator, projection);
   }, [
     mode,
-    selectedCountryCode,
+    targetCountryCode,
     features,
     pathGenerator,
     projection,
     idToCodeLookup,
   ]);
 
-  return { features: features ?? null, idToCodeLookup, targetPinCoordinates };
+  return {
+    features: features ?? null,
+    idToCodeLookup,
+    targetPinCoordinates,
+    targetCountryCode,
+  };
 };

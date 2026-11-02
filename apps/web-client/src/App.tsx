@@ -9,6 +9,7 @@ import { useAppActions } from "./features/game/application/hooks/useAppActions";
 import { WorldMap } from "./features/map/WorldMap";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { useSavedGameSession } from "./features/game/application/hooks/useSavedGameSession";
+import { MultiplayerExperience } from "./features/multiplayer/presentation/MultiplayerExperience";
 import Modals from "./modals";
 
 function App() {
@@ -147,6 +148,7 @@ function App() {
           onClosePopup={() => setClickedCountry(null)}
         />
       </main>
+      <MultiplayerExperience countries={countries} />
     </div>
   );
 }

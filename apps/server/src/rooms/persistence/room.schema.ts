@@ -12,16 +12,16 @@ import type {
 
 @Schema({ _id: false })
 class RoomConfigurationEntity implements RoomConfiguration {
-  @Prop({ required: true, enum: ['identify', 'reverse', 'pin'] })
+  @Prop({ type: String, required: true, enum: ['identify', 'reverse', 'pin'] })
   mode!: RoomConfiguration['mode'];
 
-  @Prop({ required: true, enum: ['locate', 'identify'] })
+  @Prop({ type: String, required: true, enum: ['locate', 'identify'] })
   pinDirection!: RoomConfiguration['pinDirection'];
 
-  @Prop({ required: true, enum: ['name', 'flag', 'capital'] })
+  @Prop({ type: String, required: true, enum: ['name', 'flag', 'capital'] })
   subMode!: RoomConfiguration['subMode'];
 
-  @Prop({ required: true, enum: ['world', 'count', 'timer'] })
+  @Prop({ type: String, required: true, enum: ['world', 'count', 'timer'] })
   challengeType!: RoomConfiguration['challengeType'];
 
   @Prop({ required: true, min: 0 })
@@ -78,7 +78,7 @@ const RoomPlayerSchema = SchemaFactory.createForClass(RoomPlayerEntity);
 
 @Schema({ _id: false })
 class PublicPromptEntity implements PublicPrompt {
-  @Prop({ required: true, enum: ['text', 'flag', 'instruction'] })
+  @Prop({ type: String, required: true, enum: ['text', 'flag', 'instruction'] })
   type!: PublicPrompt['type'];
 
   @Prop({ required: true, maxlength: 256 })
@@ -161,7 +161,7 @@ export class RoomEntity implements RoomRecord {
   @Prop({ required: true, min: 0, default: 0 })
   revision!: number;
 
-  @Prop({ required: true, enum: ['waiting', 'playing', 'finished'] })
+  @Prop({ type: String, required: true, enum: ['waiting', 'playing', 'finished'] })
   status!: RoomRecord['status'];
 
   @Prop({ required: true })

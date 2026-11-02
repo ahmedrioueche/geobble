@@ -20,13 +20,25 @@ coordination (for example, a Redis adapter).
 The server listens on `PORT` (default `3000`). `GET /health` reports liveness;
 `GET /health/ready` returns `503` until MongoDB is connected.
 
+To insert a disposable sample room into the configured database, run this
+from `apps/server` after setting `MONGODB_URI` in `.env`:
+
+```sh
+npm run db:seed:test
+```
+
+The script builds the server schema, inserts a waiting room with two disconnected
+placeholder players, prints the generated room code, and sets it to expire after
+24 hours. Re-running it inserts another uniquely named test room.
+
 ## Configuration
 
 See `.env.example` for supported variables and defaults. Set `CLIENT_ORIGINS`
 to the exact comma-separated origins allowed to connect, including the deployed
-client origin. `MONGODB_URI` is required. `REST_COUNTRIES_API_KEY` is optional;
-the country catalog is fetched from `REST_COUNTRIES_API_URL` and cached in
-memory.
+client origin. `MONGODB_URI` and `REST_COUNTRIES_API_KEY` are required for the
+default REST Countries v5 endpoint. The server fetches the country catalog from
+`REST_COUNTRIES_API_URL` and caches it in memory. Keep the API key in the server
+environment only.
 
 ## Room protocol
 
@@ -57,8 +69,19 @@ and are stored hashed. Public snapshots omit unrevealed answers and private
 reconnect data. Pin-locate guesses are kept private until the round is revealed.
 A room needs at least two connected, ready players to start.
 
-The existing client transport is not yet connected to this Socket.IO protocol;
-client event/snapshot mapping and UI hookup remain a separate integration step.
+The Vite client connects to this protocol through its Socket.IO room transport.
+For local development, create `apps/web-client/.env.local` with:
+
+```dotenv
+VITE_MULTIPLAYER_SERVER_URL=http://localhost:3000
+```
+
+In Vercel, set `VITE_MULTIPLAYER_SERVER_URL` to the deployed server's public
+HTTPS origin (for example, the Render service URL) for the applicable
+deployment environment, then redeploy so Vite includes it in the client build.
+Set the same client origin in the server's `CLIENT_ORIGINS` value. The client
+uses the `/rooms` namespace and keeps reconnect tokens in browser local storage;
+the server remains authoritative for room state and gameplay.
 
 ## Tests and deployment
 
