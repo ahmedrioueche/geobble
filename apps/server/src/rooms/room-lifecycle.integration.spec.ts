@@ -388,4 +388,36 @@ describe('room lifecycle and competitive gameplay', () => {
       players: [{ id: guest.playerId, isAdmin: true }],
     });
   });
+
+  it('creates a public room when matchmaking has no match and reuses it for the next player', async () => {
+    const config = createConfig();
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      new CountryCatalogService(config),
+      new GameEngineService(),
+      config,
+    );
+    const privateRoom = await lifecycle.createRoom({
+      requestId: 'request-private',
+      playerName: 'Private host',
+      visibility: 'private',
+    });
+
+    const first = await lifecycle.joinPublicRoom({
+      requestId: 'request-match-1',
+      playerName: 'Ada',
+    });
+    expect(first.snapshot.roomId).not.toBe(privateRoom.snapshot.roomId);
+    expect(first.snapshot.visibility).toBe('public');
+
+    const second = await lifecycle.joinPublicRoom({
+      requestId: 'request-match-2',
+      playerName: 'Grace',
+    });
+    expect(second.snapshot.roomId).toBe(first.snapshot.roomId);
+    expect(second.snapshot.players).toHaveLength(2);
+  });
 });

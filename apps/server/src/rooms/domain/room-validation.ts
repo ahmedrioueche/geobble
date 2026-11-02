@@ -75,9 +75,17 @@ export const parseCreateRequest = (value: unknown): RoomCreateRequest => {
   }
 
   const playerName = parsePlayerName(value.playerName);
+  const visibility =
+    value.visibility === undefined
+      ? 'private'
+      : value.visibility === 'public' || value.visibility === 'private'
+        ? value.visibility
+        : null;
+  if (!visibility) throw new RoomDomainError('INVALID_REQUEST');
   return {
     requestId: value.requestId,
     playerName,
+    visibility,
     ...(value.config === undefined
       ? {}
       : { config: parseRoomConfiguration(value.config) }),

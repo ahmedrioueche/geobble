@@ -62,6 +62,7 @@ describe('room snapshots', () => {
     const snapshot = toRoomSnapshot(room);
     const serialized = JSON.stringify(snapshot);
 
+    expect(snapshot.visibility).toBe('private');
     expect(snapshot.game.round?.prompt.mapAnchor).toEqual([-106, 56]);
     expect(snapshot.game.round?.choices).toEqual([
       { id: 'choice-1', label: 'Canada' },

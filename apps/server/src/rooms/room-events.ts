@@ -10,6 +10,7 @@ import type {
 export const ROOM_EVENTS = {
   create: 'room:create',
   join: 'room:join',
+  matchmake: 'room:matchmake',
   reconnect: 'room:reconnect',
   ready: 'room:ready',
   start: 'room:start',
@@ -39,6 +40,7 @@ export interface RoomRequestError {
 export interface RoomClientEvents {
   'room:create': (payload: RoomCreateRequest) => void;
   'room:join': (payload: RoomJoinRequest) => void;
+  'room:matchmake': (payload: RoomCreateRequest) => void;
   'room:reconnect': (payload: RoomReconnectRequest) => void;
   'room:ready': (payload: { requestId: string; ready: boolean }) => void;
   'room:start': (payload: { requestId: string }) => void;

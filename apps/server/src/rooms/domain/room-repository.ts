@@ -5,6 +5,7 @@ export const ROOM_REPOSITORY = Symbol('ROOM_REPOSITORY');
 export interface RoomRepository {
   create(room: RoomRecord): Promise<void>;
   findById(roomId: string): Promise<RoomRecord | null>;
+  findAvailablePublicRooms(maxPlayers: number): Promise<RoomRecord[]>;
   compareAndSwap(
     roomId: string,
     expectedRevision: number,

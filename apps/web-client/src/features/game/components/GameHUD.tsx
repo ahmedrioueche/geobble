@@ -1,5 +1,4 @@
 import React from "react";
-import { Button } from "../../../components/atoms/Button";
 import { getTierRanges } from "../../../data/difficulty-ranking";
 import { useGameStore } from "../../../store/useGameStore";
 import {
@@ -16,7 +15,6 @@ import {
 import { useShallow } from "zustand/react/shallow";
 
 interface GameHUDProps {
-  onStart: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   totalCountries?: number;
@@ -24,7 +22,6 @@ interface GameHUDProps {
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
-  onStart,
   isFullscreen,
   onToggleFullscreen,
   totalCountries = 0,
@@ -176,15 +173,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               />
             </>
           ) : (
-            <div className="flex gap-3 items-center">
-              <Button
-                onClick={onStart}
-                size="sm"
-                className="font-black text-xs px-4 py-2 bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 shadow-md uppercase tracking-wider"
-              >
-                START GAME
-              </Button>
-
+            <div className="flex items-center">
               <FullscreenToggle
                 isFullscreen={isFullscreen}
                 onToggle={onToggleFullscreen}

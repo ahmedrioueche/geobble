@@ -1,18 +1,26 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import type { RoomClientState } from "../application/multiplayerRoomClient";
 import { MultiplayerExperience } from "./MultiplayerExperience";
 
 const mocks = vi.hoisted(() => ({
   useRoomClient: vi.fn(),
+  playOffline: vi.fn(),
   setReady: vi.fn(),
   startRoom: vi.fn(),
   submitCommand: vi.fn(),
   createRoom: vi.fn(),
   joinRoom: vi.fn(),
+  joinPublicRoom: vi.fn(),
   leaveRoom: vi.fn(),
   changeSettings: vi.fn(),
   forgetReconnect: vi.fn(),
@@ -30,6 +38,7 @@ const createSnapshot = (
   roomId: "ROOM2345",
   revision: 1,
   status: "waiting",
+  visibility: "private",
   adminPlayerId: "player-1",
   config: {
     mode: "identify",
@@ -89,6 +98,7 @@ beforeEach(() => {
     client: {
       createRoom: mocks.createRoom.mockResolvedValue(undefined),
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
+      joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
       setReady: mocks.setReady,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
@@ -101,36 +111,82 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  cleanup();
+});
+
 describe("MultiplayerExperience", () => {
-  it("creates a room from the entry dialog", async () => {
-    render(<MultiplayerExperience countries={[]} />);
+  const renderExperience = (
+    state: RoomClientState = createClientState(),
+  ) => {
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom.mockResolvedValue(undefined),
+        joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
+        joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
+        setReady: mocks.setReady,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand.mockResolvedValue(1),
+        leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect.mockResolvedValue(undefined),
+      },
+      state,
+    });
+    return render(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+  };
+
+  it("creates a private room from the room entry page", async () => {
+    renderExperience();
 
     fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
     fireEvent.change(screen.getByLabelText("Player name"), {
       target: { value: "Ada" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
 
-    await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined));
+    await waitFor(() =>
+      expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "private"),
+    );
+  });
+
+  it("allows joining public matchmaking even when no rooms are currently available", async () => {
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Join public game" }));
+
+    await waitFor(() => expect(mocks.joinPublicRoom).toHaveBeenCalledWith("Ada"));
+  });
+
+  it("can create a public room", async () => {
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^public$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Create public room" }));
+
+    await waitFor(() =>
+      expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "public"),
+    );
   });
 
   it("sends lobby readiness and admin start actions", () => {
     const snapshot = createSnapshot();
-    mocks.useRoomClient.mockReturnValue({
-      client: {
-        createRoom: mocks.createRoom,
-        joinRoom: mocks.joinRoom,
-        setReady: mocks.setReady,
-        startRoom: mocks.startRoom,
-        changeSettings: mocks.changeSettings,
-        submitCommand: mocks.submitCommand,
-        leaveRoom: mocks.leaveRoom,
-        forgetReconnect: mocks.forgetReconnect,
-        retryReconnect: mocks.retryReconnect,
-      },
-      state: createClientState(snapshot),
-    });
-    render(<MultiplayerExperience countries={[]} />);
+    renderExperience(createClientState(snapshot));
 
     fireEvent.click(screen.getByRole("button", { name: "Not ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
@@ -162,21 +218,7 @@ describe("MultiplayerExperience", () => {
         },
       },
     });
-    mocks.useRoomClient.mockReturnValue({
-      client: {
-        createRoom: mocks.createRoom,
-        joinRoom: mocks.joinRoom,
-        setReady: mocks.setReady,
-        startRoom: mocks.startRoom,
-        changeSettings: mocks.changeSettings,
-        submitCommand: mocks.submitCommand.mockResolvedValue(1),
-        leaveRoom: mocks.leaveRoom,
-        forgetReconnect: mocks.forgetReconnect,
-        retryReconnect: mocks.retryReconnect,
-      },
-      state: createClientState(snapshot),
-    });
-    render(<MultiplayerExperience countries={[]} />);
+    renderExperience(createClientState(snapshot));
 
     fireEvent.click(screen.getByRole("button", { name: "Canada" }));
 
@@ -185,5 +227,17 @@ describe("MultiplayerExperience", () => {
       answerCountryCode: null,
       choiceId: "choice-canada",
     });
+  });
+
+  it("shows distinct solo and multiplayer home actions", () => {
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Single player" }));
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+
+    expect(mocks.playOffline).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: /geobble multiplayer/i }),
+    ).toBeTruthy();
   });
 });

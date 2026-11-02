@@ -58,8 +58,10 @@ export interface RoomClient {
   createRoom: (
     playerName: string,
     config?: RoomConfiguration,
+    visibility?: "public" | "private",
   ) => Promise<void>;
   joinRoom: (roomId: string, playerName: string) => Promise<void>;
+  joinPublicRoom: (playerName: string) => Promise<void>;
   setReady: (ready: boolean) => void;
   startRoom: () => void;
   changeSettings: (config: RoomConfiguration) => void;
@@ -475,7 +477,7 @@ export const createRoomClient = (
       await connectTransport();
       await beginReconnect();
     },
-    createRoom: async (playerName, config) => {
+    createRoom: async (playerName, config, visibility = "private") => {
       if (credentials && !state.room) {
         throw new Error("Reconnect to your saved room or forget it first.");
       }
@@ -486,6 +488,7 @@ export const createRoomClient = (
         await requestRoomJoin(requestId, "room:create", {
           requestId,
           playerName: playerName.trim(),
+          visibility,
           ...(config ? { config } : {}),
         });
       } catch (error) {
@@ -519,6 +522,29 @@ export const createRoomClient = (
             error instanceof Error
               ? error.message
               : "Could not join the room.",
+        });
+        throw error;
+      }
+    },
+    joinPublicRoom: async (playerName) => {
+      if (credentials && !state.room) {
+        throw new Error("Reconnect to your saved room or forget it first.");
+      }
+      await connectTransport();
+      const requestId = createId();
+      updateState({ status: "connecting", error: null });
+      try {
+        await requestRoomJoin(requestId, "room:matchmake", {
+          requestId,
+          playerName: playerName.trim(),
+        });
+      } catch (error) {
+        updateState({
+          status: transportConnected ? "connected" : "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Public matchmaking is temporarily unavailable.",
         });
         throw error;
       }

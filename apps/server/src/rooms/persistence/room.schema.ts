@@ -164,6 +164,9 @@ export class RoomEntity implements RoomRecord {
   @Prop({ type: String, required: true, enum: ['waiting', 'playing', 'finished'] })
   status!: RoomRecord['status'];
 
+  @Prop({ type: String, required: true, enum: ['public', 'private'], default: 'private' })
+  visibility!: NonNullable<RoomRecord['visibility']>;
+
   @Prop({ required: true })
   adminPlayerId!: string;
 

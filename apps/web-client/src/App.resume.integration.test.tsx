@@ -77,9 +77,15 @@ vi.mock("./components/organisms/LoadingScreen", () => ({
 }));
 
 vi.mock("./features/game/components/GameHUD", () => ({
-  GameHUD: ({ onStart }: { onStart: () => void }) => (
-    <button onClick={onStart}>Open game menu</button>
-  ),
+  GameHUD: () => null,
+}));
+
+vi.mock("./features/multiplayer/presentation/MultiplayerExperience", () => ({
+  MultiplayerExperience: ({
+    onPlayOffline,
+  }: {
+    onPlayOffline: () => void;
+  }) => <button onClick={onPlayOffline}>Play Solo</button>,
 }));
 
 vi.mock("./features/game/components/TacticalInterface", () => ({
@@ -171,7 +177,7 @@ describe("App saved-game resume flow", () => {
     const secondRender = render(<App />);
     await flushAsyncSessionWork();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Solo" }));
     fireEvent.click(screen.getByRole("button", { name: "Resume saved game" }));
 
     expect(useGameStore.getState().session.gameStatus).toBe("playing");
@@ -211,7 +217,7 @@ describe("App saved-game resume flow", () => {
 
     expect(useGameStore.getState().session.gameStatus).toBe("playing");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Solo" }));
     expect(screen.getByRole("alert").textContent).toContain(
       "Your game could not be saved on this device.",
     );
@@ -219,7 +225,7 @@ describe("App saved-game resume flow", () => {
     expect(useGameStore.getState().session.correctAttempts).toBe(1);
 
     storageAvailable = true;
-    fireEvent.click(screen.getByRole("button", { name: "Open game menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Solo" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry save" }));
 
     await flushAsyncSessionWork();

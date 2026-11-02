@@ -13,6 +13,20 @@ export class InMemoryRoomRepository implements RoomRepository {
     return room ? structuredClone(room) : null;
   }
 
+  async findAvailablePublicRooms(maxPlayers: number): Promise<RoomRecord[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.visibility === 'public' &&
+          room.status === 'waiting' &&
+          room.expiresAt > new Date() &&
+          room.players.some((player) => player.connected) &&
+          room.players.length < maxPlayers,
+      )
+      .sort((first, second) => second.players.length - first.players.length)
+      .map((room) => structuredClone(room));
+  }
+
   async compareAndSwap(
     roomId: string,
     expectedRevision: number,

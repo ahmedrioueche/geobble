@@ -26,6 +26,24 @@ export class MongoRoomRepository implements RoomRepository {
       .exec();
   }
 
+  findAvailablePublicRooms(maxPlayers: number): Promise<RoomRecord[]> {
+    return this.roomModel
+      .find({
+        visibility: 'public',
+        status: 'waiting',
+        expiresAt: { $gt: new Date() },
+        'players.connected': true,
+        $expr: { $lt: [{ $size: '$players' }, maxPlayers] },
+      })
+      .sort({ updatedAt: 1 })
+      .limit(50)
+      .select(
+        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
+      )
+      .lean<RoomRecord[]>()
+      .exec();
+  }
+
   compareAndSwap(
     roomId: string,
     expectedRevision: number,
@@ -38,6 +56,7 @@ export class MongoRoomRepository implements RoomRepository {
           $set: {
             revision: expectedRevision + 1,
             status: replacement.status,
+            visibility: replacement.visibility ?? 'private',
             adminPlayerId: replacement.adminPlayerId,
             config: replacement.config,
             pendingConfig: replacement.pendingConfig,

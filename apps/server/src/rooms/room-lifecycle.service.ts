@@ -109,6 +109,7 @@ export class RoomLifecycleService {
         roomId,
         revision: 0,
         status: 'waiting',
+        visibility: request.visibility ?? 'private',
         adminPlayerId: host.playerId,
         config: roomConfig,
         pendingConfig: null,
@@ -140,6 +141,44 @@ export class RoomLifecycleService {
     }
 
     throw new Error('Could not allocate a unique room identifier.');
+  }
+
+  async joinPublicRoom(request: RoomCreateRequest) {
+    const playerName = parsePlayerName(request.playerName);
+    const rooms = await this.repository.findAvailablePublicRooms(
+      this.config.getOrThrow('roomMaxPlayers'),
+    );
+    rooms.sort((first, second) => {
+      const connectedDifference =
+        second.players.filter((player) => player.connected).length -
+        first.players.filter((player) => player.connected).length;
+      return connectedDifference || second.players.length - first.players.length;
+    });
+
+    for (const room of rooms) {
+      try {
+        return await this.joinRoom({
+          requestId: request.requestId,
+          roomId: room.roomId,
+          playerName,
+        });
+      } catch (error) {
+        if (
+          error instanceof RoomDomainError &&
+          ['ROOM_FULL', 'ROOM_NOT_JOINABLE', 'ROOM_NOT_FOUND', 'STALE_REVISION'].includes(error.code)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return this.createRoom({
+      requestId: request.requestId,
+      playerName,
+      visibility: 'public',
+      config: request.config,
+    });
   }
 
   async joinRoom(request: RoomJoinRequest) {

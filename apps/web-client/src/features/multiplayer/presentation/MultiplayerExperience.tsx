@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import type { CountryData } from "../../../data/country-data";
+import { RoomEntryPage } from "./RoomEntryPage";
 import { resolveMapCountry } from "../../game/domain/gameRules";
 import { WorldMap } from "../../map/WorldMap";
 import type { WorldMapGameState } from "../../map/worldMapStoreSelectors";
@@ -10,6 +11,8 @@ import { RoomSettingsForm } from "./RoomSettingsForm";
 
 interface MultiplayerExperienceProps {
   countries: CountryData[];
+  onPlayOffline: () => void;
+  showHomeActions: boolean;
 }
 
 const getPlayer = (
@@ -25,12 +28,17 @@ const formatTime = (milliseconds: number): string => {
 
 export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   countries,
+  onPlayOffline,
+  showHomeActions,
 }) => {
   const { client, state } = useRoomClient();
   const [showEntry, setShowEntry] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [roomCode, setRoomCode] = useState("");
+  const [roomVisibility, setRoomVisibility] = useState<"public" | "private">(
+    "private",
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const [localPinGuess, setLocalPinGuess] = useState<{
     missionId: string;
@@ -131,9 +139,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const connect = (input: RoomConnectInput) =>
     runAction(async () => {
       if (input.type === "create") {
-        await client.createRoom(input.playerName, input.config);
-      } else {
+        await client.createRoom(
+          input.playerName,
+          input.config,
+          input.visibility,
+        );
+      } else if (input.type === "join") {
         await client.joinRoom(input.roomId, input.playerName);
+      } else {
+        await client.joinPublicRoom(input.playerName);
       }
       setShowEntry(false);
       setRoomCode("");
@@ -187,15 +201,43 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     <>
       {!room && (
         <>
-          <div className="fixed right-3 top-16 z-[70] md:right-6 md:top-20">
-            <button
-              className="rounded-xl border border-sky-300/40 bg-slate-950/90 px-4 py-2 text-xs font-black uppercase tracking-wider text-sky-200 shadow-xl hover:bg-slate-800"
-              onClick={() => setShowEntry(true)}
-              type="button"
-            >
-              Multiplayer
-            </button>
-          </div>
+          {showHomeActions && !showEntry && (
+            <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-[70] flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 gap-3 md:bottom-8 md:left-8 md:w-auto md:max-w-none md:translate-x-0">
+              <button
+                className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/25 bg-gradient-to-r from-sky-400 via-sky-500 to-blue-600 px-4 text-sm font-black uppercase tracking-wide text-slate-950 shadow-[0_0_32px_rgba(56,189,248,0.3)] transition hover:from-sky-300 hover:to-blue-500 active:scale-[0.98] md:min-w-56 md:flex-none md:px-6 md:text-base"
+                onClick={onPlayOffline}
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-5 w-5 fill-current"
+                  viewBox="0 0 24 24"
+                >
+                  <polygon points="6 3 20 12 6 21 6 3" />
+                </svg>
+                Single player
+              </button>
+              <button
+                className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl border border-violet-200/30 bg-gradient-to-r from-violet-500 to-fuchsia-600 px-4 text-sm font-black uppercase tracking-wide text-white shadow-[0_0_32px_rgba(168,85,247,0.28)] transition hover:from-violet-400 hover:to-fuchsia-500 active:scale-[0.98] md:min-w-56 md:flex-none md:px-6 md:text-base"
+                onClick={() => setShowEntry(true)}
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Multiplayer
+              </button>
+            </div>
+          )}
           {state.error && !showEntry && (
             <p
               className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 rounded-lg border border-rose-300/30 bg-slate-950/95 px-4 py-2 text-center text-xs text-rose-200"
@@ -208,124 +250,38 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
       )}
 
       {showEntry && !room && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-xl">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-            <div className="mb-6 flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-wide text-white">
-                  Multiplayer
-                </h2>
-                <p className="mt-1 text-sm text-white/55">
-                  Create a room or join with a room code.
-                </p>
-              </div>
-              <button
-                className="rounded-lg px-3 py-1 text-white/60 hover:bg-white/10 hover:text-white"
-                onClick={() => setShowEntry(false)}
-                type="button"
-              >
-                Close
-              </button>
-            </div>
-
-            <label className="mb-4 block text-xs font-bold uppercase tracking-wider text-white/70">
-              Player name
-              <input
-                autoComplete="nickname"
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white outline-none focus:border-sky-400"
-                maxLength={24}
-                onChange={(event) => setPlayerName(event.target.value)}
-                value={playerName}
-              />
-            </label>
-
-            <button
-              className="w-full rounded-xl bg-sky-400 px-4 py-3 font-black uppercase text-slate-950 disabled:opacity-40"
-              disabled={
-                !playerName.trim() ||
-                state.status === "connecting" ||
-                state.status === "reconnecting" ||
-                state.reconnectRequired
-              }
-              onClick={() =>
-                void connect({ type: "create", playerName })
-              }
-              type="button"
-            >
-              Create room
-            </button>
-
-            <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase text-white/35">
-              <div className="h-px flex-1 bg-white/10" />
-              or join
-              <div className="h-px flex-1 bg-white/10" />
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                aria-label="Room code"
-                autoCapitalize="characters"
-                className="min-w-0 flex-1 rounded-lg border border-white/15 bg-slate-950 p-3 uppercase text-white outline-none focus:border-sky-400"
-                maxLength={12}
-                onChange={(event) => setRoomCode(event.target.value)}
-                placeholder="ROOM CODE"
-                value={roomCode}
-              />
-              <button
-                className="rounded-xl border border-white/15 px-4 font-black text-white disabled:opacity-40"
-                disabled={
-                  !playerName.trim() ||
-                  !roomCode.trim() ||
-                  state.status === "connecting" ||
-                  state.status === "reconnecting" ||
-                  state.reconnectRequired
-                }
-                onClick={() =>
-                  void connect({
-                    type: "join",
-                    roomId: roomCode,
-                    playerName,
-                  })
-                }
-                type="button"
-              >
-                Join
-              </button>
-            </div>
-            {(actionError || state.error) && (
-              <p className="mt-4 text-sm text-rose-300" role="alert">
-                {actionError ?? state.error}
-              </p>
-            )}
-            {state.reconnectAvailable && !room && (
-              <div className="mt-4 flex justify-center gap-5">
-                {state.reconnectRequired && state.status === "error" && (
-                  <button
-                    className="text-xs font-bold text-sky-300 underline hover:text-sky-100"
-                    onClick={() =>
-                      void runAction(async () => client.retryReconnect())
-                    }
-                    type="button"
-                  >
-                    Retry reconnect
-                  </button>
-                )}
-                <button
-                  className="text-xs font-bold text-white/45 underline hover:text-white"
-                  onClick={() => client.forgetReconnect()}
-                  type="button"
-                >
-                  Forget saved room
-                </button>
-              </div>
-            )}
-            {state.status === "connecting" && (
-              <p className="mt-4 text-center text-xs text-sky-200">
-                Connecting to room server…
-              </p>
-            )}
-          </div>
-        </div>
+        <RoomEntryPage
+          blocked={state.reconnectRequired}
+          busy={
+            state.status === "connecting" || state.status === "reconnecting"
+          }
+          error={actionError ?? state.error}
+          onClose={() => setShowEntry(false)}
+          onCreate={() =>
+            void connect({
+              type: "create",
+              playerName,
+              visibility: roomVisibility,
+            })
+          }
+          onForgetReconnect={() => client.forgetReconnect()}
+          onJoin={() =>
+            void connect({ type: "join", roomId: roomCode, playerName })
+          }
+          onMatchmake={() => void connect({ type: "matchmake", playerName })}
+          onPlayerNameChange={setPlayerName}
+          onRetryReconnect={() =>
+            void runAction(async () => client.retryReconnect())
+          }
+          onRoomCodeChange={setRoomCode}
+          onVisibilityChange={setRoomVisibility}
+          playerName={playerName}
+          reconnectAvailable={state.reconnectAvailable}
+          reconnectRequired={state.reconnectRequired}
+          roomCode={roomCode}
+          status={state.status}
+          visibility={roomVisibility}
+        />
       )}
 
       {room && snapshot && (

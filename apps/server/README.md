@@ -47,7 +47,9 @@ TypeScript payloads are defined in `src/rooms/room-events.ts`.
 
 Client events:
 
-- `room:create`, `room:join`, and `room:reconnect` establish room membership.
+- `room:create` creates a private room by default; clients can specify public
+  visibility. `room:join` joins by code, `room:matchmake` joins an available
+  public room or creates one, and `room:reconnect` restores saved membership.
 - `room:ready` updates readiness; `room:start` starts a match.
 - `room:change-settings` changes lobby settings immediately or queues them for
   the next round while a match is active.
@@ -57,7 +59,7 @@ Client events:
 Server events:
 
 - `room:joined` returns the player ID, reconnect token, command sequence, and
-  public room snapshot.
+  public room snapshot, including its visibility.
 - `room:updated` broadcasts public room state.
 - `room:command-accepted` and `room:command-rejected` acknowledge gameplay.
 - `room:settings-accepted`, `room:left`, `room:closed`, and `room:error` report
@@ -68,6 +70,8 @@ admin succession. Reconnect tokens are returned only on create/join/reconnect
 and are stored hashed. Public snapshots omit unrevealed answers and private
 reconnect data. Pin-locate guesses are kept private until the round is revealed.
 A room needs at least two connected, ready players to start.
+Public matchmaking is available independently of current room supply: if no
+waiting public room has space, the server creates one for the requesting player.
 
 The Vite client connects to this protocol through its Socket.IO room transport.
 For local development, create `apps/web-client/.env.local` with:

@@ -17,6 +17,7 @@ const createSnapshot = (
   roomId: "ROOM2345",
   revision: 1,
   status: "waiting",
+  visibility: "private",
   adminPlayerId: "player-1",
   config: {
     mode: "identify",
@@ -171,8 +172,13 @@ describe("createRoomClient", () => {
     await vi.waitFor(() => expect(transport.events).toHaveLength(1));
     expect(transport.events[0]).toEqual({
       eventName: "room:create",
-      payload: { requestId: "request-1", playerName: "Ada" },
+      payload: {
+        requestId: "request-1",
+        playerName: "Ada",
+        visibility: "private",
+      },
     });
+
     transport.receive(createJoinedEvent("request-1"));
     await joining;
 
@@ -190,6 +196,30 @@ describe("createRoomClient", () => {
       playerId: "player-1",
       reconnectToken: "private-token",
     });
+  });
+
+  it("requests public matchmaking through the shared room-join confirmation flow", async () => {
+    const transport = new FakeRoomTransport();
+    const client = createRoomClient(
+      transport,
+      new FakeStorage(),
+      () => "request-match",
+    );
+    const joining = client.joinPublicRoom(" Ada ");
+
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    expect(transport.events[0]).toEqual({
+      eventName: "room:matchmake",
+      payload: { requestId: "request-match", playerName: "Ada" },
+    });
+    transport.receive(
+      createJoinedEvent(
+        "request-match",
+        createSnapshot({ visibility: "public" }),
+      ),
+    );
+    await joining;
+    expect(client.getState().room?.snapshot.visibility).toBe("public");
   });
 
   it("sends authoritative commands and adopts server acknowledgements and snapshots", async () => {

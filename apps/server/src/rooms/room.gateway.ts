@@ -148,6 +148,36 @@ export class RoomGateway
     });
   }
 
+  @SubscribeMessage(ROOM_EVENTS.matchmake)
+  async matchmake(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const requestId = getRequestId(value);
+    await this.handleRequest(
+      client,
+      requestId,
+      async () => {
+        if (client.data.roomIdentity) {
+          throw new RoomDomainError('INVALID_REQUEST');
+        }
+        const request = parseCreateRequest(value);
+        const joined = await this.lifecycle.joinPublicRoom(request);
+        await client.join(joined.snapshot.roomId);
+        client.data.roomIdentity = {
+          roomId: joined.snapshot.roomId,
+          playerId: joined.playerId,
+        };
+        client.emit(ROOM_EVENTS.joined, {
+          requestId: request.requestId,
+          ...joined,
+        });
+        client.to(joined.snapshot.roomId).emit(ROOM_EVENTS.updated, joined.snapshot);
+      },
+      'Public matchmaking is temporarily unavailable. Please try again.',
+    );
+  }
+
   @SubscribeMessage(ROOM_EVENTS.join)
   async join(
     @ConnectedSocket() client: RoomSocket,
@@ -369,6 +399,7 @@ export class RoomGateway
     client: RoomSocket,
     requestId: string | null,
     operation: () => Promise<void>,
+    fallbackMessage = 'The server could not complete the room request.',
   ): Promise<void> {
     try {
       this.enforceEventRate(client);
@@ -377,7 +408,7 @@ export class RoomGateway
       const message =
         error instanceof RoomDomainError
           ? error.message
-          : 'The server could not complete the room request.';
+          : fallbackMessage;
       if (!(error instanceof RoomDomainError)) {
         this.logUnexpectedError('room request', error);
       }

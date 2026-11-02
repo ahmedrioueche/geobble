@@ -43,6 +43,7 @@ export interface RoomSnapshot {
   roomId: string;
   revision: number;
   status: "waiting" | "playing" | "finished";
+  visibility: "public" | "private";
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
@@ -55,7 +56,13 @@ export interface RoomSnapshot {
 }
 
 export type RoomConnectInput =
-  | { type: "create"; playerName: string; config?: RoomConfiguration }
+  | {
+      type: "create";
+      playerName: string;
+      visibility: "public" | "private";
+      config?: RoomConfiguration;
+    }
+  | { type: "matchmake"; playerName: string }
   | { type: "join"; roomId: string; playerName: string };
 
 export type RoomCommandInput =
@@ -185,6 +192,7 @@ export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isString(value.roomId) &&
   isInteger(value.revision) &&
   ["waiting", "playing", "finished"].includes(String(value.status)) &&
+  ["public", "private"].includes(String(value.visibility)) &&
   isString(value.adminPlayerId) &&
   isConfiguration(value.config) &&
   (value.pendingConfig === null || isConfiguration(value.pendingConfig)) &&

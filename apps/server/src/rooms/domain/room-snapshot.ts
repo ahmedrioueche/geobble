@@ -4,6 +4,7 @@ export const toRoomSnapshot = (room: RoomRecord): RoomSnapshot => ({
   roomId: room.roomId,
   revision: room.revision,
   status: room.status,
+  visibility: room.visibility ?? 'private',
   adminPlayerId: room.adminPlayerId,
   config: { ...room.config },
   pendingConfig: room.pendingConfig ? { ...room.pendingConfig } : null,

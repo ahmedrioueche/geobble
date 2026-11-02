@@ -3,6 +3,7 @@ export type PinDirection = 'locate' | 'identify';
 export type SubMode = 'name' | 'flag' | 'capital';
 export type ChallengeType = 'world' | 'count' | 'timer';
 export type RoomStatus = 'waiting' | 'playing' | 'finished';
+export type RoomVisibility = 'public' | 'private';
 
 export interface RoomConfiguration {
   mode: GameMode;
@@ -71,6 +72,7 @@ export interface RoomRecord {
   roomId: string;
   revision: number;
   status: RoomStatus;
+  visibility?: RoomVisibility;
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
@@ -98,6 +100,7 @@ export interface RoomSnapshot {
   roomId: string;
   revision: number;
   status: RoomStatus;
+  visibility: RoomVisibility;
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
@@ -119,6 +122,7 @@ export interface RoomSnapshot {
 export interface RoomCreateRequest {
   requestId: string;
   playerName: string;
+  visibility?: RoomVisibility;
   config?: RoomConfiguration;
 }
 

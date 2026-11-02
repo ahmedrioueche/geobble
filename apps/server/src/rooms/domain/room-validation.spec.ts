@@ -55,7 +55,25 @@ describe('room request validation', () => {
         playerName: ' Ada ',
         playerId: 'client-controlled',
       }),
-    ).toEqual({ requestId: 'request-1', playerName: 'Ada' });
+    ).toEqual({
+      requestId: 'request-1',
+      playerName: 'Ada',
+      visibility: 'private',
+    });
+    expect(
+      parseCreateRequest({
+        requestId: 'request-1',
+        playerName: 'Ada',
+        visibility: 'public',
+      }).visibility,
+    ).toBe('public');
+    expect(() =>
+      parseCreateRequest({
+        requestId: 'request-1',
+        playerName: 'Ada',
+        visibility: 'unlisted',
+      }),
+    ).toThrow(RoomDomainError);
     expect(
       parseJoinRequest({
         requestId: 'request-2',
