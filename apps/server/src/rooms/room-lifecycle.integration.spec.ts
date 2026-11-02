@@ -62,7 +62,7 @@ const createConfig = (): ConfigService<ServerConfiguration, true> =>
     mongoUri: 'mongodb://localhost/test',
     clientOrigins: ['http://localhost:5173'],
     roomMaxPlayers: 8,
-    roomIdLength: 8,
+    roomIdLength: 4,
     socketEventsPerMinute: 120,
     maxChallengeValue: 500,
     reconnectGraceMs: 60_000,
@@ -106,6 +106,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-create',
       playerName: 'Ada',
     });
+    expect(host.snapshot.roomId).toMatch(/^\d{4}$/);
     const guest = await lifecycle.joinRoom({
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
@@ -419,5 +420,31 @@ describe('room lifecycle and competitive gameplay', () => {
     });
     expect(second.snapshot.roomId).toBe(first.snapshot.roomId);
     expect(second.snapshot.players).toHaveLength(2);
+  });
+
+  it('increases numeric room-code length after repeated collisions', async () => {
+    const config = createConfig();
+    const repository = new InMemoryRoomRepository();
+    const persistRoom = repository.create.bind(repository);
+    vi.spyOn(repository, 'create').mockImplementation(async (room) => {
+      if (room.roomId.length === 4) {
+        throw Object.assign(new Error('Duplicate room code'), { code: 11000 });
+      }
+      await persistRoom(room);
+    });
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      new RoomMutationService(repository, config),
+      new CountryCatalogService(config),
+      new GameEngineService(),
+      config,
+    );
+
+    const created = await lifecycle.createRoom({
+      requestId: 'request-create-after-collision',
+      playerName: 'Ada',
+    });
+
+    expect(created.snapshot.roomId).toMatch(/^\d{5}$/);
   });
 });

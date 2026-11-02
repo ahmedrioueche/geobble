@@ -435,6 +435,25 @@ export const createRoomClient = (
       }
     });
 
+  const clearSavedReconnect = () => {
+    if (!credentials) return;
+    try {
+      storage.clear();
+    } catch {
+      const error = new Error("Saved room details could not be cleared.");
+      updateState({ error: error.message });
+      throw error;
+    }
+    credentials = null;
+    reconnectRequestId = null;
+    reconnecting = false;
+    updateState({
+      reconnectAvailable: false,
+      reconnectRequired: false,
+      error: null,
+    });
+  };
+
   const requireRoom = (): ActiveRoom => {
     if (!state.room || state.status !== "connected") {
       throw new Error("Connect to a room before sending room actions.");
@@ -478,9 +497,7 @@ export const createRoomClient = (
       await beginReconnect();
     },
     createRoom: async (playerName, config, visibility = "private") => {
-      if (credentials && !state.room) {
-        throw new Error("Reconnect to your saved room or forget it first.");
-      }
+      clearSavedReconnect();
       await connectTransport();
       const requestId = createId();
       updateState({ status: "connecting", error: null });
@@ -503,9 +520,7 @@ export const createRoomClient = (
       }
     },
     joinRoom: async (roomId, playerName) => {
-      if (credentials && !state.room) {
-        throw new Error("Reconnect to your saved room or forget it first.");
-      }
+      clearSavedReconnect();
       await connectTransport();
       const requestId = createId();
       updateState({ status: "connecting", error: null });
@@ -527,9 +542,7 @@ export const createRoomClient = (
       }
     },
     joinPublicRoom: async (playerName) => {
-      if (credentials && !state.room) {
-        throw new Error("Reconnect to your saved room or forget it first.");
-      }
+      clearSavedReconnect();
       await connectTransport();
       const requestId = createId();
       updateState({ status: "connecting", error: null });

@@ -39,6 +39,10 @@ client origin. `MONGODB_URI` and `REST_COUNTRIES_API_KEY` are required for the
 default REST Countries v5 endpoint. The server fetches the country catalog from
 `REST_COUNTRIES_API_URL` and caches it in memory. Keep the API key in the server
 environment only.
+New room codes are numeric and default to four digits. `ROOM_ID_LENGTH` sets
+the starting length; after repeated collisions, the server automatically
+increases the length up to 12 digits. Existing alphanumeric room codes remain
+joinable for compatibility.
 
 ## Room protocol
 

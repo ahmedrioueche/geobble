@@ -11,11 +11,9 @@ interface RoomEntryPageProps {
   roomCode: string;
   visibility: RoomVisibility;
   busy: boolean;
-  blocked: boolean;
   status: string;
   error: string | null;
   reconnectAvailable: boolean;
-  reconnectRequired: boolean;
   onPlayerNameChange: (value: string) => void;
   onRoomCodeChange: (value: string) => void;
   onVisibilityChange: (value: RoomVisibility) => void;
@@ -23,8 +21,7 @@ interface RoomEntryPageProps {
   onJoin: () => void;
   onMatchmake: () => void;
   onClose: () => void;
-  onRetryReconnect: () => void;
-  onForgetReconnect: () => void;
+  onConnectLatestRoom: () => void;
 }
 
 const ActionButton: React.FC<
@@ -76,11 +73,9 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
   roomCode,
   visibility,
   busy,
-  blocked,
   status,
   error,
   reconnectAvailable,
-  reconnectRequired,
   onPlayerNameChange,
   onRoomCodeChange,
   onVisibilityChange,
@@ -88,10 +83,9 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
   onJoin,
   onMatchmake,
   onClose,
-  onRetryReconnect,
-  onForgetReconnect,
+  onConnectLatestRoom,
 }) => {
-  const canStart = Boolean(playerName.trim()) && !busy && !blocked;
+  const canStart = Boolean(playerName.trim()) && !busy;
   const [activeCard, setActiveCard] = useState<RoomAction>("create");
   const cardProps = (card: RoomAction) => ({
     onFocusCapture: () => setActiveCard(card),
@@ -131,6 +125,27 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
             value={playerName}
           />
         </div>
+
+        {reconnectAvailable && (
+          <aside className="mx-auto mb-6 flex w-full max-w-4xl flex-col items-center justify-between gap-4 rounded-2xl border-2 border-[var(--color-accent)] bg-slate-900 p-5 shadow-[0_0_32px_rgba(56,189,248,0.12)] sm:flex-row sm:px-7">
+            <div className="text-center sm:text-left">
+              <h2 className="text-base font-black uppercase tracking-tight">
+                Your latest room is saved
+              </h2>
+              <p className="mt-1 text-sm text-white/55">
+                Reconnect to continue, or choose another room below.
+              </p>
+            </div>
+            <ActionButton
+              className="w-full sm:w-auto"
+              disabled={busy}
+              highlighted
+              onClick={onConnectLatestRoom}
+            >
+              Connect to latest room
+            </ActionButton>
+          </aside>
+        )}
 
         <div className="grid gap-5 lg:grid-cols-3">
           <article
@@ -233,26 +248,6 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
               ? "Reconnecting to your saved room…"
               : "Connecting to the room server…"}
           </p>
-        )}
-        {reconnectAvailable && (
-          <div className="mt-5 flex flex-wrap justify-center gap-5">
-            {reconnectRequired && status === "error" && (
-              <button
-                className="text-xs font-bold text-sky-300 underline hover:text-sky-100"
-                onClick={onRetryReconnect}
-                type="button"
-              >
-                Retry reconnect
-              </button>
-            )}
-            <button
-              className="text-xs font-bold text-white/45 underline hover:text-white"
-              onClick={onForgetReconnect}
-              type="button"
-            >
-              Forget saved room
-            </button>
-          </div>
         )}
       </div>
     </section>

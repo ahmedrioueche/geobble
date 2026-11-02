@@ -1,13 +1,12 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mongoose from 'mongoose';
 import { ROOM_MODEL, RoomSchema } from '../dist/rooms/persistence/room.schema.js';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-const createRoomId = () =>
-  `TST${Array.from(randomBytes(5), (byte) => alphabet[byte % alphabet.length]).join('')}`;
+const createRoomId = (length) =>
+  Array.from({ length }, () => String(randomInt(10))).join('');
 
 const createPlayer = (name, joinedAt, disconnectedAt) => ({
   playerId: randomUUID(),
@@ -43,9 +42,8 @@ const main = async () => {
 
   try {
     const roomModel = connection.model(ROOM_MODEL, RoomSchema);
-    const roomId = createRoomId();
-    await roomModel.create({
-      roomId,
+    const room = {
+      roomId: '',
       revision: 0,
       status: 'waiting',
       adminPlayerId: firstPlayer.playerId,
@@ -68,7 +66,30 @@ const main = async () => {
       expiresAt: new Date(now + 24 * 60 * 60 * 1000),
       createdAt: new Date(now),
       updatedAt: new Date(now),
-    });
+    };
+    let inserted = false;
+    for (let length = 4; length <= 12 && !inserted; length += 1) {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        room.roomId = createRoomId(length);
+        try {
+          await roomModel.create(room);
+          inserted = true;
+          break;
+        } catch (error) {
+          if (
+            typeof error !== 'object' ||
+            error === null ||
+            !('code' in error) ||
+            error.code !== 11000
+          ) {
+            throw error;
+          }
+        }
+      }
+    }
+    if (!inserted) throw new Error('Could not allocate a unique test room code.');
+
+    const roomId = room.roomId;
 
     console.log(`Inserted test room ${roomId} into MongoDB. It expires in 24 hours.`);
     console.log('The seeded players are disconnected placeholders and cannot reconnect.');

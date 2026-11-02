@@ -102,7 +102,7 @@ export const parseJoinRequest = (value: unknown): RoomJoinRequest => {
   }
 
   const roomId = value.roomId.trim().toUpperCase();
-  if (!/^[2-9A-HJ-NP-Z]{6,12}$/.test(roomId)) {
+  if (!/^(?:\d{4,12}|[A-Z0-9]{6,12})$/.test(roomId)) {
     throw new RoomDomainError('INVALID_REQUEST');
   }
   return {
@@ -127,7 +127,7 @@ export const parseReconnectRequest = (
   }
 
   const roomId = value.roomId.trim().toUpperCase();
-  if (!/^[2-9A-HJ-NP-Z]{6,12}$/.test(roomId)) {
+  if (!/^(?:\d{4,12}|[A-Z0-9]{6,12})$/.test(roomId)) {
     throw new RoomDomainError('INVALID_REQUEST');
   }
   return {

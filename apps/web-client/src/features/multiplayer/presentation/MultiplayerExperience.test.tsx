@@ -94,6 +94,19 @@ const createClientState = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((media: string) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
   mocks.useRoomClient.mockReturnValue({
     client: {
       createRoom: mocks.createRoom.mockResolvedValue(undefined),
@@ -184,6 +197,31 @@ describe("MultiplayerExperience", () => {
     );
   });
 
+  it("offers reconnecting to the latest room without blocking new rooms", async () => {
+    renderExperience({
+      ...createClientState(),
+      status: "error",
+      reconnectAvailable: true,
+      reconnectRequired: true,
+      error: "Could not reconnect.",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Connect to latest room" }),
+    );
+    expect(mocks.retryReconnect).toHaveBeenCalledOnce();
+
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
+
+    await waitFor(() =>
+      expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "private"),
+    );
+  });
+
   it("sends lobby readiness and admin start actions", () => {
     const snapshot = createSnapshot();
     renderExperience(createClientState(snapshot));
@@ -227,6 +265,94 @@ describe("MultiplayerExperience", () => {
       answerCountryCode: null,
       choiceId: "choice-canada",
     });
+  });
+
+  it("copies the room code and shows join and disconnect toasts", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const initialSnapshot = createSnapshot({
+      players: [
+        {
+          ...createSnapshot().players[0]!,
+          id: "player-1",
+          name: "Ada",
+        },
+        {
+          ...createSnapshot().players[1]!,
+          id: "player-2",
+          name: "Grace",
+          connected: false,
+        },
+      ],
+    });
+    const client = {
+      createRoom: mocks.createRoom.mockResolvedValue(undefined),
+      joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
+      joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
+      setReady: mocks.setReady,
+      startRoom: mocks.startRoom,
+      changeSettings: mocks.changeSettings,
+      submitCommand: mocks.submitCommand.mockResolvedValue(1),
+      leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
+      forgetReconnect: mocks.forgetReconnect,
+      retryReconnect: mocks.retryReconnect.mockResolvedValue(undefined),
+    };
+    const firstState = createClientState(initialSnapshot);
+    mocks.useRoomClient.mockReturnValue({ client, state: firstState });
+    const view = render(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy room code" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("ROOM2345"));
+    expect(await screen.findByText("Room code copied")).toBeTruthy();
+
+    const joinedSnapshot = createSnapshot({
+      revision: 2,
+      players: initialSnapshot.players.map((player) => ({
+        ...player,
+        connected: true,
+      })),
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client,
+      state: createClientState(joinedSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+    expect(await screen.findByText("Grace joined the room")).toBeTruthy();
+
+    const disconnectedSnapshot = createSnapshot({
+      revision: 3,
+      players: joinedSnapshot.players.map((player) => ({
+        ...player,
+        connected: player.id === "player-1",
+      })),
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client,
+      state: createClientState(disconnectedSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+    expect(await screen.findByText("Grace disconnected")).toBeTruthy();
   });
 
   it("shows distinct solo and multiplayer home actions", () => {

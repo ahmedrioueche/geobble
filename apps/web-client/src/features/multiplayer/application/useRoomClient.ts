@@ -13,7 +13,6 @@ export const useRoomClient = () => {
   );
 
   useEffect(() => {
-    void client.resume();
     return () => client.disconnect();
   }, [client]);
 

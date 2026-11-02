@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
+import { Copy } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
 import { resolveMapCountry } from "../../game/domain/gameRules";
 import { WorldMap } from "../../map/WorldMap";
 import type { WorldMapGameState } from "../../map/worldMapStoreSelectors";
 import type { RoomConnectInput } from "../contracts/multiplayerRoomProtocol";
+import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
 
@@ -45,6 +48,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     location: [number, number];
   } | null>(null);
   const [now, setNow] = useState(0);
+  const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
   const room = state.room;
   const snapshot = room?.snapshot;
   const round = snapshot?.game.round ?? null;
@@ -65,6 +69,28 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [snapshot?.status, snapshot?.game.timerDeadlineAt]);
+
+  useEffect(() => {
+    if (!snapshot) {
+      previousRoomSnapshot.current = null;
+      return;
+    }
+
+    const previous = previousRoomSnapshot.current;
+    previousRoomSnapshot.current = snapshot;
+    if (!previous || previous.roomId !== snapshot.roomId) return;
+
+    for (const player of snapshot.players) {
+      const previousPlayer = previous.players.find(
+        (candidate) => candidate.id === player.id,
+      );
+      if (player.connected && (!previousPlayer || !previousPlayer.connected)) {
+        toast.success(`${player.name} joined the room`);
+      } else if (previousPlayer?.connected && !player.connected) {
+        toast(`${player.name} disconnected`, { icon: "⚠️" });
+      }
+    }
+  }, [snapshot]);
 
   const gameState = useMemo<WorldMapGameState>(
     () => ({
@@ -136,6 +162,16 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     }
   };
 
+  const copyRoomCode = async () => {
+    if (!snapshot) return;
+    try {
+      await navigator.clipboard.writeText(snapshot.roomId);
+      toast.success("Room code copied");
+    } catch {
+      toast.error("Could not copy the room code. Please copy it manually.");
+    }
+  };
+
   const connect = (input: RoomConnectInput) =>
     runAction(async () => {
       if (input.type === "create") {
@@ -199,6 +235,16 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
   return (
     <>
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: "#0f172a",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.15)",
+          },
+        }}
+      />
       {!room && (
         <>
           {showHomeActions && !showEntry && (
@@ -251,12 +297,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
       {showEntry && !room && (
         <RoomEntryPage
-          blocked={state.reconnectRequired}
           busy={
             state.status === "connecting" || state.status === "reconnecting"
           }
           error={actionError ?? state.error}
           onClose={() => setShowEntry(false)}
+          onConnectLatestRoom={() =>
+            void runAction(async () => client.retryReconnect())
+          }
           onCreate={() =>
             void connect({
               type: "create",
@@ -264,20 +312,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               visibility: roomVisibility,
             })
           }
-          onForgetReconnect={() => client.forgetReconnect()}
           onJoin={() =>
             void connect({ type: "join", roomId: roomCode, playerName })
           }
           onMatchmake={() => void connect({ type: "matchmake", playerName })}
           onPlayerNameChange={setPlayerName}
-          onRetryReconnect={() =>
-            void runAction(async () => client.retryReconnect())
-          }
           onRoomCodeChange={setRoomCode}
           onVisibilityChange={setRoomVisibility}
           playerName={playerName}
           reconnectAvailable={state.reconnectAvailable}
-          reconnectRequired={state.reconnectRequired}
           roomCode={roomCode}
           status={state.status}
           visibility={roomVisibility}
@@ -307,9 +350,20 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">
                 Geobble multiplayer
               </p>
-              <p className="font-mono text-lg font-black tracking-[0.15em]">
-                {snapshot.roomId}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-lg font-black tracking-[0.15em]">
+                  {snapshot.roomId}
+                </p>
+                <button
+                  aria-label="Copy room code"
+                  className="rounded-md p-1.5 text-white/55 transition hover:bg-white/10 hover:text-sky-300"
+                  onClick={() => void copyRoomCode()}
+                  title="Copy room code"
+                  type="button"
+                >
+                  <Copy aria-hidden="true" size={16} />
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <span

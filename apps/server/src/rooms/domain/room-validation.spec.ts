@@ -77,6 +77,20 @@ describe('room request validation', () => {
     expect(
       parseJoinRequest({
         requestId: 'request-2',
+        roomId: '0042',
+        playerName: 'Grace',
+      }),
+    ).toMatchObject({ roomId: '0042', playerName: 'Grace' });
+    expect(
+      parseJoinRequest({
+        requestId: 'request-2',
+        roomId: '123456',
+        playerName: 'Grace',
+      }),
+    ).toMatchObject({ roomId: '123456', playerName: 'Grace' });
+    expect(
+      parseJoinRequest({
+        requestId: 'request-2',
         roomId: 'ab23cd',
         playerName: 'Grace',
       }),

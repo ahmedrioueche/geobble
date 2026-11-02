@@ -222,6 +222,29 @@ describe("createRoomClient", () => {
     expect(client.getState().room?.snapshot.visibility).toBe("public");
   });
 
+  it("allows creating a new room without reconnecting to the saved room", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    storage.value = {
+      roomId: "ROOM2345",
+      playerId: "player-1",
+      reconnectToken: "saved-token",
+    };
+    const client = createRoomClient(transport, storage, () => "new-room-request");
+    const creating = client.createRoom("Ada");
+
+    expect(storage.value).toBeNull();
+    expect(client.getState()).toMatchObject({
+      reconnectAvailable: false,
+      reconnectRequired: false,
+    });
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    expect(transport.events[0]?.eventName).toBe("room:create");
+    transport.receive(createJoinedEvent("new-room-request"));
+    await creating;
+    expect(client.getState().room?.snapshot.roomId).toBe("ROOM2345");
+  });
+
   it("sends authoritative commands and adopts server acknowledgements and snapshots", async () => {
     const transport = new FakeRoomTransport();
     const client = createRoomClient(transport, new FakeStorage(), () => "request-1");

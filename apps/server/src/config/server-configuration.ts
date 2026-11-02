@@ -72,7 +72,7 @@ export const validateEnvironment = (
 
   const port = readInteger(env, 'PORT', 3000, 1);
   const roomMaxPlayers = readInteger(env, 'ROOM_MAX_PLAYERS', 8, 2);
-  const roomIdLength = readInteger(env, 'ROOM_ID_LENGTH', 8, 6);
+  const roomIdLength = readInteger(env, 'ROOM_ID_LENGTH', 4, 4);
   if (roomIdLength > 12) {
     throw new Error('ROOM_ID_LENGTH must be less than or equal to 12');
   }

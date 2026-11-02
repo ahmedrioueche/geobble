@@ -31,13 +31,8 @@ import {
 } from './domain/room-rules.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
-const ROOM_ID_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-
 const createRoomId = (length: number): string =>
-  Array.from(
-    { length },
-    () => ROOM_ID_ALPHABET[randomInt(ROOM_ID_ALPHABET.length)],
-  ).join('');
+  Array.from({ length }, () => String(randomInt(10))).join('');
 
 const createReconnectToken = (): string =>
   randomBytes(32).toString('base64url');
@@ -100,43 +95,45 @@ export class RoomLifecycleService {
       request.config ?? DEFAULT_ROOM_CONFIGURATION,
     );
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const reconnectToken = createReconnectToken();
-      const now = Date.now();
-      const host = createPlayer(name, true, now, reconnectToken);
-      const roomId = createRoomId(this.config.getOrThrow('roomIdLength'));
-      const room: RoomRecord = {
-        roomId,
-        revision: 0,
-        status: 'waiting',
-        visibility: request.visibility ?? 'private',
-        adminPlayerId: host.playerId,
-        config: roomConfig,
-        pendingConfig: null,
-        players: [host],
-        game: {
-          startedAt: null,
-          timerDeadlineAt: null,
-          advanceAt: null,
-          round: null,
-          usedCountryCodes: [],
-        },
-        expiresAt: this.getExpiryDate(now),
-        createdAt: new Date(now),
-        updatedAt: new Date(now),
-      };
-
-      try {
-        await this.repository.create(room);
-        this.logger.log(`Room ${roomId} created`);
-        return {
-          playerId: host.playerId,
-          reconnectToken,
-          nextCommandId: 1,
-          snapshot: toRoomSnapshot(room),
+    for (let length = this.config.getOrThrow('roomIdLength'); length <= 12; length += 1) {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const reconnectToken = createReconnectToken();
+        const now = Date.now();
+        const host = createPlayer(name, true, now, reconnectToken);
+        const roomId = createRoomId(length);
+        const room: RoomRecord = {
+          roomId,
+          revision: 0,
+          status: 'waiting',
+          visibility: request.visibility ?? 'private',
+          adminPlayerId: host.playerId,
+          config: roomConfig,
+          pendingConfig: null,
+          players: [host],
+          game: {
+            startedAt: null,
+            timerDeadlineAt: null,
+            advanceAt: null,
+            round: null,
+            usedCountryCodes: [],
+          },
+          expiresAt: this.getExpiryDate(now),
+          createdAt: new Date(now),
+          updatedAt: new Date(now),
         };
-      } catch (error) {
-        if (!this.isDuplicateKeyError(error)) throw error;
+
+        try {
+          await this.repository.create(room);
+          this.logger.log(`Room ${roomId} created`);
+          return {
+            playerId: host.playerId,
+            reconnectToken,
+            nextCommandId: 1,
+            snapshot: toRoomSnapshot(room),
+          };
+        } catch (error) {
+          if (!this.isDuplicateKeyError(error)) throw error;
+        }
       }
     }
 
