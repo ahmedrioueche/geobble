@@ -1,14 +1,13 @@
 import { useState } from "react";
 import type React from "react";
-import type {
-  RoomConfiguration,
-} from "../contracts/multiplayerRoomProtocol";
+import type { RoomConfiguration } from "../contracts/multiplayerRoomProtocol";
+import CustomSelect from "../../../components/atoms/CustomSelect";
 
 interface RoomSettingsFormProps {
   initial: RoomConfiguration;
   submitting: boolean;
   onCancel: () => void;
-  onSave: (configuration: RoomConfiguration) => void;
+  onSave: (configuration: RoomConfiguration) => Promise<void>;
 }
 
 export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
@@ -18,6 +17,8 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
   onSave,
 }) => {
   const [config, setConfig] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const update = (changes: Partial<RoomConfiguration>) =>
     setConfig((current) => ({ ...current, ...changes }));
 
@@ -26,86 +27,77 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave(config);
+        setSaveError(null);
+        setSaving(true);
+        void onSave(config)
+          .catch((error: unknown) => {
+            setSaveError(
+              error instanceof Error
+                ? error.message
+                : "Could not save room settings.",
+            );
+          })
+          .finally(() => setSaving(false));
       }}
     >
-      <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
-        Mode
-        <select
-          className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white"
-          value={config.mode}
-          onChange={(event) =>
-            update({ mode: event.target.value as RoomConfiguration["mode"] })
-          }
-        >
-          <option value="identify">Identify</option>
-          <option value="reverse">Reverse</option>
-          <option value="pin">Pin</option>
-        </select>
-      </label>
+      <CustomSelect<RoomConfiguration["mode"]>
+        title="Mode"
+        onChange={(mode) => update({ mode })}
+        options={[
+          { value: "identify", label: "Identify" },
+          { value: "reverse", label: "Reverse" },
+          { value: "pin", label: "Pin" },
+        ]}
+        selectedOption={config.mode}
+      />
 
       {config.mode === "pin" && (
-        <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
-          Pin mode
-          <select
-            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white"
-            value={config.pinDirection}
-            onChange={(event) =>
-              update({
-                pinDirection:
-                  event.target.value as RoomConfiguration["pinDirection"],
-              })
-            }
-          >
-            <option value="locate">Locate country</option>
-            <option value="identify">Identify pin</option>
-          </select>
-        </label>
+        <CustomSelect<RoomConfiguration["pinDirection"]>
+          title="Pin mode"
+          onChange={(pinDirection) => update({ pinDirection })}
+          options={[
+            { value: "locate", label: "Locate country" },
+            { value: "identify", label: "Identify pin" },
+          ]}
+          selectedOption={config.pinDirection}
+        />
       )}
 
-      <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
-        Prompt
-        <select
-          className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white"
-          value={config.subMode}
-          onChange={(event) =>
-            update({ subMode: event.target.value as RoomConfiguration["subMode"] })
-          }
-        >
-          <option value="name">Country name</option>
-          <option value="flag">Flag</option>
-          <option value="capital">Capital</option>
-        </select>
-      </label>
+      <CustomSelect<RoomConfiguration["subMode"]>
+        title="Prompt"
+        onChange={(subMode) => update({ subMode })}
+        options={[
+          { value: "name", label: "Country name" },
+          { value: "flag", label: "Flag" },
+          { value: "capital", label: "Capital" },
+        ]}
+        selectedOption={config.subMode}
+      />
 
-      <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
-        Challenge
-        <select
-          className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white"
-          value={config.challengeType}
-          onChange={(event) => {
-            const challengeType =
-              event.target.value as RoomConfiguration["challengeType"];
-            update({
-              challengeType,
-              challengeValue:
-                challengeType === "world"
-                  ? 0
-                  : Math.max(1, config.challengeValue || 10),
-            });
-          }}
-        >
-          <option value="world">Whole world</option>
-          <option value="count">Target count</option>
-          <option value="timer">Timed match</option>
-        </select>
-      </label>
+      <CustomSelect<RoomConfiguration["challengeType"]>
+        title="Challenge"
+        onChange={(challengeType) => {
+          update({
+            challengeType,
+            challengeValue:
+              challengeType === "world"
+                ? 0
+                : Math.max(1, config.challengeValue || 10),
+          });
+        }}
+        options={[
+          { value: "world", label: "Whole world" },
+          { value: "count", label: "Target count" },
+          { value: "timer", label: "Timed match" },
+        ]}
+        selectedOption={config.challengeType}
+      />
 
       {config.challengeType !== "world" && (
         <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
           {config.challengeType === "timer" ? "Duration (seconds)" : "Rounds"}
           <input
-            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950 p-3 text-white"
+            className="mt-2 h-12 w-full rounded-xl border border-white/15 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition-colors hover:border-sky-300/50 hover:bg-slate-900 focus:border-sky-300 focus:ring-2 focus:ring-sky-300/20"
             type="number"
             min={1}
             max={500}
@@ -119,6 +111,11 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         </label>
       )}
 
+      {saveError && (
+        <p className="text-sm text-rose-300" role="alert">
+          {saveError}
+        </p>
+      )}
       <div className="flex justify-end gap-3 pt-2">
         <button
           className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/70 hover:text-white"
@@ -129,10 +126,10 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         </button>
         <button
           className="rounded-lg bg-sky-400 px-5 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
-          disabled={submitting}
+          disabled={submitting || saving}
           type="submit"
         >
-          Save settings
+          {saving ? "Saving…" : "Save settings"}
         </button>
       </div>
     </form>

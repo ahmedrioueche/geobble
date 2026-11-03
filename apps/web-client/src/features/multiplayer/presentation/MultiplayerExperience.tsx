@@ -7,10 +7,14 @@ import { RoomEntryPage } from "./RoomEntryPage";
 import { resolveMapCountry } from "../../game/domain/gameRules";
 import { WorldMap } from "../../map/WorldMap";
 import type { WorldMapGameState } from "../../map/worldMapStoreSelectors";
-import type { RoomConnectInput } from "../contracts/multiplayerRoomProtocol";
+import type {
+  RoomConfiguration,
+  RoomConnectInput,
+} from "../contracts/multiplayerRoomProtocol";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
+import { RoomSettingsPanel } from "./RoomSettingsPanel";
 
 interface MultiplayerExperienceProps {
   countries: CountryData[];
@@ -160,6 +164,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         error instanceof Error ? error.message : "The room action failed.",
       );
     }
+  };
+
+  const saveRoomSettings = async (
+    configuration: RoomConfiguration,
+  ) => {
+    setActionError(null);
+    await client.changeSettings(configuration);
+    setShowSettings(false);
   };
 
   const copyRoomCode = async () => {
@@ -464,25 +476,20 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       Start game
                     </button>
                   )}
-                  {isAdmin && (
-                    <button
-                      className="w-full rounded-xl border border-sky-300/30 px-4 py-3 text-xs font-black uppercase text-sky-200 hover:bg-sky-300/10"
-                      disabled={state.status !== "connected"}
-                      onClick={() => setShowSettings(true)}
-                      type="button"
-                    >
-                      Room settings
-                    </button>
-                  )}
                 </div>
               </div>
-              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-center backdrop-blur-xl">
-                <div>
-                  <p className="text-4xl">🌍</p>
-                  <h2 className="mt-3 text-xl font-black uppercase">
+              <div className="space-y-4">
+                <RoomSettingsPanel
+                  config={snapshot.config}
+                  isAdmin={isAdmin}
+                  onEdit={() => setShowSettings(true)}
+                  pendingConfig={snapshot.pendingConfig}
+                />
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-5 text-center backdrop-blur-xl">
+                  <p className="text-sm font-bold text-white/75">
                     Waiting for the match
-                  </h2>
-                  <p className="mt-2 text-sm text-white/55">
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
                     Share the room code with a friend. The admin can start when
                     everyone is ready.
                   </p>
@@ -637,12 +644,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 <RoomSettingsForm
                   initial={snapshot.pendingConfig ?? snapshot.config}
                   onCancel={() => setShowSettings(false)}
-                  onSave={(configuration) => {
-                    void runAction(async () => {
-                      client.changeSettings(configuration);
-                      setShowSettings(false);
-                    });
-                  }}
+                  onSave={saveRoomSettings}
                   submitting={false}
                 />
               </div>

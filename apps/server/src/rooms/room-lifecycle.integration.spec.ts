@@ -174,6 +174,16 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-create',
       playerName: 'Ada',
     });
+    const updatedSettings = await lifecycle.changeSettings(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        ...host.snapshot.config,
+        subMode: 'capital',
+      },
+    );
+    expect(updatedSettings.queued).toBe(false);
+    expect(updatedSettings.snapshot.config.subMode).toBe('capital');
     const guest = await lifecycle.joinRoom({
       requestId: 'request-join',
       roomId: host.snapshot.roomId,

@@ -269,8 +269,9 @@ export class RoomGateway
     @MessageBody() value: unknown,
   ): Promise<void> {
     const identity = client.data.roomIdentity;
-    await this.handleRequest(client, getRequestId(value), async () => {
-      if (!identity || !this.isSettingsRequest(value)) {
+    const requestId = getRequestId(value);
+    await this.handleRequest(client, requestId, async () => {
+      if (!identity || !requestId || !this.isSettingsRequest(value)) {
         throw new RoomDomainError('INVALID_REQUEST');
       }
       const result = await this.lifecycle.changeSettings(
@@ -282,6 +283,7 @@ export class RoomGateway
         .to(identity.roomId)
         .emit(ROOM_EVENTS.updated, result.snapshot);
       client.emit(ROOM_EVENTS.settingsAccepted, {
+        requestId,
         roomId: identity.roomId,
         queued: result.queued,
         revision: result.snapshot.revision,

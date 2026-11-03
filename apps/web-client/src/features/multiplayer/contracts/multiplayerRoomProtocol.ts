@@ -112,7 +112,12 @@ export type RoomServerEvent =
     }
   | {
       type: "settings-accepted";
-      payload: { roomId: string; queued: boolean; revision: number };
+      payload: {
+        requestId: string;
+        roomId: string;
+        queued: boolean;
+        revision: number;
+      };
     }
   | { type: "left"; payload: { roomId: string } }
   | { type: "closed"; payload: { roomId: string } }
@@ -235,6 +240,7 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
       );
     case "settings-accepted":
       return (
+        isString(payload.requestId) &&
         isString(payload.roomId) &&
         typeof payload.queued === "boolean" &&
         isInteger(payload.revision)

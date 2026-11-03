@@ -222,6 +222,48 @@ describe("createRoomClient", () => {
     expect(client.getState().room?.snapshot.visibility).toBe("public");
   });
 
+  it("waits for server confirmation when changing room settings", async () => {
+    const transport = new FakeRoomTransport();
+    const client = createRoomClient(
+      transport,
+      new FakeStorage(),
+      () => "settings-request",
+    );
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("settings-request"));
+    await joining;
+
+    const saving = client.changeSettings({
+      mode: "identify",
+      pinDirection: "locate",
+      subMode: "capital",
+      challengeType: "world",
+      challengeValue: 0,
+    });
+    expect(transport.events.at(-1)).toMatchObject({
+      eventName: "room:change-settings",
+      payload: {
+        requestId: "settings-request",
+        config: { subMode: "capital" },
+      },
+    });
+    transport.receive({
+      type: "settings-accepted",
+      payload: {
+        requestId: "settings-request",
+        roomId: "ROOM2345",
+        queued: false,
+        revision: 2,
+      },
+    });
+    await expect(saving).resolves.toBeUndefined();
+    expect(client.getState().settingsAccepted).toEqual({
+      queued: false,
+      revision: 2,
+    });
+  });
+
   it("allows creating a new room without reconnecting to the saved room", async () => {
     const transport = new FakeRoomTransport();
     const storage = new FakeStorage();

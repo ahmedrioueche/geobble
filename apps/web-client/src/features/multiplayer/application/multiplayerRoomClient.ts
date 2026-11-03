@@ -64,7 +64,7 @@ export interface RoomClient {
   joinPublicRoom: (playerName: string) => Promise<void>;
   setReady: (ready: boolean) => void;
   startRoom: () => void;
-  changeSettings: (config: RoomConfiguration) => void;
+  changeSettings: (config: RoomConfiguration) => Promise<void>;
   submitCommand: (command: RoomCommandInput) => Promise<number>;
   leaveRoom: () => Promise<void>;
   forgetReconnect: () => void;
@@ -119,6 +119,14 @@ export const createRoomClient = (
     string,
     {
       resolve: (event: RoomJoinedEvent) => void;
+      reject: (error: Error) => void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
+  const pendingSettings = new Map<
+    string,
+    {
+      resolve: () => void;
       reject: (error: Error) => void;
       timeout: ReturnType<typeof setTimeout>;
     }
@@ -290,6 +298,14 @@ export const createRoomClient = (
         return;
       case "settings-accepted":
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        {
+          const pending = pendingSettings.get(event.payload.requestId);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            pendingSettings.delete(event.payload.requestId);
+            pending.resolve();
+          }
+        }
         updateState({
           settingsAccepted: {
             queued: event.payload.queued,
@@ -299,6 +315,14 @@ export const createRoomClient = (
         return;
       case "error":
         rejectPendingJoins(event.payload.requestId, event.payload.message);
+        if (event.payload.requestId) {
+          const pending = pendingSettings.get(event.payload.requestId);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            pendingSettings.delete(event.payload.requestId);
+            pending.reject(new Error(event.payload.message));
+          }
+        }
         if (event.payload.requestId !== null) {
           updateState({
             status:
@@ -569,7 +593,32 @@ export const createRoomClient = (
       emitRequest("room:start", {});
     },
     changeSettings: (config) => {
-      emitRequest("room:change-settings", { config });
+      const room = requireRoom();
+      const requestId = createId();
+      updateState({ error: null, settingsAccepted: null });
+      return new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pendingSettings.delete(requestId);
+          reject(new Error("The server did not confirm the settings change."));
+        }, REQUEST_TIMEOUT_MS);
+        pendingSettings.set(requestId, { resolve, reject, timeout });
+        try {
+          transport.emit("room:change-settings", { requestId, config });
+        } catch (error) {
+          clearTimeout(timeout);
+          pendingSettings.delete(requestId);
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("Could not send the settings change."),
+          );
+        }
+        if (state.room?.snapshot.roomId !== room.snapshot.roomId) {
+          clearTimeout(timeout);
+          pendingSettings.delete(requestId);
+          reject(new Error("The active room changed before settings were sent."));
+        }
+      });
     },
     submitCommand: async (input) => {
       const room = requireRoom();
@@ -643,6 +692,11 @@ export const createRoomClient = (
         clearTimeout(pending.timeout);
         pending.reject(new Error("Room connection was closed."));
         pendingJoins.delete(requestId);
+      }
+      for (const [requestId, pending] of pendingSettings) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error("Room connection was closed."));
+        pendingSettings.delete(requestId);
       }
       if (leaving) {
         clearTimeout(leaving.timeout);

@@ -74,6 +74,7 @@ export interface RoomServerEvents {
     revision?: number;
   }) => void;
   'room:settings-accepted': (payload: {
+    requestId: string;
     roomId: string;
     queued: boolean;
     revision: number;

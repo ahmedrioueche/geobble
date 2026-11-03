@@ -226,11 +226,28 @@ describe("MultiplayerExperience", () => {
     const snapshot = createSnapshot();
     renderExperience(createClientState(snapshot));
 
+    expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
+    expect(screen.getByText("Whole world")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Not ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(mocks.setReady).toHaveBeenCalledWith(false);
     expect(mocks.startRoom).toHaveBeenCalledOnce();
+  });
+
+  it("shows room settings to non-admin players without edit controls", () => {
+    const snapshot = createSnapshot({
+      players: createSnapshot().players.map((player) => ({
+        ...player,
+        isAdmin: false,
+      })),
+    });
+    renderExperience(createClientState(snapshot));
+
+    expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
+    expect(screen.getByText("Country name")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("submits a choice answer through the room client", () => {
