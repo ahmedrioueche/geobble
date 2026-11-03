@@ -39,6 +39,11 @@ client origin. `MONGODB_URI` and `REST_COUNTRIES_API_KEY` are required for the
 default REST Countries v5 endpoint. The server fetches the country catalog from
 `REST_COUNTRIES_API_URL` and caches it in memory. Keep the API key in the server
 environment only.
+For reverse or pin-identify game modes, the server uses primary capital
+coordinates from REST Countries v5 and automatically requests the `capitals`
+field. REST Countries v3 endpoints automatically include `latlng` in their
+`fields` list. On startup, the server logs the loaded country and coordinate
+counts; a zero-coordinate catalog logs a specific configuration error.
 New room codes are numeric and default to four digits. `ROOM_ID_LENGTH` sets
 the starting length; after repeated collisions, the server automatically
 increases the length up to 12 digits. Existing alphanumeric room codes remain

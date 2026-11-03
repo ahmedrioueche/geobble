@@ -118,7 +118,7 @@ export const validateEnvironment = (
 
   const apiUrl =
     env.REST_COUNTRIES_API_URL ??
-    'https://api.restcountries.com/countries/v5?response_fields=names.common,codes.alpha_2,codes.alpha_3,codes.numeric,capital,region,subregion,flag.emoji,coordinates.latlng';
+    'https://api.restcountries.com/countries/v5?response_fields=names.common,codes.alpha_2,codes.alpha_3,codes.numeric,capitals,region,subregion,flag.emoji';
   if (typeof apiUrl !== 'string' || !URL.canParse(apiUrl)) {
     throw new Error('REST_COUNTRIES_API_URL must be a valid URL');
   }

@@ -4,6 +4,7 @@ export type RoomErrorCode =
   | 'ROOM_FULL'
   | 'ROOM_NOT_JOINABLE'
   | 'ROOM_NOT_STARTABLE'
+  | 'ROUND_UNAVAILABLE'
   | 'NOT_ADMIN'
   | 'NOT_CONNECTED'
   | 'NOT_AUTHORIZED'
@@ -20,6 +21,8 @@ const safeMessages: Record<RoomErrorCode, string> = {
   ROOM_FULL: 'That room is full.',
   ROOM_NOT_JOINABLE: 'That room is no longer accepting players.',
   ROOM_NOT_STARTABLE: 'The room is not ready to start.',
+  ROUND_UNAVAILABLE:
+    'This game mode needs country map coordinates, but none were found in the country data. Check the server country data settings.',
   NOT_ADMIN: 'Only the room admin can do that.',
   NOT_CONNECTED: 'This player is not connected to the room.',
   NOT_AUTHORIZED: 'This player is not authorized to reconnect.',

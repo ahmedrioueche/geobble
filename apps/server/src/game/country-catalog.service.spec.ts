@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServerConfiguration } from '../config/server-configuration.js';
 import { CountryCatalogService } from './country-catalog.service.js';
 
-const createConfig = (): ConfigService<ServerConfiguration, true> =>
+const createConfig = (
+  restCountriesApiUrl = 'https://countries.example.test/all',
+): ConfigService<ServerConfiguration, true> =>
   new ConfigService<ServerConfiguration, true>({
     port: 3000,
     mongoUri: 'mongodb://localhost/test',
@@ -20,8 +22,50 @@ const createConfig = (): ConfigService<ServerConfiguration, true> =>
     streakBonusPoints: 5,
     choicesPerRound: 4,
     countryDataCacheMs: 3_600_000,
-    restCountriesApiUrl: 'https://countries.example.test/all',
+    restCountriesApiUrl,
     restCountriesApiKey: null,
+  });
+
+  it('uses the primary capital coordinates as a map anchor in v5 records', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              objects: [
+                {
+                  names: { common: 'Canada' },
+                  codes: { alpha_2: 'CA', alpha_3: 'CAN' },
+                  capitals: [
+                    {
+                      name: 'Toronto',
+                      coordinates: { lat: 43.65, lng: -79.38 },
+                    },
+                    {
+                      name: 'Ottawa',
+                      primary: true,
+                      coordinates: { lat: 45.42, lng: -75.7 },
+                    },
+                  ],
+                },
+              ],
+              meta: { limit: 25, offset: 0, more: false },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    await expect(
+      new CountryCatalogService(createConfig()).getCountries(),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        capitals: ['Toronto', 'Ottawa'],
+        mapAnchor: [-75.7, 45.42],
+      }),
+    ]);
   });
 
 describe('CountryCatalogService', () => {
@@ -67,7 +111,13 @@ describe('CountryCatalogService', () => {
                 {
                   names: { common: 'Canada' },
                   codes: { alpha_2: 'ca', alpha_3: 'can', numeric: '124' },
-                  capitals: ['Ottawa'],
+                  capitals: [
+                    {
+                      name: 'Ottawa',
+                      primary: true,
+                      coordinates: { lat: 45.42, lng: -75.7 },
+                    },
+                  ],
                   region: 'Americas',
                   subregion: 'North America',
                   flag: { emoji: '🇨🇦' },
@@ -103,6 +153,92 @@ describe('CountryCatalogService', () => {
         mapAnchor: [-106, 56],
       },
     ]);
+  });
+
+  it('requests map coordinates from REST Countries v5 when custom fields omit them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            objects: [
+              {
+                names: { common: 'Canada' },
+                codes: { alpha_3: 'CAN' },
+                capitals: [
+                  {
+                    name: 'Ottawa',
+                    primary: true,
+                    coordinates: { lat: 45.42, lng: -75.7 },
+                  },
+                ],
+              },
+            ],
+            meta: { limit: 25, offset: 0, more: false },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config = createConfig(
+      'https://api.restcountries.com/countries/v5?response_fields=names.common,codes.alpha_3,capital,coordinates.latlng',
+    );
+
+    const countries = await new CountryCatalogService(config).getCountries();
+
+    const requestUrl = fetchMock.mock.calls[0]?.[0] as URL | undefined;
+    expect(requestUrl?.searchParams.get('response_fields')).toBe(
+      'names.common,codes.alpha_3,capitals',
+    );
+    expect(countries[0]?.mapAnchor).toEqual([-75.7, 45.42]);
+  });
+
+  it('requests map coordinates from a proxied v5 endpoint without a field list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            name: { common: 'Canada' },
+            cca3: 'CAN',
+            latlng: [56, -106],
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config = createConfig('https://countries.example.test/v5/all');
+
+    await new CountryCatalogService(config).getCountries();
+    const requestUrl = fetchMock.mock.calls[0]?.[0] as URL | undefined;
+    expect(requestUrl?.searchParams.get('response_fields')).toBe(
+      'names.common,names.official,codes.alpha_2,codes.alpha_3,codes.numeric,capitals,region,subregion,flag.emoji',
+    );
+  });
+
+  it('requests legacy map coordinates from REST Countries v3 endpoints', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            name: { common: 'Canada' },
+            cca3: 'CAN',
+            latlng: [56, -106],
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config = createConfig(
+      'https://restcountries.com/v3.1/all?fields=name,cca3',
+    );
+
+    const countries = await new CountryCatalogService(config).getCountries();
+
+    const requestUrl = fetchMock.mock.calls[0]?.[0] as URL | undefined;
+    expect(requestUrl?.searchParams.get('fields')).toBe('name,cca3,latlng');
+    expect(countries[0]?.mapAnchor).toEqual([-106, 56]);
   });
 
   it('fetches all pages of the v5 catalog using its pagination metadata', async () => {

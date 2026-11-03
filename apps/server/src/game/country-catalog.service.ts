@@ -26,12 +26,19 @@ interface CountryApiRecord {
   cca3?: string;
   ccn3?: string;
   capital?: string[] | string;
-  capitals?: string[];
+  capitals?: Array<string | CountryApiCapital> | string;
   region?: string;
   subregion?: string;
   flag?: string | { emoji?: string };
   latlng?: number[];
   coordinates?: { latlng?: number[] };
+}
+
+interface CountryApiCapital {
+  name?: string;
+  primary?: boolean;
+  attributes?: { primary?: boolean };
+  coordinates?: { lat?: number; lng?: number };
 }
 
 interface CountryApiPage {
@@ -81,20 +88,48 @@ const isCountryApiPage = (value: unknown): value is CountryApiPage =>
 const readString = (value: unknown): string =>
   typeof value === 'string' ? value : '';
 
-const readStringArray = (value: unknown): string[] =>
-  typeof value === 'string'
-    ? value.length > 0
-      ? [value]
-      : []
-    : Array.isArray(value)
-      ? value.filter(
-          (item): item is string =>
-            typeof item === 'string' && item.length > 0,
-        )
+const readCapitals = (
+  value: CountryApiRecord['capitals'] | CountryApiRecord['capital'],
+): string[] => {
+  if (typeof value === 'string') return value.length > 0 ? [value] : [];
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((capital) => {
+    if (typeof capital === 'string') return capital.length > 0 ? [capital] : [];
+    return typeof capital.name === 'string' && capital.name.length > 0
+      ? [capital.name]
       : [];
+  });
+};
 
 const readCode = (value: unknown): string =>
   typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+
+const toCapitalMapAnchor = (
+  capitals: CountryApiRecord['capitals'] | undefined,
+): [number, number] | null => {
+  if (!Array.isArray(capitals)) return null;
+
+  const primaryCapital = capitals.find(
+    (capital) =>
+      typeof capital === 'object' &&
+      capital !== null &&
+      (capital.primary === true || capital.attributes?.primary === true),
+  );
+  const candidates = [
+    ...(primaryCapital ? [primaryCapital] : []),
+    ...capitals.filter((capital) => capital !== primaryCapital),
+  ];
+
+  for (const capital of candidates) {
+    if (typeof capital === 'string' || !capital.coordinates) continue;
+    const { lat, lng } = capital.coordinates;
+    if (typeof lat !== 'number' || typeof lng !== 'number') continue;
+    const anchor = toMapAnchor([lat, lng]);
+    if (anchor) return anchor;
+  }
+  return null;
+};
 
 const toMapAnchor = (latlng: number[] | undefined): [number, number] | null => {
   const latitude = latlng?.[0];
@@ -126,15 +161,62 @@ const toCountryRecord = (country: CountryApiRecord): CountryRecord => {
     cca2: readString(codes?.alpha_2 ?? country.cca2).toUpperCase(),
     cca3: readString(codes?.alpha_3 ?? country.cca3).toUpperCase(),
     numericCode: readCode(codes?.numeric ?? country.ccn3),
-    capitals: readStringArray(capitals),
+    capitals: readCapitals(capitals),
     region: readString(country.region),
     subregion: readString(country.subregion),
     flag:
       typeof rawFlag === 'string'
         ? rawFlag
         : readString(rawFlag?.emoji),
-    mapAnchor: toMapAnchor(coordinates?.latlng ?? country.latlng),
+    mapAnchor:
+      toMapAnchor(coordinates?.latlng ?? country.latlng) ??
+      toCapitalMapAnchor(country.capitals),
   };
+};
+
+const includeMapCoordinates = (endpoint: string): URL => {
+  const requestUrl = new URL(endpoint);
+  const path = requestUrl.pathname.toLowerCase();
+  if (/\/v5(?:\/|$)/.test(path)) {
+    const fields = new Set(
+      requestUrl.searchParams.get('response_fields')?.split(',').map((field) => field.trim()).filter(Boolean) ??
+        [
+          'names.common',
+          'names.official',
+          'codes.alpha_2',
+          'codes.alpha_3',
+          'codes.numeric',
+          'capitals',
+          'region',
+          'subregion',
+          'flag.emoji',
+        ],
+    );
+    fields.delete('capital');
+    fields.delete('coordinates.latlng');
+    fields.add('capitals');
+    requestUrl.searchParams.set('response_fields', [...fields].join(','));
+  } else if (/\/v3(?:\.\d+)?(?:\/|$)/.test(path)) {
+    const fields = new Set(
+      requestUrl.searchParams
+        .get('fields')
+        ?.split(',')
+        .map((field) => field.trim())
+        .filter(Boolean) ?? [
+          'name',
+          'cca2',
+          'cca3',
+          'ccn3',
+          'capital',
+          'region',
+          'subregion',
+          'flag',
+        ],
+    );
+    fields.add('latlng');
+    requestUrl.searchParams.set('fields', [...fields].join(','));
+  }
+  return requestUrl;
 };
 
 const describePayloadShape = (payload: unknown, depth = 0): string => {
@@ -208,6 +290,33 @@ export class CountryCatalogService {
         throw new CountryCatalogUnavailableError();
       }
 
+      const mapAnchorCount = countries.filter(
+        (country) => country.mapAnchor !== null,
+      ).length;
+      const nestedCoordinateCount = countryPayload.filter(
+        (country) => country.coordinates?.latlng !== undefined,
+      ).length;
+      const legacyCoordinateCount = countryPayload.filter(
+        (country) => country.latlng !== undefined,
+      ).length;
+      const capitalCoordinateCount = countryPayload.filter((country) =>
+        Array.isArray(country.capitals) &&
+        country.capitals.some(
+          (capital) =>
+            typeof capital === 'object' &&
+            capital !== null &&
+            capital.coordinates !== undefined,
+        ),
+      ).length;
+      this.logger.log(
+        `Country catalog loaded: countries=${countries.length}, mapAnchors=${mapAnchorCount}, capitals.coordinates=${capitalCoordinateCount}, coordinates.latlng=${nestedCoordinateCount}, latlng=${legacyCoordinateCount}`,
+      );
+      if (mapAnchorCount === 0) {
+        this.logger.error(
+          'Country catalog has no valid map coordinates. For REST Countries v5, ensure the response includes capitals with coordinates; for legacy responses, ensure latlng is present.',
+        );
+      }
+
       return countries;
     } catch (error) {
       if (error instanceof CountryCatalogUnavailableError) throw error;
@@ -223,7 +332,13 @@ export class CountryCatalogService {
     headers: Headers,
   ): Promise<CountryApiRecord[]> {
     const countries: CountryApiRecord[] = [];
-    const requestUrl = new URL(endpoint);
+    const requestUrl = includeMapCoordinates(endpoint);
+    const coordinateField = requestUrl.pathname.toLowerCase().includes('/v5')
+      ? 'capitals field'
+      : 'latlng field';
+    this.logger.log(
+      `Loading country catalog from ${requestUrl.hostname}; requesting ${coordinateField} for map coordinates.`,
+    );
     let expectedOffset: number | null = null;
 
     while (true) {

@@ -289,7 +289,15 @@ export class RoomLifecycleService {
         1,
         this.config.getOrThrow('choicesPerRound'),
       );
-      if (!created) throw new RoomDomainError('INVALID_COMMAND');
+      if (!created) {
+        const mapAnchorCount = countryList.filter(
+          (country) => country.mapAnchor !== null,
+        ).length;
+        this.logger.error(
+          `Could not create the first round: mode=${draft.config.mode}, pinDirection=${draft.config.pinDirection}, countries=${countryList.length}, mapAnchors=${mapAnchorCount}.`,
+        );
+        throw new RoomDomainError('ROUND_UNAVAILABLE');
+      }
 
       draft.status = 'playing';
       draft.pendingConfig = null;

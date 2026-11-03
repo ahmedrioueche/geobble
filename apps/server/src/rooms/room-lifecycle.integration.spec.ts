@@ -179,11 +179,11 @@ describe('room lifecycle and competitive gameplay', () => {
       host.playerId,
       {
         ...host.snapshot.config,
-        subMode: 'capital',
+        mode: 'reverse',
       },
     );
     expect(updatedSettings.queued).toBe(false);
-    expect(updatedSettings.snapshot.config.subMode).toBe('capital');
+    expect(updatedSettings.snapshot.config.mode).toBe('reverse');
     const guest = await lifecycle.joinRoom({
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
@@ -194,9 +194,16 @@ describe('room lifecycle and competitive gameplay', () => {
       host.snapshot.roomId,
       host.playerId,
     );
-    const targetCode = (await repository.findById(host.snapshot.roomId))
-      ?.game.round?.targetCountryCode;
+    const stored = await repository.findById(host.snapshot.roomId);
+    const targetCode = stored?.game.round?.targetCountryCode;
+    const targetChoiceId = stored?.game.round?.choices.find(
+      (choice) => choice.countryCode === targetCode,
+    )?.id;
     const missionId = started.game.round?.missionId;
+    expect(started.game.round?.prompt).toMatchObject({
+      type: 'instruction',
+      mapAnchor: expect.any(Array),
+    });
     const changed = await lifecycle.changeSettings(
       host.snapshot.roomId,
       host.playerId,
@@ -209,12 +216,13 @@ describe('room lifecycle and competitive gameplay', () => {
       },
     );
     expect(changed.queued).toBe(true);
-    expect(changed.snapshot.config.mode).toBe('identify');
+    expect(changed.snapshot.config.mode).toBe('reverse');
     expect(changed.snapshot.pendingConfig?.mode).toBe('pin');
 
     await gameplay.submitCommand(host.snapshot.roomId, host.playerId, {
       type: 'answer',
-      answerCountryCode: targetCode ?? null,
+      choiceId: targetChoiceId ?? '',
+      answerCountryCode: null,
       commandId: 1,
       expectedRevision: changed.snapshot.revision,
       missionId: missionId ?? '',
