@@ -90,6 +90,7 @@ export class RoomGateway
   implements OnGatewayInit, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(RoomGateway.name);
+  private readonly playerSockets = new Map<string, RoomSocket>();
   private runtimeTimer: NodeJS.Timeout | null = null;
 
   @WebSocketServer()
@@ -121,6 +122,10 @@ export class RoomGateway
     const identity = client.data.roomIdentity;
     if (!identity) return;
     delete client.data.roomIdentity;
+    const key = this.getPlayerSocketKey(identity.roomId, identity.playerId);
+    if (this.playerSockets.get(key) === client) {
+      this.playerSockets.delete(key);
+    }
     void this.markDisconnected(identity);
   }
 
@@ -136,11 +141,11 @@ export class RoomGateway
       }
       const request = parseCreateRequest(value);
       const joined = await this.lifecycle.createRoom(request);
-      await client.join(joined.snapshot.roomId);
-      client.data.roomIdentity = {
+      await this.attachPlayerSocket(client, {
         roomId: joined.snapshot.roomId,
         playerId: joined.playerId,
-      };
+        reconnectToken: joined.reconnectToken,
+      });
       client.emit(ROOM_EVENTS.joined, {
         requestId: request.requestId,
         ...joined,
@@ -163,11 +168,11 @@ export class RoomGateway
         }
         const request = parseCreateRequest(value);
         const joined = await this.lifecycle.joinPublicRoom(request);
-        await client.join(joined.snapshot.roomId);
-        client.data.roomIdentity = {
+        await this.attachPlayerSocket(client, {
           roomId: joined.snapshot.roomId,
           playerId: joined.playerId,
-        };
+          reconnectToken: joined.reconnectToken,
+        });
         client.emit(ROOM_EVENTS.joined, {
           requestId: request.requestId,
           ...joined,
@@ -190,11 +195,11 @@ export class RoomGateway
       }
       const request = parseJoinRequest(value);
       const joined = await this.lifecycle.joinRoom(request);
-      await client.join(joined.snapshot.roomId);
-      client.data.roomIdentity = {
+      await this.attachPlayerSocket(client, {
         roomId: joined.snapshot.roomId,
         playerId: joined.playerId,
-      };
+        reconnectToken: joined.reconnectToken,
+      });
       client.emit(ROOM_EVENTS.joined, {
         requestId: request.requestId,
         ...joined,
@@ -215,11 +220,11 @@ export class RoomGateway
       }
       const request = parseReconnectRequest(value);
       const joined = await this.lifecycle.reconnect(request);
-      await client.join(joined.snapshot.roomId);
-      client.data.roomIdentity = {
+      await this.attachPlayerSocket(client, {
         roomId: joined.snapshot.roomId,
         playerId: joined.playerId,
-      };
+        reconnectToken: joined.reconnectToken,
+      });
       client.emit(ROOM_EVENTS.joined, {
         requestId: request.requestId,
         ...joined,
@@ -354,6 +359,10 @@ export class RoomGateway
       );
       await client.leave(identity.roomId);
       delete client.data.roomIdentity;
+      const key = this.getPlayerSocketKey(identity.roomId, identity.playerId);
+      if (this.playerSockets.get(key) === client) {
+        this.playerSockets.delete(key);
+      }
       if (result.snapshot) {
         this.namespace
           .to(identity.roomId)
@@ -372,6 +381,7 @@ export class RoomGateway
       const snapshot = await this.lifecycle.markDisconnected(
         identity.roomId,
         identity.playerId,
+        identity.reconnectToken,
       );
       if (snapshot) {
         this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, snapshot);
@@ -414,8 +424,33 @@ export class RoomGateway
       if (!(error instanceof RoomDomainError)) {
         this.logUnexpectedError('room request', error);
       }
-      client.emit(ROOM_EVENTS.error, { requestId, message });
+      client.emit(ROOM_EVENTS.error, {
+        requestId,
+        message,
+        ...(error instanceof RoomDomainError ? { code: error.code } : {}),
+      });
     }
+  }
+
+  private async attachPlayerSocket(
+    client: RoomSocket,
+    identity: RoomSocketIdentity,
+  ): Promise<void> {
+    await client.join(identity.roomId);
+    const key = this.getPlayerSocketKey(identity.roomId, identity.playerId);
+    const previous = this.playerSockets.get(key);
+
+    client.data.roomIdentity = identity;
+    this.playerSockets.set(key, client);
+
+    if (previous && previous.id !== client.id) {
+      delete previous.data.roomIdentity;
+      previous.disconnect(true);
+    }
+  }
+
+  private getPlayerSocketKey(roomId: string, playerId: string): string {
+    return `${roomId}:${playerId}`;
   }
 
   private enforceEventRate(client: RoomSocket): void {

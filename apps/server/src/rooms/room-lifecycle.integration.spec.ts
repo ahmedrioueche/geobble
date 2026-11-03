@@ -408,6 +408,42 @@ describe('room lifecycle and competitive gameplay', () => {
     });
   });
 
+  it('accepts a valid reconnect while disconnect is pending and ignores the old socket disconnect', async () => {
+    const config = createConfig();
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      new CountryCatalogService(config),
+      new GameEngineService(),
+      config,
+    );
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create',
+      playerName: 'Ada',
+    });
+
+    const reconnected = await lifecycle.reconnect({
+      requestId: 'request-reconnect',
+      roomId: host.snapshot.roomId,
+      playerId: host.playerId,
+      reconnectToken: host.reconnectToken,
+    });
+
+    expect(reconnected.reconnectToken).not.toBe(host.reconnectToken);
+    await lifecycle.markDisconnected(
+      host.snapshot.roomId,
+      host.playerId,
+      host.reconnectToken,
+    );
+    await expect(
+      lifecycle.getSnapshot(host.snapshot.roomId),
+    ).resolves.toMatchObject({
+      players: [expect.objectContaining({ id: host.playerId, connected: true })],
+    });
+  });
+
   it('creates a public room when matchmaking has no match and reuses it for the next player', async () => {
     const config = createConfig();
     const repository = new InMemoryRoomRepository();

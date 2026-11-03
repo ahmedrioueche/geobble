@@ -2,6 +2,7 @@ import type {
   RoomCommand,
   RoomCommandInput,
   RoomConfiguration,
+  RoomErrorCode,
   RoomJoinedEvent,
   RoomServerEvent,
   RoomSnapshot,
@@ -14,11 +15,29 @@ import {
 
 const CREDENTIALS_KEY = "geobble.multiplayer.reconnect";
 const REQUEST_TIMEOUT_MS = 12_000;
+const TERMINAL_RECONNECT_ERROR_CODES: RoomErrorCode[] = [
+  "NOT_AUTHORIZED",
+  "ROOM_NOT_FOUND",
+  "ROOM_EXPIRED",
+];
 
 interface StoredRoomCredentials {
   roomId: string;
   playerId: string;
   reconnectToken: string;
+}
+
+class RoomRequestFailure extends Error {
+  readonly code?: RoomErrorCode;
+
+  constructor(
+    message: string,
+    code?: RoomErrorCode,
+  ) {
+    super(message);
+    this.name = "RoomRequestFailure";
+    this.code = code;
+  }
 }
 
 export interface ActiveRoom {
@@ -171,19 +190,23 @@ export const createRoomClient = (
     for (const listener of listeners) listener(state);
   };
 
-  const rejectPendingJoins = (requestId: string | null, message: string) => {
+  const rejectPendingJoins = (
+    requestId: string | null,
+    message: string,
+    code?: RoomErrorCode,
+  ) => {
     if (requestId) {
       const pending = pendingJoins.get(requestId);
       if (pending) {
         clearTimeout(pending.timeout);
         pendingJoins.delete(requestId);
-        pending.reject(new Error(message));
+        pending.reject(new RoomRequestFailure(message, code));
       }
       return;
     }
     for (const pending of pendingJoins.values()) {
       clearTimeout(pending.timeout);
-      pending.reject(new Error(message));
+      pending.reject(new RoomRequestFailure(message, code));
     }
     pendingJoins.clear();
   };
@@ -241,6 +264,13 @@ export const createRoomClient = (
         ...reconnectCredentials,
       });
     } catch (error) {
+      if (
+        error instanceof RoomRequestFailure &&
+        error.code !== undefined &&
+        TERMINAL_RECONNECT_ERROR_CODES.includes(error.code)
+      ) {
+        return;
+      }
       updateState({
         status: "error",
         error:
@@ -314,7 +344,11 @@ export const createRoomClient = (
         });
         return;
       case "error":
-        rejectPendingJoins(event.payload.requestId, event.payload.message);
+        rejectPendingJoins(
+          event.payload.requestId,
+          event.payload.message,
+          event.payload.code,
+        );
         if (event.payload.requestId) {
           const pending = pendingSettings.get(event.payload.requestId);
           if (pending) {
@@ -324,17 +358,21 @@ export const createRoomClient = (
           }
         }
         if (event.payload.requestId !== null) {
+          if (event.payload.requestId === reconnectRequestId) {
+            const terminalReconnectError = event.payload.code
+              ? TERMINAL_RECONNECT_ERROR_CODES.includes(event.payload.code)
+              : false;
+            if (terminalReconnectError) {
+              invalidateReconnectSession();
+            }
+            return;
+          }
           updateState({
-            status:
-              event.payload.requestId === reconnectRequestId
-                ? "error"
-                : state.room
-                  ? "connected"
-                  : transportConnected
-                    ? "connected"
-                    : "disconnected",
-            reconnectRequired:
-              event.payload.requestId === reconnectRequestId,
+            status: state.room
+              ? "connected"
+              : transportConnected
+                ? "connected"
+                : "disconnected",
             error: event.payload.message,
           });
           return;
@@ -475,6 +513,37 @@ export const createRoomClient = (
       reconnectAvailable: false,
       reconnectRequired: false,
       error: null,
+    });
+  };
+
+  const invalidateReconnectSession = () => {
+    credentials = null;
+    reconnectRequestId = null;
+    reconnecting = false;
+    let error = "Your saved room session is no longer valid. Join or create a room.";
+    try {
+      storage.clear();
+    } catch {
+      error =
+        "Your saved room session is no longer valid, but its saved details could not be cleared.";
+    }
+
+    for (const [requestId, pending] of pendingSettings) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error("The saved room session is no longer valid."));
+      pendingSettings.delete(requestId);
+    }
+
+    updateState({
+      status: transportConnected ? "connected" : "disconnected",
+      room: null,
+      pendingCommandIds: [],
+      lastAcknowledgedRevision: null,
+      lastAnswerResult: null,
+      settingsAccepted: null,
+      reconnectAvailable: false,
+      reconnectRequired: false,
+      error,
     });
   };
 

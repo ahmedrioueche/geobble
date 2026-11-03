@@ -150,6 +150,26 @@ describe("multiplayer room protocol", () => {
     ).toBe(false);
     expect(
       isRoomServerEvent({
+        type: "error",
+        payload: {
+          requestId: "request-1",
+          message: "Reconnect rejected.",
+          code: "NOT_AUTHORIZED",
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isRoomServerEvent({
+        type: "error",
+        payload: {
+          requestId: "request-1",
+          message: "Reconnect rejected.",
+          code: "UNKNOWN_ERROR",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isRoomServerEvent({
         type: "command-rejected",
         payload: {
           roomId: snapshot.roomId,
@@ -430,6 +450,96 @@ describe("createRoomClient", () => {
     );
     await retrying;
     expect(storage.value?.reconnectToken).toBe("new-token");
+  });
+
+  it("clears room state and saved credentials when reconnect is no longer authorized", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    storage.value = {
+      roomId: "ROOM2345",
+      playerId: "player-1",
+      reconnectToken: "saved-token",
+    };
+    const client = createRoomClient(
+      transport,
+      storage,
+      () => "request-reconnect",
+    );
+
+    const resuming = client.resume();
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:reconnect"),
+    );
+    transport.receive({
+      type: "error",
+      payload: {
+        requestId: "request-reconnect",
+        code: "NOT_AUTHORIZED",
+        message: "This player is not authorized to reconnect.",
+      },
+    });
+    await resuming;
+
+    expect(client.getState()).toMatchObject({
+      status: "connected",
+      room: null,
+      reconnectAvailable: false,
+      reconnectRequired: false,
+      error: "Your saved room session is no longer valid. Join or create a room.",
+    });
+    expect(storage.value).toBeNull();
+
+    const reloadedClient = createRoomClient(
+      new FakeRoomTransport(),
+      storage,
+      () => "unused-request",
+    );
+    expect(reloadedClient.getState()).toMatchObject({
+      room: null,
+      reconnectAvailable: false,
+      reconnectRequired: false,
+    });
+
+    const creating = client.createRoom("Ada");
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:create"),
+    );
+    transport.receive(createJoinedEvent("request-reconnect"));
+    await creating;
+    expect(client.getState().room?.snapshot.roomId).toBe("ROOM2345");
+  });
+
+  it("drops a stale in-memory room after a denied automatic reconnect", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    const client = createRoomClient(transport, storage, () => "request-1");
+    const joining = client.joinRoom("ROOM2345", "Ada");
+    await vi.waitFor(() => expect(transport.events).toHaveLength(1));
+    transport.receive(createJoinedEvent("request-1"));
+    await joining;
+
+    transport.setStatus("reconnecting");
+    transport.setStatus("connected");
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:reconnect"),
+    );
+    transport.receive({
+      type: "error",
+      payload: {
+        requestId: "request-1",
+        code: "NOT_AUTHORIZED",
+        message: "This player is not authorized to reconnect.",
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(client.getState()).toMatchObject({
+        room: null,
+        reconnectAvailable: false,
+        reconnectRequired: false,
+      }),
+    );
+    expect(storage.value).toBeNull();
   });
 
   it("keeps room connectivity when a room action is rejected", async () => {

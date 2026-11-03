@@ -6,6 +6,7 @@ import type {
   RoomReconnectRequest,
   RoomSnapshot,
 } from './domain/room.types.js';
+import type { RoomErrorCode } from './domain/room-errors.js';
 
 export const ROOM_EVENTS = {
   create: 'room:create',
@@ -30,11 +31,13 @@ export const ROOM_EVENTS = {
 export interface RoomSocketIdentity {
   roomId: string;
   playerId: string;
+  reconnectToken: string;
 }
 
 export interface RoomRequestError {
   requestId: string | null;
   message: string;
+  code?: RoomErrorCode;
 }
 
 export interface RoomClientEvents {

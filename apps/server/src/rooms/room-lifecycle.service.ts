@@ -215,7 +215,6 @@ export class RoomLifecycleService {
         );
         if (
           !player ||
-          player.connected ||
           !isSameHash(player.reconnectTokenHash, hashToken(request.reconnectToken))
         ) {
           throw new RoomDomainError('NOT_AUTHORIZED');
@@ -223,8 +222,9 @@ export class RoomLifecycleService {
 
         const gracePeriod = this.config.getOrThrow('reconnectGraceMs');
         if (
-          player.disconnectedAt === null ||
-          now - player.disconnectedAt > gracePeriod
+          !player.connected &&
+          (player.disconnectedAt === null ||
+            now - player.disconnectedAt > gracePeriod)
         ) {
           throw new RoomDomainError('NOT_AUTHORIZED');
         }
@@ -388,10 +388,24 @@ export class RoomLifecycleService {
     };
   }
 
-  async markDisconnected(roomId: string, playerId: string) {
+  async markDisconnected(
+    roomId: string,
+    playerId: string,
+    reconnectToken?: string,
+  ) {
     const { room } = await this.mutations.update(roomId, (draft) => {
       const player = draft.players.find((item) => item.playerId === playerId);
-      if (!player || !player.connected) return;
+      if (
+        !player ||
+        !player.connected ||
+        (reconnectToken !== undefined &&
+          !isSameHash(
+            player.reconnectTokenHash,
+            hashToken(reconnectToken),
+          ))
+      ) {
+        return;
+      }
       player.connected = false;
       player.disconnectedAt = Date.now();
       if (

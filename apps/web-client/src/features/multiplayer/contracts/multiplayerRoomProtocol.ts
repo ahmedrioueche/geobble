@@ -89,6 +89,23 @@ export interface RoomJoinedEvent {
   snapshot: RoomSnapshot;
 }
 
+export type RoomErrorCode =
+  | "INVALID_REQUEST"
+  | "ROOM_NOT_FOUND"
+  | "ROOM_FULL"
+  | "ROOM_NOT_JOINABLE"
+  | "ROOM_NOT_STARTABLE"
+  | "ROUND_UNAVAILABLE"
+  | "NOT_ADMIN"
+  | "NOT_CONNECTED"
+  | "NOT_AUTHORIZED"
+  | "STALE_REVISION"
+  | "STALE_MISSION"
+  | "DUPLICATE_COMMAND"
+  | "INVALID_COMMAND"
+  | "ROOM_EXPIRED"
+  | "RATE_LIMITED";
+
 export type RoomServerEvent =
   | { type: "joined"; payload: RoomJoinedEvent }
   | { type: "updated"; snapshot: RoomSnapshot }
@@ -123,7 +140,11 @@ export type RoomServerEvent =
   | { type: "closed"; payload: { roomId: string } }
   | {
       type: "error";
-      payload: { requestId: string | null; message: string };
+      payload: {
+        requestId: string | null;
+        message: string;
+        code?: RoomErrorCode;
+      };
     };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -134,6 +155,25 @@ const isInteger = (value: unknown): value is number =>
 
 const isString = (value: unknown): value is string =>
   typeof value === "string";
+
+const isRoomErrorCode = (value: unknown): value is RoomErrorCode =>
+  [
+    "INVALID_REQUEST",
+    "ROOM_NOT_FOUND",
+    "ROOM_FULL",
+    "ROOM_NOT_JOINABLE",
+    "ROOM_NOT_STARTABLE",
+    "ROUND_UNAVAILABLE",
+    "NOT_ADMIN",
+    "NOT_CONNECTED",
+    "NOT_AUTHORIZED",
+    "STALE_REVISION",
+    "STALE_MISSION",
+    "DUPLICATE_COMMAND",
+    "INVALID_COMMAND",
+    "ROOM_EXPIRED",
+    "RATE_LIMITED",
+  ].includes(String(value));
 
 const isNullableInteger = (value: unknown): value is number | null =>
   value === null || isInteger(value);
@@ -251,7 +291,8 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
     case "error":
       return (
         (payload.requestId === null || isString(payload.requestId)) &&
-        isString(payload.message)
+        isString(payload.message) &&
+        (payload.code === undefined || isRoomErrorCode(payload.code))
       );
     default:
       return false;
