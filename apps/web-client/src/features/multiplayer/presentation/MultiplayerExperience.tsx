@@ -178,9 +178,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     }
   };
 
-  const saveRoomSettings = async (
-    configuration: RoomConfiguration,
-  ) => {
+  const saveRoomSettings = async (configuration: RoomConfiguration) => {
     setActionError(null);
     await client.changeSettings(configuration);
     setShowSettings(false);
@@ -421,12 +419,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             <div className="absolute inset-x-4 bottom-5 top-24 z-20 mx-auto grid max-w-5xl gap-4 overflow-y-auto md:grid-cols-[1fr_1.2fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/90 p-5 backdrop-blur-xl">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="font-black uppercase tracking-wider">Players</h2>
+                  <h2 className="font-black uppercase tracking-wider">
+                    Players
+                  </h2>
                   <span className="text-xs text-white/50">
                     {snapshot.players.length} players
                   </span>
                 </div>
-                <ul className="space-y-2">
+                <ul
+                  aria-label="Room players"
+                  className="max-h-[40vh] space-y-2 overflow-y-auto overscroll-contain pr-1"
+                >
                   {snapshot.players.map((player) => (
                     <li
                       className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3"
@@ -457,37 +460,54 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     </li>
                   ))}
                 </ul>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <button
-                    className="flex-1 rounded-xl border border-white/15 px-4 py-3 text-sm font-black uppercase hover:bg-white/10"
-                    disabled={state.status !== "connected"}
-                    onClick={() =>
-                      void runAction(async () =>
-                        client.setReady(!self?.ready),
-                      )
-                    }
-                    type="button"
-                  >
-                    {self?.ready ? "Not ready" : "Ready"}
-                  </button>
-                  {isAdmin && (
+                <div className="mt-5 rounded-xl border border-sky-300/20 bg-sky-300/5 p-4">
+                  <p className="text-sm font-bold text-white">
+                    {self?.ready
+                      ? "You're ready to play."
+                      : "Ready to play? Let the host know."}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-white/55">
+                    {self?.ready
+                      ? "Change your mind? You can mark yourself as not ready."
+                      : "Select “I'm ready” when you're ready. The host can start once everyone is ready."}
+                  </p>
+                  <div className="sticky bottom-0 mt-4 flex flex-wrap gap-2 bg-slate-950/95 py-1">
                     <button
-                      className="flex-1 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 disabled:opacity-40"
-                      disabled={
-                        state.status !== "connected" ||
-                        snapshot.players.length < 2 ||
-                        snapshot.players.some(
-                          (player) => !player.connected || !player.ready,
-                        )
-                      }
+                      aria-pressed={self?.ready ?? false}
+                      className={`min-h-12 flex-1 rounded-xl px-4 py-3 text-sm font-black uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        self?.ready
+                          ? "bg-rose-600 hover:bg-rose-500"
+                          : "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                      }`}
+                      disabled={state.status !== "connected"}
                       onClick={() =>
-                        void runAction(async () => client.startRoom())
+                        void runAction(async () =>
+                          client.setReady(!self?.ready),
+                        )
                       }
                       type="button"
                     >
-                      Start game
+                      {self?.ready ? "I'm not ready" : "I'm ready"}
                     </button>
-                  )}
+                    {isAdmin && (
+                      <button
+                        className="min-h-12 flex-1 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={
+                          state.status !== "connected" ||
+                          snapshot.players.length < 2 ||
+                          snapshot.players.some(
+                            (player) => !player.connected || !player.ready,
+                          )
+                        }
+                        onClick={() =>
+                          void runAction(async () => client.startRoom())
+                        }
+                        type="button"
+                      >
+                        Start game
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="space-y-4">
@@ -556,12 +576,18 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     className={`mt-2 text-xs font-black uppercase ${state.lastAnswerResult ? "text-emerald-300" : "text-rose-300"}`}
                     role="status"
                   >
-                    {state.lastAnswerResult ? "Correct answer" : "Answer submitted"}
+                    {state.lastAnswerResult
+                      ? "Correct answer"
+                      : "Answer submitted"}
                   </p>
                 )}
                 {state.settingsAccepted && (
                   <p className="mt-2 text-[10px] font-bold text-amber-200">
-                    Settings {state.settingsAccepted.queued ? "queued for the next round" : "updated"}.
+                    Settings{" "}
+                    {state.settingsAccepted.queued
+                      ? "queued for the next round"
+                      : "updated"}
+                    .
                   </p>
                 )}
                 {isChoiceMode && round && !round.revealed && (

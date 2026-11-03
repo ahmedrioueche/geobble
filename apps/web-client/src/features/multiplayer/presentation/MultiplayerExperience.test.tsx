@@ -32,9 +32,7 @@ vi.mock("../application/useRoomClient", () => ({
 }));
 vi.mock("../../map/WorldMap", () => ({ WorldMap: () => null }));
 
-const createSnapshot = (
-  changes: Partial<RoomSnapshot> = {},
-): RoomSnapshot => ({
+const createSnapshot = (changes: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   roomId: "ROOM2345",
   revision: 1,
   status: "waiting",
@@ -78,9 +76,7 @@ const createSnapshot = (
   ...changes,
 });
 
-const createClientState = (
-  snapshot?: RoomSnapshot,
-): RoomClientState => ({
+const createClientState = (snapshot?: RoomSnapshot): RoomClientState => ({
   status: snapshot ? "connected" : "disconnected",
   room: snapshot ? { playerId: "player-1", snapshot } : null,
   pendingCommandIds: [],
@@ -130,9 +126,7 @@ afterEach(() => {
 });
 
 describe("MultiplayerExperience", () => {
-  const renderExperience = (
-    state: RoomClientState = createClientState(),
-  ) => {
+  const renderExperience = (state: RoomClientState = createClientState()) => {
     mocks.useRoomClient.mockReturnValue({
       client: {
         createRoom: mocks.createRoom.mockResolvedValue(undefined),
@@ -164,10 +158,16 @@ describe("MultiplayerExperience", () => {
     fireEvent.change(screen.getByLabelText("Player name"), {
       target: { value: "Ada" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create private room" }),
+    );
 
     await waitFor(() =>
-      expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "private"),
+      expect(mocks.createRoom).toHaveBeenCalledWith(
+        "Ada",
+        undefined,
+        "private",
+      ),
     );
   });
 
@@ -179,9 +179,9 @@ describe("MultiplayerExperience", () => {
       target: { value: "Ada" },
     });
 
-    expect(
-      window.localStorage.getItem("geobble:multiplayer-player-name"),
-    ).toBe("Ada");
+    expect(window.localStorage.getItem("geobble:multiplayer-player-name")).toBe(
+      "Ada",
+    );
 
     firstRender.unmount();
     renderExperience();
@@ -201,7 +201,9 @@ describe("MultiplayerExperience", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Join public game" }));
 
-    await waitFor(() => expect(mocks.joinPublicRoom).toHaveBeenCalledWith("Ada"));
+    await waitFor(() =>
+      expect(mocks.joinPublicRoom).toHaveBeenCalledWith("Ada"),
+    );
   });
 
   it("can create a public room", async () => {
@@ -237,10 +239,16 @@ describe("MultiplayerExperience", () => {
     fireEvent.change(screen.getByLabelText("Player name"), {
       target: { value: "Ada" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create private room" }),
+    );
 
     await waitFor(() =>
-      expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "private"),
+      expect(mocks.createRoom).toHaveBeenCalledWith(
+        "Ada",
+        undefined,
+        "private",
+      ),
     );
   });
 
@@ -251,11 +259,83 @@ describe("MultiplayerExperience", () => {
     expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
     expect(screen.getByText("Whole world")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Not ready" }));
+    fireEvent.click(screen.getByRole("button", { name: "I'm not ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(mocks.setReady).toHaveBeenCalledWith(false);
     expect(mocks.startRoom).toHaveBeenCalledOnce();
+  });
+
+  it("makes the ready action explicit and changes its color with the player's state", () => {
+    const snapshot = createSnapshot({
+      players: createSnapshot().players.map((player) => ({
+        ...player,
+        ready: player.id !== "player-1",
+      })),
+    });
+    const view = renderExperience(createClientState(snapshot));
+    const readyButton = screen.getByRole("button", { name: "I'm ready" });
+
+    expect(screen.getByText("Ready to play? Let the host know.")).toBeTruthy();
+    expect(readyButton.getAttribute("aria-pressed")).toBe("false");
+    expect(readyButton.className).toContain("bg-sky-500");
+    fireEvent.click(readyButton);
+    expect(mocks.setReady).toHaveBeenCalledWith(true);
+
+    const readySnapshot = createSnapshot({
+      players: createSnapshot().players.map((player) => ({
+        ...player,
+        ready: true,
+      })),
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(readySnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    const notReadyButton = screen.getByRole("button", {
+      name: "I'm not ready",
+    });
+    expect(screen.getByText("You're ready to play.")).toBeTruthy();
+    expect(notReadyButton.getAttribute("aria-pressed")).toBe("true");
+    expect(notReadyButton.className).toContain("bg-rose-600");
+  });
+
+  it("keeps lobby actions available with a large player list", () => {
+    const basePlayers = createSnapshot().players;
+    const players = [
+      ...basePlayers,
+      ...Array.from({ length: 48 }, (_, index) => ({
+        ...basePlayers[1]!,
+        id: `player-${index + 3}`,
+        name: `Player ${index + 3}`,
+      })),
+    ];
+    renderExperience(createClientState(createSnapshot({ players })));
+
+    expect(screen.getByText("50 players")).toBeTruthy();
+    expect(screen.getByText("Player 50")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Room players" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "I'm not ready" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeTruthy();
   });
 
   it("shows room settings to non-admin players without edit controls", () => {
