@@ -1,11 +1,11 @@
 import * as d3 from "d3";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { RefObject } from "react";
 import type { Geometry } from "geojson";
 import type { CountryFeatureCollection, CountryFeature } from "./useWorldMap";
 import type { GameMode, PinDirection } from "../../store/useGameStore";
 import { getPinIdentifyCamera } from "./pinIdentifyCamera";
-import { getCountryCamera } from "./countryCamera";
+import { getCountryCamera, getMissionOverviewCamera } from "./countryCamera";
 import { findCountryFeature } from "./mapFeatureUtils";
 import { getCountrySelectionCamera } from "./countrySelectionCamera";
 
@@ -51,6 +51,7 @@ export const useMissionMapCamera = ({
   missionId,
   getEffectiveGeometry,
 }: UseMissionMapCameraOptions) => {
+  const lastMissionIdRef = useRef<string | null>(null);
   const homeTransform = useMemo(() => {
     if (dimensions.width === 0) return d3.zoomIdentity;
     const isMobile = dimensions.width < 768;
@@ -76,6 +77,29 @@ export const useMissionMapCamera = ({
 
     const svg = d3.select(svgRef.current);
     const currentTransform = d3.zoomTransform(svgRef.current);
+    const missionChanged =
+      missionId !== null &&
+      missionId !== undefined &&
+      lastMissionIdRef.current !== null &&
+      lastMissionIdRef.current !== missionId;
+    if (missionId) lastMissionIdRef.current = missionId;
+
+    if (missionChanged && !selectedCountryCode) {
+      const overviewTransform = getMissionOverviewCamera(
+        currentTransform,
+        homeTransform,
+      );
+      if (overviewTransform) {
+        svg
+          .interrupt()
+          .transition()
+          .duration(900)
+          .ease(d3.easeCubicInOut)
+          .call(zoomRef.current.transform, overviewTransform);
+      }
+      return;
+    }
+
     const isPinLocate = mode === "pin" && pinDirection === "locate";
     const isPinIdentify = mode === "pin" && pinDirection === "identify";
 

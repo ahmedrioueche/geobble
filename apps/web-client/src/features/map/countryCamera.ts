@@ -59,3 +59,9 @@ export const getCountryCamera = (
     isAlreadyFramed: isInView && isGoodScale,
   };
 };
+
+export const getMissionOverviewCamera = (
+  currentTransform: d3.ZoomTransform,
+  homeTransform: d3.ZoomTransform,
+): d3.ZoomTransform | null =>
+  currentTransform.k > homeTransform.k ? homeTransform : null;

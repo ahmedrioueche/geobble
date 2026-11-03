@@ -1,6 +1,6 @@
 import * as d3 from "d3";
 import { describe, expect, it } from "vitest";
-import { getCountryCamera } from "./countryCamera";
+import { getCountryCamera, getMissionOverviewCamera } from "./countryCamera";
 
 describe("getCountryCamera", () => {
   it("frames a country at the desktop center with the identify scale", () => {
@@ -17,6 +17,20 @@ describe("getCountryCamera", () => {
 
     expect(transform.k).toBe(4);
     expect(transform.apply([450, 350])).toEqual([600, 400]);
+  });
+
+  describe("getMissionOverviewCamera", () => {
+    it("returns to the normal overview after a close-up without zooming out further", () => {
+      const overview = d3.zoomIdentity
+        .translate(600, 400)
+        .scale(1.3)
+        .translate(-600, -400);
+
+      expect(
+        getMissionOverviewCamera(d3.zoomIdentity.scale(6), overview),
+      ).toBe(overview);
+      expect(getMissionOverviewCamera(overview, overview)).toBeNull();
+    });
   });
 
   it("uses the lower reverse-mode scale", () => {
