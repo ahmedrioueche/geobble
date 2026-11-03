@@ -94,6 +94,7 @@ const createClientState = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockImplementation((media: string) => ({
@@ -168,6 +169,27 @@ describe("MultiplayerExperience", () => {
     await waitFor(() =>
       expect(mocks.createRoom).toHaveBeenCalledWith("Ada", undefined, "private"),
     );
+  });
+
+  it("saves the player name and pre-fills it when multiplayer is opened again", () => {
+    const firstRender = renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+
+    expect(
+      window.localStorage.getItem("geobble:multiplayer-player-name"),
+    ).toBe("Ada");
+
+    firstRender.unmount();
+    renderExperience();
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+
+    expect(
+      (screen.getByLabelText("Player name") as HTMLInputElement).value,
+    ).toBe("Ada");
   });
 
   it("allows joining public matchmaking even when no rooms are currently available", async () => {

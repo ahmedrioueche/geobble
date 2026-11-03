@@ -15,6 +15,12 @@ import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
 import { RoomSettingsPanel } from "./RoomSettingsPanel";
+import {
+  readBrowserStorageItem,
+  writeBrowserStorageItem,
+} from "../../../store/safeBrowserStorage";
+
+const PLAYER_NAME_STORAGE_KEY = "geobble:multiplayer-player-name";
 
 interface MultiplayerExperienceProps {
   countries: CountryData[];
@@ -41,7 +47,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const { client, state } = useRoomClient();
   const [showEntry, setShowEntry] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [playerName, setPlayerName] = useState("");
+  const [playerName, setPlayerName] = useState(
+    () => readBrowserStorageItem(PLAYER_NAME_STORAGE_KEY) ?? "",
+  );
   const [roomCode, setRoomCode] = useState("");
   const [roomVisibility, setRoomVisibility] = useState<"public" | "private">(
     "private",
@@ -67,6 +75,10 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     snapshot?.config.mode === "reverse" ||
     (snapshot?.config.mode === "pin" &&
       snapshot.config.pinDirection === "identify");
+
+  useEffect(() => {
+    writeBrowserStorageItem(PLAYER_NAME_STORAGE_KEY, playerName);
+  }, [playerName]);
 
   useEffect(() => {
     if (snapshot?.status !== "playing") return;
