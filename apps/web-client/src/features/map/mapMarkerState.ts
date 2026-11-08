@@ -12,6 +12,7 @@ interface MapMarkerStateOptions {
   targetPinCoordinates: [number, number] | null;
   projection: d3.GeoProjection;
   mapWidth: number;
+  feedback?: "correct" | "wrong" | null;
 }
 
 interface MapMarkerState {
@@ -29,22 +30,29 @@ export const getMapMarkerState = ({
   targetPinCoordinates,
   projection,
   mapWidth,
+  feedback = null,
 }: MapMarkerStateOptions): MapMarkerState => {
   const isPinGame =
     mode === "pin" && (gameStatus === "playing" || revealed);
+  const guessPinPoint =
+    isPinGame && pinDirection === "locate" && pinLocation
+      ? projection(pinLocation)
+      : null;
+  // A correct locate guess already marks the answer; a second target pin
+  // would only stack a duplicate on top of it.
+  const guessMarksTarget =
+    pinDirection === "locate" && feedback === "correct" && guessPinPoint !== null;
   const showTargetPin =
     isPinGame &&
-    (pinDirection === "identify" || (pinDirection === "locate" && revealed));
+    (pinDirection === "identify" ||
+      (pinDirection === "locate" && revealed && !guessMarksTarget));
 
   return {
     targetPinPoint:
       showTargetPin && targetPinCoordinates
         ? projection(targetPinCoordinates)
         : null,
-    guessPinPoint:
-      isPinGame && pinDirection === "locate" && pinLocation
-        ? projection(pinLocation)
-        : null,
-    pinScale: mapWidth < 768 ? 0.2 : 0.5,
+    guessPinPoint,
+    pinScale: mapWidth < 768 ? 0.08 : 0.5,
   };
 };

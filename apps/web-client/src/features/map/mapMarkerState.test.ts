@@ -28,6 +28,31 @@ describe("getMapMarkerState", () => {
     );
   });
 
+  it("does not stack a target pin on a correct locate guess", () => {
+    const correct = getMapMarkerState({
+      ...defaults,
+      revealed: true,
+      feedback: "correct",
+    });
+    expect(correct.targetPinPoint).toBeNull();
+    expect(correct.guessPinPoint).toEqual(projection(pinLocation));
+
+    const wrong = getMapMarkerState({
+      ...defaults,
+      revealed: true,
+      feedback: "wrong",
+    });
+    expect(wrong.targetPinPoint).toEqual(projection(targetPinCoordinates));
+
+    const noGuess = getMapMarkerState({
+      ...defaults,
+      revealed: true,
+      feedback: "correct",
+      pinLocation: null,
+    });
+    expect(noGuess.targetPinPoint).toEqual(projection(targetPinCoordinates));
+  });
+
   it("shows the identify target but not a guess pin", () => {
     const state = getMapMarkerState({
       ...defaults,
@@ -47,8 +72,8 @@ describe("getMapMarkerState", () => {
     ).toBeNull();
   });
 
-  it("keeps the existing mobile and desktop pin scales", () => {
-    expect(getMapMarkerState({ ...defaults, mapWidth: 390 }).pinScale).toBe(0.2);
+  it("uses a smaller pin on mobile and the existing desktop scale", () => {
+    expect(getMapMarkerState({ ...defaults, mapWidth: 390 }).pinScale).toBe(0.08);
     expect(getMapMarkerState({ ...defaults, mapWidth: 768 }).pinScale).toBe(0.5);
   });
 });

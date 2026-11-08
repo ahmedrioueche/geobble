@@ -133,6 +133,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
         : targetPinCoordinates,
     projection,
     mapWidth: dimensions.width,
+    feedback,
   });
 
   return (
