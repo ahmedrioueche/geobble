@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Copy } from "lucide-react";
+import { Copy, Users } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
@@ -47,6 +47,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const { client, state } = useRoomClient();
   const [showEntry, setShowEntry] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showStandings, setShowStandings] = useState(false);
   const [playerName, setPlayerName] = useState(
     () => readBrowserStorageItem(PLAYER_NAME_STORAGE_KEY) ?? "",
   );
@@ -65,6 +66,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const snapshot = room?.snapshot;
   const round = snapshot?.game.round ?? null;
   const self = getPlayer(room, room?.playerId ?? null);
+  const selfPlayerId = room?.playerId ?? null;
   const isAdmin = self?.isAdmin ?? false;
   const hasAnswered = self?.answered ?? false;
   const waitingForCommand = state.pendingCommandIds.length > 0;
@@ -106,7 +108,70 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         toast(`${player.name} disconnected`, { icon: "⚠️" });
       }
     }
-  }, [snapshot]);
+
+    const previousRound = previous.game.round;
+    const currentRound = snapshot.game.round;
+    if (
+      previousRound &&
+      currentRound &&
+      previousRound.missionId === currentRound.missionId &&
+      !previousRound.revealed &&
+      currentRound.revealed &&
+      currentRound.answerReveal
+    ) {
+      const answerName = currentRound.answerReveal.countryName;
+      const scorers = snapshot.players.filter((player) => {
+        const previousPlayer = previous.players.find(
+          (candidate) => candidate.id === player.id,
+        );
+        return previousPlayer !== undefined && player.score > previousPlayer.score;
+      });
+      if (scorers.length > 0) {
+        const names = scorers.map((player) =>
+          player.id === selfPlayerId ? "You" : player.name,
+        );
+        const promptValue = currentRound.prompt.value.trim().toLowerCase();
+        const answerIsObvious =
+          currentRound.prompt.type === "text" &&
+          promptValue === answerName.trim().toLowerCase();
+        toast.success(
+          <span>
+            <span className="font-black text-sky-500">
+              {names.join(", ")}
+            </span>{" "}
+            got it!
+            {!answerIsObvious && (
+              <>
+                {" "}
+                The answer is{" "}
+                <span className="font-black text-emerald-600">
+                  {answerName}
+                </span>
+                .
+              </>
+            )}
+          </span>,
+          { icon: "🎯" },
+        );
+      }
+    }
+  }, [snapshot, selfPlayerId]);
+
+  const settingsAccepted = state.settingsAccepted;
+  const [visibleSettingsNotice, setVisibleSettingsNotice] =
+    useState<typeof settingsAccepted>(null);
+  useEffect(() => {
+    if (!settingsAccepted) {
+      setVisibleSettingsNotice(null);
+      return;
+    }
+    setVisibleSettingsNotice(settingsAccepted);
+    const timeout = window.setTimeout(
+      () => setVisibleSettingsNotice(null),
+      4000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [settingsAccepted]);
 
   const gameState = useMemo<WorldMapGameState>(
     () => ({
@@ -367,13 +432,13 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             />
           </div>
 
-          <header className="absolute inset-x-0 top-0 z-30 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur-xl md:px-7">
+          <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b border-white/10 bg-slate-950/90 px-3 py-2 backdrop-blur-xl md:min-h-16 md:flex-wrap md:gap-3 md:px-7 md:py-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">
+              <p className="hidden text-[10px] font-black uppercase tracking-[0.2em] text-sky-300 md:block">
                 Geobble multiplayer
               </p>
-              <div className="flex items-center gap-2">
-                <p className="font-mono text-lg font-black tracking-[0.15em]">
+              <div className="flex items-center gap-1 md:gap-2">
+                <p className="font-mono text-base font-black tracking-[0.15em] md:text-lg">
                   {snapshot.roomId}
                 </p>
                 <button
@@ -387,9 +452,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               <span
-                className={`text-xs font-bold uppercase ${state.status === "connected" ? "text-emerald-300" : "text-amber-300"}`}
+                className={`text-[10px] font-bold uppercase md:text-xs ${state.status === "connected" ? "text-emerald-300" : "text-amber-300"}`}
               >
                 {state.status}
               </span>
@@ -404,8 +469,20 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   Retry
                 </button>
               )}
+              {snapshot.status !== "waiting" && (
+                <button
+                  aria-expanded={showStandings}
+                  aria-label="Toggle players"
+                  className="flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 md:hidden"
+                  onClick={() => setShowStandings((value) => !value)}
+                  type="button"
+                >
+                  <Users aria-hidden="true" size={14} />
+                  {snapshot.players.length}
+                </button>
+              )}
               <button
-                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-black uppercase text-white/80 hover:bg-white/10"
+                className="rounded-lg border border-white/15 px-2 py-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 md:px-3 md:py-2 md:text-xs"
                 disabled={state.status !== "connected"}
                 onClick={() => void leave()}
                 type="button"
@@ -416,7 +493,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           </header>
 
           {snapshot.status === "waiting" ? (
-            <div className="absolute inset-x-4 bottom-5 top-24 z-20 mx-auto grid max-w-5xl gap-4 overflow-y-auto md:grid-cols-[1fr_1.2fr]">
+            <div className="absolute inset-x-4 bottom-5 top-16 z-20 mx-auto grid max-w-5xl gap-4 overflow-y-auto md:top-24 md:grid-cols-[1fr_1.2fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/90 p-5 backdrop-blur-xl">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="font-black uppercase tracking-wider">
@@ -530,7 +607,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             </div>
           ) : (
             <>
-              <aside className="absolute left-3 top-24 z-20 max-h-[45vh] w-48 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/90 p-3 backdrop-blur-xl md:left-6 md:w-60">
+              <aside
+                className={`${showStandings ? "block" : "hidden"} absolute left-3 top-16 z-30 max-h-[45vh] w-48 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur-xl md:left-6 md:top-24 md:block md:w-60 md:z-20 md:bg-slate-950/90`}
+              >
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-300">
                   Standings · Round {round?.number ?? 0}
                 </p>
@@ -554,7 +633,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 </ul>
               </aside>
 
-              <div className="absolute right-3 top-24 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-5">
+              <div className="absolute right-3 top-16 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-5">
                 <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-sky-300">
                   <span>{snapshot.config.mode} mission</span>
                   <span>
@@ -571,20 +650,18 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     Answer: {round.answerReveal.countryName}
                   </p>
                 )}
-                {state.lastAnswerResult !== null && (
+                {state.lastAnswerResult === false && (
                   <p
-                    className={`mt-2 text-xs font-black uppercase ${state.lastAnswerResult ? "text-emerald-300" : "text-rose-300"}`}
+                    className="mt-2 text-xs font-black uppercase text-rose-300"
                     role="status"
                   >
-                    {state.lastAnswerResult
-                      ? "Correct answer"
-                      : "Answer submitted"}
+                    Answer submitted
                   </p>
                 )}
-                {state.settingsAccepted && (
+                {visibleSettingsNotice && (
                   <p className="mt-2 text-[10px] font-bold text-amber-200">
                     Settings{" "}
-                    {state.settingsAccepted.queued
+                    {visibleSettingsNotice.queued
                       ? "queued for the next round"
                       : "updated"}
                     .
@@ -604,16 +681,6 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       </button>
                     ))}
                   </div>
-                )}
-                {isPinLocate && !hasAnswered && (
-                  <p className="mt-3 text-[10px] font-bold uppercase text-white/50">
-                    Click the country on the map to place your pin.
-                  </p>
-                )}
-                {hasAnswered && !round?.revealed && (
-                  <p className="mt-3 text-[10px] font-bold uppercase text-white/45">
-                    Answer submitted — waiting for the round to finish.
-                  </p>
                 )}
                 {isAdmin && !round?.revealed && (
                   <div className="mt-4 flex gap-2">

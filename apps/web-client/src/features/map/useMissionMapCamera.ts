@@ -103,7 +103,7 @@ export const useMissionMapCamera = ({
     const isPinLocate = mode === "pin" && pinDirection === "locate";
     const isPinIdentify = mode === "pin" && pinDirection === "identify";
 
-    if ((mode === "identify" && !revealed) || isPinLocate) {
+    if ((mode === "identify" || isPinLocate) && !revealed) {
       if (!selectedCountryCode) return;
 
       const feature = findCountryFeature(

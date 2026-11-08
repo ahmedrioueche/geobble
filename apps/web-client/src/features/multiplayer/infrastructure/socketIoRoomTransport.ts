@@ -52,7 +52,7 @@ const normalizeEvent = (eventName: string, payload: unknown): unknown => {
 const getSocketUrl = (): string => {
   const configuredUrl = import.meta.env.VITE_MULTIPLAYER_SERVER_URL;
   if (configuredUrl) return configuredUrl;
-  if (import.meta.env.DEV) return "http://localhost:3000";
+  if (import.meta.env.DEV) return `http://${window.location.hostname}:3000`;
   throw new Error("VITE_MULTIPLAYER_SERVER_URL is not configured.");
 };
 

@@ -13,6 +13,8 @@ import {
   type RoomTransportStatus,
 } from "../infrastructure/socketIoRoomTransport";
 
+import { createGameSessionId } from "../../game/domain/gameSession";
+
 const CREDENTIALS_KEY = "geobble.multiplayer.reconnect";
 const REQUEST_TIMEOUT_MS = 12_000;
 const TERMINAL_RECONNECT_ERROR_CODES: RoomErrorCode[] = [
@@ -126,7 +128,7 @@ const getBrowserStorage = (): RoomCredentialStorage => ({
   },
 });
 
-const makeRequestId = (): string => crypto.randomUUID();
+const makeRequestId = (): string => createGameSessionId();
 
 export const createRoomClient = (
   transport: RoomTransport = new SocketIoRoomTransport(),
@@ -321,8 +323,8 @@ export const createRoomClient = (
             event.payload.commandId === null
               ? []
               : state.pendingCommandIds.filter(
-                  (id) => id !== event.payload.commandId,
-                ),
+                (id) => id !== event.payload.commandId,
+              ),
           error: `Command rejected: ${event.payload.reason}.`,
         });
         return;
