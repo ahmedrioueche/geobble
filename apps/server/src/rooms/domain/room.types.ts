@@ -50,6 +50,8 @@ export interface RoomPlayerRecord {
   name: string;
   ready: boolean;
   connected: boolean;
+  paused?: boolean;
+  pausedAt?: number | null;
   joinedAt: number;
   disconnectedAt: number | null;
   reconnectTokenHash: string;
@@ -131,6 +133,12 @@ export interface RoomGameRecord {
   startedAt: number | null;
   timerDeadlineAt: number | null;
   advanceAt: number | null;
+  paused?: boolean;
+  pausedAt?: number | null;
+  pauseDeadlineAt?: number | null;
+  pausedRoundRemainingMs?: number | null;
+  pausedTimerRemainingMs?: number | null;
+  pausedAdvanceRemainingMs?: number | null;
   round: RoomRoundRecord | null;
   usedCountryCodes: string[];
 }
@@ -156,6 +164,7 @@ export interface RoomPlayerSnapshot {
   isAdmin: boolean;
   ready: boolean;
   connected: boolean;
+  paused?: boolean;
   score: number;
   streak: number;
   maxStreak: number;
@@ -180,6 +189,8 @@ export interface RoomSnapshot {
   game: {
     startedAt: number | null;
     timerDeadlineAt: number | null;
+    paused?: boolean;
+    pauseDeadlineAt?: number | null;
     round: {
       missionId: string;
       number: number;

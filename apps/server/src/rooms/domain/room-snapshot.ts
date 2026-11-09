@@ -43,6 +43,7 @@ export const toRoomSnapshot = (
         isAdmin: player.playerId === room.adminPlayerId,
         ready: player.ready,
         connected: player.connected,
+        ...(player.paused ? { paused: true } : {}),
         score: player.score,
         streak: player.streak,
         maxStreak: player.maxStreak,
@@ -78,6 +79,12 @@ export const toRoomSnapshot = (
     game: {
       startedAt: room.game.startedAt,
       timerDeadlineAt: room.game.timerDeadlineAt,
+      ...(room.game.paused
+        ? {
+            paused: true,
+            pauseDeadlineAt: room.game.pauseDeadlineAt ?? null,
+          }
+        : {}),
       round: room.game.round
         ? {
             missionId: room.game.round.missionId,

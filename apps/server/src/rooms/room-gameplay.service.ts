@@ -17,6 +17,7 @@ import {
   type RoomRepository,
 } from './domain/room-repository.js';
 import {
+  areConnectedPlayersDone,
   resolveRoundTimeLimitMs,
   revealRoomRound,
 } from './domain/room-rules.js';
@@ -107,7 +108,12 @@ export class RoomGameplayService {
     }
 
     const round = room.game.round;
-    if (room.status !== 'playing' || !round || room.game.advanceAt !== null) {
+    if (
+      room.status !== 'playing' ||
+      room.game.paused ||
+      !round ||
+      room.game.advanceAt !== null
+    ) {
       throw new RoomDomainError('INVALID_COMMAND');
     }
     if (command.missionId !== round.missionId) {
@@ -121,6 +127,10 @@ export class RoomGameplayService {
       this.completeRound(room, Date.now());
       player.lastCommandId = command.commandId;
       return null;
+    }
+
+    if (player.paused) {
+      throw new RoomDomainError('INVALID_COMMAND');
     }
 
     if (round.revealed || player.answeredMissionId === round.missionId) {
@@ -216,13 +226,7 @@ export class RoomGameplayService {
       streakAfter: 0,
       ...(distanceKm !== null ? { distanceKm } : {}),
     });
-    const connectedPlayers = room.players.filter((member) => member.connected);
-    if (
-      connectedPlayers.length > 0 &&
-      connectedPlayers.every(
-        (member) => member.answeredMissionId === round.missionId,
-      )
-    ) {
+    if (areConnectedPlayersDone(room)) {
       this.completeRound(room, now);
     }
     return false;

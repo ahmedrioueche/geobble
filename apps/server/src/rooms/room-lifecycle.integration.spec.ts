@@ -751,4 +751,84 @@ describe('room lifecycle and competitive gameplay', () => {
         ?.doubleActive,
     ).toBe(true);
   });
+
+  it('keeps the game running even when only 1 active player remains after another goes AFK, and freezes only if all players are AFK', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({ roundTimeLimitMs: 20_000 });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-pause',
+      playerName: 'Ada',
+    });
+    const guest1 = await lifecycle.joinRoom({
+      requestId: 'request-join-pause-1',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    await lifecycle.setReady(host.snapshot.roomId, guest1.playerId, true);
+    await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
+
+    // 1 of 2 players goes AFK -> 1 active player remains, match continues!
+    const afterGuestAfk = await lifecycle.setPaused(
+      host.snapshot.roomId,
+      guest1.playerId,
+      true,
+    );
+    expect(afterGuestAfk.game.paused).toBeUndefined();
+    expect(
+      afterGuestAfk.players.find((p) => p.id === guest1.playerId)?.paused,
+    ).toBe(true);
+
+    // The remaining active player can still answer and complete the round solo
+    const soloAnswer = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'answer',
+        answerCountryCode: 'ZZZ',
+        commandId: 1,
+        expectedRevision: afterGuestAfk.revision,
+        missionId: afterGuestAfk.game.round?.missionId ?? '',
+      },
+    );
+    expect(soloAnswer.accepted).toBe(true);
+    expect(soloAnswer.snapshot.game.round?.revealed).toBe(true);
+
+    // If all connected players go AFK (0 active players), room freezes until auto-resume
+    const afterAllAfk = await lifecycle.setPaused(
+      host.snapshot.roomId,
+      host.playerId,
+      true,
+    );
+    expect(afterAllAfk.game.paused).toBe(true);
+
+    const futureNow = (afterAllAfk.game.pauseDeadlineAt ?? Date.now()) + 1_000;
+    const tickResult = await runtime.tick(futureNow);
+    expect(tickResult.snapshots).toHaveLength(1);
+    expect(tickResult.snapshots[0]?.game.paused).toBeUndefined();
+  });
 });

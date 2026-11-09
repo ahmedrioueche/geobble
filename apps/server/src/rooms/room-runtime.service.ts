@@ -16,6 +16,7 @@ import {
   resolveRoundTimeLimitMs,
   revealRoomRound,
   stampRoundTiming,
+  syncRoomPauseState,
 } from './domain/room-rules.js';
 import { toRoomSnapshot } from './domain/room-snapshot.js';
 import { RoomMutationService } from './room-mutation.service.js';
@@ -59,11 +60,52 @@ export class RoomRuntimeService implements OnModuleInit {
 
     await this.removeExpiredRooms(now, removedRoomIds);
     await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds);
+    await this.resumeExpiredPauses(now, snapshots);
     await this.finishExpiredMatches(now, snapshots);
     await this.revealTimedOutRounds(now, snapshots);
     await this.advanceCompletedRounds(now, snapshots);
 
     return { snapshots, removedRoomIds };
+  }
+
+  private async resumeExpiredPauses(
+    now: number,
+    snapshots: RoomSnapshot[],
+  ): Promise<void> {
+    const due = await this.repository.findDuePauseDeadlines(now);
+    for (const candidate of due) {
+      const mutation = await this.mutateSafely(candidate.roomId, (draft) => {
+        if (
+          draft.status !== 'playing' ||
+          !draft.game.paused ||
+          draft.game.pauseDeadlineAt == null ||
+          draft.game.pauseDeadlineAt > now
+        ) {
+          return false;
+        }
+        for (const player of draft.players) {
+          if (player.paused) {
+            player.paused = false;
+            player.pausedAt = null;
+          }
+        }
+        syncRoomPauseState(draft, now);
+        if (
+          !draft.game.paused &&
+          draft.game.advanceAt === null &&
+          areConnectedPlayersDone(draft)
+        ) {
+          revealRoomRound(
+            draft,
+            now,
+            this.config.getOrThrow('roundAdvanceDelayMs'),
+          );
+        }
+        return true;
+      });
+      if (!mutation?.room) continue;
+      snapshots.push(toRoomSnapshot(mutation.room));
+    }
   }
 
   private async revealTimedOutRounds(
@@ -76,6 +118,7 @@ export class RoomRuntimeService implements OnModuleInit {
         const round = draft.game.round;
         if (
           draft.status !== 'playing' ||
+          draft.game.paused ||
           draft.game.advanceAt !== null ||
           !round ||
           round.revealed ||
@@ -85,7 +128,9 @@ export class RoomRuntimeService implements OnModuleInit {
           return false;
         }
         for (const player of draft.players) {
-          if (player.answeredMissionId !== round.missionId) player.streak = 0;
+          if (!player.paused && player.answeredMissionId !== round.missionId) {
+            player.streak = 0;
+          }
         }
         revealRoomRound(
           draft,
@@ -136,8 +181,11 @@ export class RoomRuntimeService implements OnModuleInit {
           draft.adminPlayerId = getNextAdminPlayerId(draft.players);
         }
 
+        syncRoomPauseState(draft, now);
+
         if (
           draft.status === 'playing' &&
+          !draft.game.paused &&
           draft.game.advanceAt === null &&
           areConnectedPlayersDone(draft)
         ) {
@@ -293,6 +341,11 @@ export class RoomRuntimeService implements OnModuleInit {
     room.status = 'finished';
     room.game.timerDeadlineAt = null;
     room.game.advanceAt = null;
+    for (const player of room.players) {
+      player.paused = false;
+      player.pausedAt = null;
+    }
+    syncRoomPauseState(room, now);
   }
 
   private async completeRoomRound(roomId: string, now: number): Promise<void> {

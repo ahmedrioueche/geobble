@@ -16,6 +16,7 @@ export const ROOM_EVENTS = {
   matchmake: 'room:matchmake',
   reconnect: 'room:reconnect',
   ready: 'room:ready',
+  pause: 'room:pause',
   start: 'room:start',
   changeSettings: 'room:change-settings',
   command: 'room:command',
@@ -49,6 +50,7 @@ export interface RoomClientEvents {
   'room:matchmake': (payload: RoomCreateRequest) => void;
   'room:reconnect': (payload: RoomReconnectRequest) => void;
   'room:ready': (payload: { requestId: string; ready: boolean }) => void;
+  'room:pause': (payload: { requestId: string; paused: boolean }) => void;
   'room:start': (payload: { requestId: string }) => void;
   'room:change-settings': (payload: {
     requestId: string;

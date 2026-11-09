@@ -57,6 +57,12 @@ class RoomPlayerEntity implements RoomPlayerRecord {
   @Prop({ required: true, default: true })
   connected!: boolean;
 
+  @Prop({ type: Boolean, default: false })
+  paused?: boolean;
+
+  @Prop({ type: Number, default: null })
+  pausedAt?: number | null;
+
   @Prop({ required: true })
   joinedAt!: number;
 
@@ -196,6 +202,24 @@ class RoomGameEntity implements RoomGameRecord {
 
   @Prop({ type: Number, default: null })
   advanceAt!: number | null;
+
+  @Prop({ type: Boolean, default: false })
+  paused?: boolean;
+
+  @Prop({ type: Number, default: null })
+  pausedAt?: number | null;
+
+  @Prop({ type: Number, default: null })
+  pauseDeadlineAt?: number | null;
+
+  @Prop({ type: Number, default: null })
+  pausedRoundRemainingMs?: number | null;
+
+  @Prop({ type: Number, default: null })
+  pausedTimerRemainingMs?: number | null;
+
+  @Prop({ type: Number, default: null })
+  pausedAdvanceRemainingMs?: number | null;
 
   @Prop({ type: RoomRoundSchema, default: null })
   round!: RoomRoundRecord | null;

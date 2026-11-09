@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   useRoomClient: vi.fn(),
   playOffline: vi.fn(),
   setReady: vi.fn(),
+  setPaused: vi.fn(),
   startRoom: vi.fn(),
   submitCommand: vi.fn(),
   sendReaction: vi.fn(),
@@ -112,6 +113,7 @@ beforeEach(() => {
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
       joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
       setReady: mocks.setReady,
+      setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
@@ -136,6 +138,7 @@ describe("MultiplayerExperience", () => {
         joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
         joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
         setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
         submitCommand: mocks.submitCommand.mockResolvedValue(1),
@@ -436,6 +439,7 @@ describe("MultiplayerExperience", () => {
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
       joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
       setReady: mocks.setReady,
+      setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
@@ -699,5 +703,120 @@ describe("MultiplayerExperience", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close players" }));
     expect(toggleButton.getAttribute("aria-expanded")).toBe("false");
     expect(standings.className).toContain("hidden");
+  });
+
+  it("marks AFK players in red in the standings list, notifies other players via toast, and keeps active players playing", async () => {
+    const activeSnapshot = createSnapshot({
+      status: "playing",
+      players: [
+        {
+          ...createSnapshot().players[0]!,
+          id: "player-1",
+          name: "Ada",
+        },
+        {
+          ...createSnapshot().players[1]!,
+          id: "player-2",
+          name: "Grace",
+        },
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Croatia" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+    const view = renderExperience(createClientState(activeSnapshot));
+
+    const graceAfkSnapshot = createSnapshot({
+      ...activeSnapshot,
+      revision: 2,
+      players: [
+        activeSnapshot.players[0]!,
+        {
+          ...activeSnapshot.players[1]!,
+          paused: true,
+        },
+      ],
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(graceAfkSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    expect(await screen.findByText(/is AFK for the moment/)).toBeTruthy();
+    expect(screen.getByLabelText("Grace AFK")).toBeTruthy();
+    expect(screen.getByText("AFK")).toBeTruthy();
+    // Ada keeps playing uninterrupted even with 1 active player
+    expect(screen.getByText("Croatia")).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Match paused" })).toBeNull();
+
+    // When Ada herself is AFK/Spectating, she sees the Resume button
+    const selfAfkSnapshot = createSnapshot({
+      ...activeSnapshot,
+      revision: 3,
+      players: [
+        {
+          ...activeSnapshot.players[0]!,
+          paused: true,
+        },
+        activeSnapshot.players[1]!,
+      ],
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(selfAfkSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    expect(screen.queryByText(/Spectating/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Resume playing" }));
+    expect(mocks.setPaused).toHaveBeenCalledWith(false);
   });
 });

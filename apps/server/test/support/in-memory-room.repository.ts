@@ -86,6 +86,18 @@ export class InMemoryRoomRepository implements RoomRepository {
       .map((room) => structuredClone(room));
   }
 
+  async findDuePauseDeadlines(now: number): Promise<RoomRecord[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.status === 'playing' &&
+          room.game.paused === true &&
+          typeof room.game.pauseDeadlineAt === 'number' &&
+          room.game.pauseDeadlineAt <= now,
+      )
+      .map((room) => structuredClone(room));
+  }
+
   async findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]> {
     return [...this.rooms.values()]
       .filter((room) =>

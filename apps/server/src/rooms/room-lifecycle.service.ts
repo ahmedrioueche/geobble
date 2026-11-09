@@ -31,6 +31,7 @@ import {
   resolveRoundTimeLimitMs,
   revealRoomRound,
   stampRoundTiming,
+  syncRoomPauseState,
 } from './domain/room-rules.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
@@ -63,6 +64,8 @@ const createPlayer = (
   name,
   ready,
   connected: true,
+  paused: false,
+  pausedAt: null,
   joinedAt: now,
   disconnectedAt: null,
   reconnectTokenHash: hashToken(reconnectToken),
@@ -123,6 +126,12 @@ export class RoomLifecycleService {
             startedAt: null,
             timerDeadlineAt: null,
             advanceAt: null,
+            paused: false,
+            pausedAt: null,
+            pauseDeadlineAt: null,
+            pausedRoundRemainingMs: null,
+            pausedTimerRemainingMs: null,
+            pausedAdvanceRemainingMs: null,
             round: null,
             usedCountryCodes: [],
           },
@@ -253,6 +262,7 @@ export class RoomLifecycleService {
         ) {
           draft.adminPlayerId = getNextAdminPlayerId(draft.players);
         }
+        syncRoomPauseState(draft, now);
         return player.lastCommandId + 1;
       },
     );
@@ -320,6 +330,8 @@ export class RoomLifecycleService {
       draft.pendingConfig = null;
       draft.players = draft.players.map((player) => ({
         ...player,
+        paused: false,
+        pausedAt: null,
         score: 0,
         streak: 0,
         maxStreak: 0,
@@ -340,6 +352,12 @@ export class RoomLifecycleService {
             ? now + draft.config.challengeValue * 1000
             : null,
         advanceAt: null,
+        paused: false,
+        pausedAt: null,
+        pauseDeadlineAt: null,
+        pausedRoundRemainingMs: null,
+        pausedTimerRemainingMs: null,
+        pausedAdvanceRemainingMs: null,
         round: created.round,
         usedCountryCodes: created.usedCountryCodes,
       };
@@ -373,7 +391,45 @@ export class RoomLifecycleService {
     return { snapshot: toRoomSnapshot(room), queued: result };
   }
 
+  async setPaused(roomId: string, playerId: string, paused: boolean) {
+    const now = Date.now();
+    const { room } = await this.mutations.update(roomId, (draft) => {
+      if (draft.status !== 'playing') {
+        throw new RoomDomainError('INVALID_COMMAND');
+      }
+      const player = this.requireConnectedPlayer(draft, playerId);
+      if (Boolean(player.paused) === paused) {
+        return;
+      }
+      player.paused = paused;
+      player.pausedAt = paused ? now : null;
+
+      syncRoomPauseState(draft, now);
+
+      if (paused && !draft.game.paused) {
+        const round = draft.game.round;
+        if (
+          round &&
+          !round.revealed &&
+          player.answeredMissionId !== round.missionId
+        ) {
+          player.streak = 0;
+        }
+        if (draft.game.advanceAt === null && areConnectedPlayersDone(draft)) {
+          revealRoomRound(
+            draft,
+            now,
+            this.config.getOrThrow('roundAdvanceDelayMs'),
+          );
+        }
+      }
+    });
+    if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    return toRoomSnapshot(room);
+  }
+
   async leaveRoom(roomId: string, playerId: string) {
+    const now = Date.now();
     const { room, result } = await this.mutations.update(
       roomId,
       (draft) => {
@@ -386,14 +442,16 @@ export class RoomLifecycleService {
         if (previousAdminId === playerId && draft.players.length > 0) {
           draft.adminPlayerId = getNextAdminPlayerId(draft.players);
         }
+        syncRoomPauseState(draft, now);
         if (
           draft.status === 'playing' &&
+          !draft.game.paused &&
           draft.game.advanceAt === null &&
           areConnectedPlayersDone(draft)
         ) {
           revealRoomRound(
             draft,
-            Date.now(),
+            now,
             this.config.getOrThrow('roundAdvanceDelayMs'),
           );
         }
@@ -416,6 +474,7 @@ export class RoomLifecycleService {
     playerId: string,
     reconnectToken?: string,
   ) {
+    const now = Date.now();
     const { room } = await this.mutations.update(roomId, (draft) => {
       const player = draft.players.find((item) => item.playerId === playerId);
       if (
@@ -430,15 +489,17 @@ export class RoomLifecycleService {
         return;
       }
       player.connected = false;
-      player.disconnectedAt = Date.now();
+      player.disconnectedAt = now;
+      syncRoomPauseState(draft, now);
       if (
         draft.status === 'playing' &&
+        !draft.game.paused &&
         draft.game.advanceAt === null &&
         areConnectedPlayersDone(draft)
       ) {
         revealRoomRound(
           draft,
-          Date.now(),
+          now,
           this.config.getOrThrow('roundAdvanceDelayMs'),
         );
       }

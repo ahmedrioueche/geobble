@@ -119,6 +119,18 @@ export class MongoRoomRepository implements RoomRepository {
       .exec();
   }
 
+  findDuePauseDeadlines(now: number): Promise<RoomRecord[]> {
+    return this.roomModel
+      .find({
+        status: 'playing',
+        'game.paused': true,
+        'game.pauseDeadlineAt': { $ne: null, $lte: now },
+      })
+      .select(ROOM_PRIVATE_SELECT)
+      .lean<RoomRecord[]>()
+      .exec();
+  }
+
   findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]> {
     return this.roomModel
       .find({

@@ -261,6 +261,25 @@ export class RoomGateway
     });
   }
 
+  @SubscribeMessage(ROOM_EVENTS.pause)
+  async setPaused(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const identity = client.data.roomIdentity;
+    await this.handleRequest(client, getRequestId(value), async () => {
+      if (!identity || !this.isPauseRequest(value)) {
+        throw new RoomDomainError('INVALID_REQUEST');
+      }
+      const snapshot = await this.lifecycle.setPaused(
+        identity.roomId,
+        identity.playerId,
+        value.paused,
+      );
+      this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, snapshot);
+    });
+  }
+
   @SubscribeMessage(ROOM_EVENTS.start)
   async start(
     @ConnectedSocket() client: RoomSocket,
@@ -540,6 +559,15 @@ export class RoomGateway
       value !== null &&
       'ready' in value &&
       typeof value.ready === 'boolean'
+    );
+  }
+
+  private isPauseRequest(value: unknown): value is { paused: boolean } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'paused' in value &&
+      typeof value.paused === 'boolean'
     );
   }
 

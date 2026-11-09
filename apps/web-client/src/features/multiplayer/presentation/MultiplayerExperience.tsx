@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Copy, Loader2, Users, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Copy,
+  Loader2,
+  Pause,
+  Play,
+  Users,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
@@ -21,6 +30,7 @@ import { RoomSettingsPanel } from "./RoomSettingsPanel";
 import { RoundRecapCard } from "./RoundRecapCard";
 import { PowerUpBar } from "./PowerUpBar";
 import { StartingGameOverlay } from "./StartingGameOverlay";
+import { MatchPausedOverlay } from "./MatchPausedOverlay";
 import {
   readHapticsEnabled,
   readSoundEnabled,
@@ -82,6 +92,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const [pendingReadyTarget, setPendingReadyTarget] = useState<boolean | null>(
     null,
   );
+  const [pendingPauseTarget, setPendingPauseTarget] = useState<boolean | null>(
+    null,
+  );
   const [isStartingGame, setIsStartingGame] = useState(false);
   const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
@@ -92,9 +105,13 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const selfPlayerId = room?.playerId ?? null;
   const isAdmin = self?.isAdmin ?? false;
   const hasAnswered = self?.answered ?? false;
+  const isSelfPaused = Boolean(self?.paused);
+  const isRoomPaused = Boolean(snapshot?.game.paused);
   const waitingForCommand = state.pendingCommandIds.length > 0;
   const isUpdatingReady =
     pendingReadyTarget !== null && self?.ready !== pendingReadyTarget;
+  const isUpdatingPause =
+    pendingPauseTarget !== null && Boolean(self?.paused) !== pendingPauseTarget;
   const isPinLocate =
     snapshot?.config.mode === "pin" &&
     snapshot.config.pinDirection === "locate";
@@ -117,6 +134,26 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [
     pendingReadyTarget,
     self?.ready,
+    snapshot?.status,
+    state.status,
+    state.error,
+    actionError,
+  ]);
+
+  useEffect(() => {
+    if (
+      pendingPauseTarget !== null &&
+      (Boolean(self?.paused) === pendingPauseTarget ||
+        snapshot?.status !== "playing" ||
+        state.status !== "connected" ||
+        state.error !== null ||
+        actionError !== null)
+    ) {
+      setPendingPauseTarget(null);
+    }
+  }, [
+    pendingPauseTarget,
+    self?.paused,
     snapshot?.status,
     state.status,
     state.error,
@@ -230,6 +267,27 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           { icon: "⚠️" },
         );
         triggerMultiplayerCue("player-leave", { soundEnabled, hapticsEnabled });
+      } else if (
+        previousPlayer &&
+        Boolean(previousPlayer.paused) !== Boolean(player.paused)
+      ) {
+        if (player.paused) {
+          toast(
+            <span>
+              <span className="font-black text-rose-400">{player.name}</span>{" "}
+              is AFK for the moment
+            </span>,
+            { icon: "⏸" },
+          );
+        } else {
+          toast.success(
+            <span>
+              <span className="font-black text-emerald-400">{player.name}</span>{" "}
+              is back
+            </span>,
+            { icon: "▶️" },
+          );
+        }
       }
     }
 
@@ -393,6 +451,28 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
       ? Math.max(0, round.deadlineAt - (now === 0 ? (round.startedAt ?? round.deadlineAt) : now))
       : 0;
 
+  const pauseRemainingMs =
+    snapshot?.game.pauseDeadlineAt != null
+      ? Math.max(
+          0,
+          snapshot.game.pauseDeadlineAt -
+            (now === 0 ? snapshot.game.pauseDeadlineAt : now),
+        )
+      : null;
+
+  const togglePause = (targetPaused = !isSelfPaused) => {
+    if (snapshot?.status !== "playing") return;
+    setPendingPauseTarget(targetPaused);
+    void runAction(async () => {
+      try {
+        client.setPaused(targetPaused);
+      } catch (error) {
+        setPendingPauseTarget(null);
+        throw error;
+      }
+    });
+  };
+
   useEffect(() => {
     if (!round || round.revealed || round.deadlineAt == null) return;
     const remainingSec = Math.ceil(roundRemainingMs / 1000);
@@ -407,7 +487,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [round, roundRemainingMs, soundEnabled, hapticsEnabled]);
 
   const usePowerUp = (kind: PowerUpKind) => {
-    if (!round || round.revealed || hasAnswered) return;
+    if (!round || round.revealed || hasAnswered || isSelfPaused || isRoomPaused) {
+      return;
+    }
     triggerMultiplayerCue("powerup", { soundEnabled, hapticsEnabled });
     void runAction(async () => {
       await client.submitCommand({ type: "powerup", kind });
@@ -467,7 +549,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     code: string,
     coordinates?: [number, number],
   ) => {
-    if (!snapshot || snapshot.status !== "playing" || !round || hasAnswered) {
+    if (
+      !snapshot ||
+      snapshot.status !== "playing" ||
+      !round ||
+      hasAnswered ||
+      isSelfPaused ||
+      isRoomPaused
+    ) {
       return;
     }
     if (snapshot.config.mode !== "identify" && !isPinLocate) return;
@@ -489,7 +578,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   };
 
   const submitChoice = (choiceId: string) => {
-    if (!isChoiceMode || !round || hasAnswered) return;
+    if (!isChoiceMode || !round || hasAnswered || isSelfPaused || isRoomPaused) {
+      return;
+    }
     void runAction(async () => {
       await client.submitCommand({
         type: "answer",
@@ -666,6 +757,41 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   <Users aria-hidden="true" size={14} />
                   {snapshot.players.filter((player) => player.answered).length}/
                   {snapshot.players.length}
+                </button>
+              )}
+              {snapshot.status === "playing" && (
+                <button
+                  aria-busy={isUpdatingPause}
+                  aria-label={isSelfPaused ? "Resume game" : "Pause game"}
+                  aria-pressed={isSelfPaused}
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-black uppercase transition disabled:cursor-not-allowed disabled:opacity-50 md:px-3 md:py-2 md:text-xs ${
+                    isSelfPaused
+                      ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-200 hover:bg-emerald-400/30"
+                      : "border-white/15 text-white/80 hover:bg-white/10"
+                  }`}
+                  disabled={state.status !== "connected" || isUpdatingPause}
+                  onClick={() => togglePause(!isSelfPaused)}
+                  type="button"
+                >
+                  {isUpdatingPause ? (
+                    <Loader2
+                      aria-hidden="true"
+                      className="h-3.5 w-3.5 animate-spin"
+                    />
+                  ) : isSelfPaused ? (
+                    <Play aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+                  ) : (
+                    <Pause aria-hidden="true" className="h-3.5 w-3.5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isUpdatingPause
+                      ? isSelfPaused
+                        ? "Resuming…"
+                        : "Pausing…"
+                      : isSelfPaused
+                        ? "Resume"
+                        : "Pause"}
+                  </span>
                 </button>
               )}
               <button
@@ -883,34 +1009,52 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                         className="flex items-center justify-between gap-2 text-xs"
                         key={player.id}
                       >
-                        <span className="flex min-w-0 items-center gap-1.5 truncate font-bold">
+                        <span
+                          className={`flex min-w-0 items-center gap-1.5 truncate font-bold ${
+                            player.paused ? "text-rose-400" : ""
+                          }`}
+                        >
                           <span
                             aria-label={
-                              player.lockedOut
-                                ? `${player.name} locked out`
-                                : player.answered
-                                  ? `${player.name} answered`
-                                  : `${player.name} thinking`
+                              player.paused
+                                ? `${player.name} AFK`
+                                : player.lockedOut
+                                  ? `${player.name} locked out`
+                                  : player.answered
+                                    ? `${player.name} answered`
+                                    : `${player.name} thinking`
                             }
                             className={`inline-block h-2 w-2 shrink-0 rounded-full transition ${
-                              player.lockedOut
-                                ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]"
-                                : player.answered
-                                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]"
-                                  : "bg-white/20"
+                              player.paused
+                                ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.85)]"
+                                : player.lockedOut
+                                  ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]"
+                                  : player.answered
+                                    ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]"
+                                    : "bg-white/20"
                             }`}
                             title={
-                              player.lockedOut
-                                ? "Locked out this round"
-                                : player.answered
-                                  ? "Locked in"
-                                  : "Thinking…"
+                              player.paused
+                                ? "AFK / Unavailable for the moment"
+                                : player.lockedOut
+                                  ? "Locked out this round"
+                                  : player.answered
+                                    ? "Locked in"
+                                    : "Thinking…"
                             }
                           />
                           <span className="truncate">
                             {player.name}
                             {player.id === room.playerId ? " (you)" : ""}
                           </span>
+                          {player.paused && (
+                            <span
+                              className="shrink-0 rounded border border-rose-400/30 bg-rose-500/20 px-1 py-0.5 text-[9px] font-black uppercase text-rose-300"
+                              title="AFK / Unavailable for the moment"
+                            >
+                              AFK
+                            </span>
+                          )}
                           {player.streak >= 2 && (
                             <span
                               className="shrink-0 rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-black text-amber-300"
@@ -938,8 +1082,34 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </span>
                 </div>
                 <p className="text-sm font-bold uppercase leading-relaxed md:text-base">
-                  {round?.prompt.value ?? "Waiting for the next round"}
+                  {isRoomPaused && !round?.revealed
+                    ? "Match paused — prompt hidden"
+                    : (round?.prompt.value ?? "Waiting for the next round")}
                 </p>
+                {isSelfPaused && !isRoomPaused && snapshot.status === "playing" && (
+                  <button
+                    aria-busy={isUpdatingPause}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
+                    disabled={isUpdatingPause}
+                    onClick={() => togglePause(false)}
+                    type="button"
+                  >
+                    {isUpdatingPause ? (
+                      <Loader2
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 animate-spin"
+                      />
+                    ) : (
+                      <Play
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 fill-current"
+                      />
+                    )}
+                    <span>
+                      {isUpdatingPause ? "Resuming…" : "Resume playing"}
+                    </span>
+                  </button>
+                )}
                 {round &&
                   !round.revealed &&
                   round.startedAt != null &&
@@ -995,7 +1165,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     .
                   </p>
                 )}
-                {isChoiceMode && round && !round.revealed && (
+                {isChoiceMode && round && !round.revealed && !isRoomPaused && (
                   <div className="mt-4 grid gap-2">
                     {round.choices
                       .filter(
@@ -1004,7 +1174,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       .map((choice) => (
                         <button
                           className="rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-left text-xs font-black uppercase hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
-                          disabled={hasAnswered || waitingForCommand}
+                          disabled={
+                            hasAnswered ||
+                            waitingForCommand ||
+                            isSelfPaused ||
+                            isRoomPaused
+                          }
                           key={choice.id}
                           onClick={() => submitChoice(choice.id)}
                           type="button"
@@ -1014,9 +1189,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       ))}
                   </div>
                 )}
-                {round && !round.revealed && self?.powerUps && (
+                {round && !round.revealed && self?.powerUps && !isRoomPaused && (
                   <PowerUpBar
-                    disabled={hasAnswered || waitingForCommand}
+                    disabled={
+                      hasAnswered ||
+                      waitingForCommand ||
+                      isSelfPaused ||
+                      isRoomPaused
+                    }
                     doubleActive={Boolean(self.doubleActive)}
                     hasRoundTimer={round.deadlineAt != null}
                     isChoiceMode={Boolean(isChoiceMode)}
@@ -1072,6 +1252,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </button>
                 )}
               </div>
+              {snapshot.status === "playing" && isRoomPaused && (
+                <MatchPausedOverlay
+                  onResume={() => togglePause(false)}
+                  pausedPlayerNames={snapshot.players
+                    .filter((player) => player.connected && player.paused)
+                    .map((player) => player.name)}
+                  remainingMs={pauseRemainingMs}
+                  selfPaused={isSelfPaused}
+                  updatingPause={isUpdatingPause}
+                />
+              )}
             </>
           )}
 

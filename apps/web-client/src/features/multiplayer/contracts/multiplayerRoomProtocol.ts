@@ -42,6 +42,7 @@ export interface RoomPlayer {
   isAdmin: boolean;
   ready: boolean;
   connected: boolean;
+  paused?: boolean;
   score: number;
   streak: number;
   maxStreak: number;
@@ -99,6 +100,8 @@ export interface RoomSnapshot {
   game: {
     startedAt: number | null;
     timerDeadlineAt: number | null;
+    paused?: boolean;
+    pauseDeadlineAt?: number | null;
     round: RoomRound | null;
   };
 }
@@ -279,6 +282,7 @@ const isPlayer = (value: unknown): value is RoomPlayer =>
   typeof value.isAdmin === "boolean" &&
   typeof value.ready === "boolean" &&
   typeof value.connected === "boolean" &&
+  (value.paused === undefined || typeof value.paused === "boolean") &&
   isInteger(value.score) &&
   isInteger(value.streak) &&
   isInteger(value.maxStreak) &&
@@ -354,6 +358,9 @@ export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value.game) &&
   isNullableInteger(value.game.startedAt) &&
   isNullableInteger(value.game.timerDeadlineAt) &&
+  (value.game.paused === undefined || typeof value.game.paused === "boolean") &&
+  (value.game.pauseDeadlineAt === undefined ||
+    isNullableInteger(value.game.pauseDeadlineAt)) &&
   (value.game.round === null || isRound(value.game.round));
 
 export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
