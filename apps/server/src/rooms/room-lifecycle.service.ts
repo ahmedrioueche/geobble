@@ -202,15 +202,13 @@ export class RoomLifecycleService {
     const now = Date.now();
     const player = createPlayer(playerName, false, now, reconnectToken);
     const { room } = await this.mutations.update(request.roomId, (draft) => {
-      if (draft.status !== 'waiting') {
-        throw new RoomDomainError('ROOM_NOT_JOINABLE');
-      }
       if (
         draft.players.length >= this.config.getOrThrow('roomMaxPlayers')
       ) {
         throw new RoomDomainError('ROOM_FULL');
       }
       draft.players.push(player);
+      syncRoomPauseState(draft, now);
     });
 
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
@@ -218,7 +216,7 @@ export class RoomLifecycleService {
       playerId: player.playerId,
       reconnectToken,
       nextCommandId: 1,
-      snapshot: toRoomSnapshot(room),
+      snapshot: toRoomSnapshot(room, player.playerId),
     };
   }
 

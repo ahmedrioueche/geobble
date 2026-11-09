@@ -831,4 +831,77 @@ describe('room lifecycle and competitive gameplay', () => {
     expect(tickResult.snapshots).toHaveLength(1);
     expect(tickResult.snapshots[0]?.game.paused).toBeUndefined();
   });
+
+  it('allows players to join or re-join an already playing room at any time via code or public matchmaking', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({ roundTimeLimitMs: 20_000 });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-live-join',
+      playerName: 'Ada',
+      visibility: 'public',
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'request-join-live-1',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
+    await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
+
+    // Grace leaves during the active match and then re-joins using the room code
+    await lifecycle.leaveRoom(host.snapshot.roomId, guest.playerId);
+    const rejoined = await lifecycle.joinRoom({
+      requestId: 'request-rejoin-by-code',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    expect(rejoined.snapshot.status).toBe('playing');
+    expect(rejoined.snapshot.players).toHaveLength(2);
+
+    // Another player joins the in-progress public room via public matchmaking
+    const publicJoiner = await lifecycle.joinPublicRoom({
+      requestId: 'request-public-midgame',
+      playerName: 'Linus',
+    });
+    expect(publicJoiner.snapshot.roomId).toBe(host.snapshot.roomId);
+    expect(publicJoiner.snapshot.status).toBe('playing');
+    expect(publicJoiner.snapshot.players).toHaveLength(3);
+
+    // The newly joined player can immediately answer the active round
+    const stored = await repository.findById(host.snapshot.roomId);
+    const targetCode = stored?.game.round?.targetCountryCode ?? 'CAN';
+    const answerOutcome = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      publicJoiner.playerId,
+      {
+        type: 'answer',
+        answerCountryCode: targetCode,
+        commandId: 1,
+        expectedRevision: publicJoiner.snapshot.revision,
+        missionId: publicJoiner.snapshot.game.round?.missionId ?? '',
+      },
+    );
+    expect(answerOutcome).toMatchObject({
+      accepted: true,
+      answerResult: true,
+    });
+  });
 });

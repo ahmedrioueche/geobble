@@ -31,7 +31,6 @@ export class MongoRoomRepository implements RoomRepository {
     return this.roomModel
       .find({
         visibility: 'public',
-        status: 'waiting',
         expiresAt: { $gt: new Date() },
         'players.connected': true,
         $expr: { $lt: [{ $size: '$players' }, maxPlayers] },
