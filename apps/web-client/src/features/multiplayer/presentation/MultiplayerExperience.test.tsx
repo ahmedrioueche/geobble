@@ -390,24 +390,31 @@ describe("MultiplayerExperience", () => {
     });
   });
 
-  it("copies the room code and shows join and disconnect toasts", async () => {
+  it("copies the room code and shows join, disconnect, reconnect, and leave toasts with sounds", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText },
     });
+    const playedSources: string[] = [];
+    const playMock = vi.fn().mockResolvedValue(undefined);
+    class MockAudio {
+      src: string;
+      volume = 1;
+      constructor(src = "") {
+        this.src = src;
+        playedSources.push(src);
+      }
+      play = playMock;
+    }
+    vi.stubGlobal("Audio", MockAudio);
+
     const initialSnapshot = createSnapshot({
       players: [
         {
           ...createSnapshot().players[0]!,
           id: "player-1",
           name: "Ada",
-        },
-        {
-          ...createSnapshot().players[1]!,
-          id: "player-2",
-          name: "Grace",
-          connected: false,
         },
       ],
     });
@@ -440,10 +447,15 @@ describe("MultiplayerExperience", () => {
 
     const joinedSnapshot = createSnapshot({
       revision: 2,
-      players: initialSnapshot.players.map((player) => ({
-        ...player,
-        connected: true,
-      })),
+      players: [
+        ...initialSnapshot.players,
+        {
+          ...createSnapshot().players[1]!,
+          id: "player-2",
+          name: "Grace",
+          connected: true,
+        },
+      ],
     });
     mocks.useRoomClient.mockReturnValue({
       client,
@@ -456,7 +468,8 @@ describe("MultiplayerExperience", () => {
         showHomeActions
       />,
     );
-    expect(await screen.findByText("Grace joined the room")).toBeTruthy();
+    expect(await screen.findByText(/joined the room/)).toBeTruthy();
+    expect(playedSources).toContain("/audio/player-join.wav");
 
     const disconnectedSnapshot = createSnapshot({
       revision: 3,
@@ -476,7 +489,42 @@ describe("MultiplayerExperience", () => {
         showHomeActions
       />,
     );
-    expect(await screen.findByText("Grace disconnected")).toBeTruthy();
+    expect(await screen.findByText(/disconnected/)).toBeTruthy();
+    expect(playedSources).toContain("/audio/player-leave.wav");
+
+    const reconnectedSnapshot = createSnapshot({
+      revision: 4,
+      players: joinedSnapshot.players,
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client,
+      state: createClientState(reconnectedSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+    expect(await screen.findByText(/reconnected to the room/)).toBeTruthy();
+
+    const leftSnapshot = createSnapshot({
+      revision: 5,
+      players: initialSnapshot.players,
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client,
+      state: createClientState(leftSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+    expect(await screen.findByText(/left the room/)).toBeTruthy();
   });
 
   it("shows distinct solo and multiplayer home actions", () => {

@@ -92,7 +92,39 @@ export type MultiplayerCue =
   | "wrong"
   | "tick"
   | "round-start"
-  | "powerup";
+  | "powerup"
+  | "player-join"
+  | "player-leave";
+
+export const MULTIPLAYER_SOUND_FILES: Record<
+  Extract<MultiplayerCue, "player-join" | "player-leave">,
+  string
+> = {
+  "player-join": "/audio/player-join.wav",
+  "player-leave": "/audio/player-leave.wav",
+};
+
+const playAudioFileWithFallback = (
+  path: string,
+  fallback: () => void,
+): void => {
+  if (typeof window === "undefined" || typeof window.Audio !== "function") {
+    fallback();
+    return;
+  }
+  try {
+    const audio = new window.Audio(path);
+    audio.volume = 0.45;
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        fallback();
+      });
+    }
+  } catch {
+    fallback();
+  }
+};
 
 export const triggerMultiplayerCue = (
   cue: MultiplayerCue,
@@ -120,6 +152,21 @@ export const triggerMultiplayerCue = (
         playTone(659.25, 70, "triangle", 0.07, 55);
         playTone(783.99, 120, "triangle", 0.08, 110);
         break;
+      case "player-join":
+        playAudioFileWithFallback(MULTIPLAYER_SOUND_FILES["player-join"], () => {
+          playTone(523.25, 110, "sine", 0.075, 0);
+          playTone(783.99, 160, "triangle", 0.085, 95);
+        });
+        break;
+      case "player-leave":
+        playAudioFileWithFallback(
+          MULTIPLAYER_SOUND_FILES["player-leave"],
+          () => {
+            playTone(659.25, 110, "sine", 0.07, 0);
+            playTone(440, 170, "sine", 0.075, 100);
+          },
+        );
+        break;
     }
   }
 
@@ -132,6 +179,9 @@ export const triggerMultiplayerCue = (
       if (cue === "correct") navigator.vibrate([25, 35, 45]);
       else if (cue === "wrong") navigator.vibrate([70, 40, 70]);
       else if (cue === "powerup") navigator.vibrate(20);
+      else if (cue === "player-join" || cue === "player-leave") {
+        navigator.vibrate(15);
+      }
     } catch {
       // Ignore vibration failures.
     }

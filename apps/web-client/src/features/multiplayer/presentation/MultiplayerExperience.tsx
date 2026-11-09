@@ -147,13 +147,60 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     if (!previous || previous.roomId !== snapshot.roomId) return;
 
     for (const player of snapshot.players) {
+      if (player.id === selfPlayerId) continue;
       const previousPlayer = previous.players.find(
         (candidate) => candidate.id === player.id,
       );
-      if (player.connected && (!previousPlayer || !previousPlayer.connected)) {
-        toast.success(`${player.name} joined the room`);
+      if (!previousPlayer && player.connected) {
+        toast.success(
+          <span>
+            <span className="font-black text-emerald-400">{player.name}</span>{" "}
+            joined the room
+          </span>,
+          { icon: "👋" },
+        );
+        triggerMultiplayerCue("player-join", { soundEnabled, hapticsEnabled });
+      } else if (
+        previousPlayer &&
+        !previousPlayer.connected &&
+        player.connected
+      ) {
+        toast.success(
+          <span>
+            <span className="font-black text-sky-400">{player.name}</span>{" "}
+            reconnected to the room
+          </span>,
+          { icon: "🔌" },
+        );
+        triggerMultiplayerCue("player-join", { soundEnabled, hapticsEnabled });
       } else if (previousPlayer?.connected && !player.connected) {
-        toast(`${player.name} disconnected`, { icon: "⚠️" });
+        toast(
+          <span>
+            <span className="font-black text-amber-400">{player.name}</span>{" "}
+            disconnected
+          </span>,
+          { icon: "⚠️" },
+        );
+        triggerMultiplayerCue("player-leave", { soundEnabled, hapticsEnabled });
+      }
+    }
+
+    for (const previousPlayer of previous.players) {
+      if (previousPlayer.id === selfPlayerId) continue;
+      const stillPresent = snapshot.players.some(
+        (candidate) => candidate.id === previousPlayer.id,
+      );
+      if (!stillPresent) {
+        toast(
+          <span>
+            <span className="font-black text-rose-400">
+              {previousPlayer.name}
+            </span>{" "}
+            left the room
+          </span>,
+          { icon: "🚪" },
+        );
+        triggerMultiplayerCue("player-leave", { soundEnabled, hapticsEnabled });
       }
     }
 
