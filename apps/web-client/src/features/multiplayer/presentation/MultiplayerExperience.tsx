@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Copy, Users, Volume2, VolumeX } from "lucide-react";
+import { Copy, Loader2, Users, Volume2, VolumeX } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
@@ -20,6 +20,7 @@ import { RoomSettingsForm } from "./RoomSettingsForm";
 import { RoomSettingsPanel } from "./RoomSettingsPanel";
 import { RoundRecapCard } from "./RoundRecapCard";
 import { PowerUpBar } from "./PowerUpBar";
+import { StartingGameOverlay } from "./StartingGameOverlay";
 import {
   readHapticsEnabled,
   readSoundEnabled,
@@ -78,6 +79,10 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     Array<RoomReactionEvent & { id: string; leftPercent: number }>
   >([]);
   const [now, setNow] = useState(0);
+  const [pendingReadyTarget, setPendingReadyTarget] = useState<boolean | null>(
+    null,
+  );
+  const [isStartingGame, setIsStartingGame] = useState(false);
   const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
   const room = state.room;
@@ -88,6 +93,8 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const isAdmin = self?.isAdmin ?? false;
   const hasAnswered = self?.answered ?? false;
   const waitingForCommand = state.pendingCommandIds.length > 0;
+  const isUpdatingReady =
+    pendingReadyTarget !== null && self?.ready !== pendingReadyTarget;
   const isPinLocate =
     snapshot?.config.mode === "pin" &&
     snapshot.config.pinDirection === "locate";
@@ -95,6 +102,47 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     snapshot?.config.mode === "reverse" ||
     (snapshot?.config.mode === "pin" &&
       snapshot.config.pinDirection === "identify");
+
+  useEffect(() => {
+    if (
+      pendingReadyTarget !== null &&
+      (self?.ready === pendingReadyTarget ||
+        snapshot?.status !== "waiting" ||
+        state.status !== "connected" ||
+        state.error !== null ||
+        actionError !== null)
+    ) {
+      setPendingReadyTarget(null);
+    }
+  }, [
+    pendingReadyTarget,
+    self?.ready,
+    snapshot?.status,
+    state.status,
+    state.error,
+    actionError,
+  ]);
+
+  useEffect(() => {
+    if (
+      isStartingGame &&
+      (snapshot?.status !== "waiting" ||
+        state.status !== "connected" ||
+        state.error !== null ||
+        actionError !== null ||
+        snapshot.players.length < 2 ||
+        snapshot.players.some((player) => !player.connected || !player.ready))
+    ) {
+      setIsStartingGame(false);
+    }
+  }, [
+    isStartingGame,
+    snapshot?.status,
+    snapshot?.players,
+    state.status,
+    state.error,
+    actionError,
+  ]);
 
   useEffect(() => {
     writeBrowserStorageItem(PLAYER_NAME_STORAGE_KEY, playerName);
@@ -703,38 +751,82 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </p>
                   <div className="sticky bottom-0 mt-4 flex flex-wrap gap-2 bg-slate-950/95 py-1">
                     <button
+                      aria-busy={isUpdatingReady}
                       aria-pressed={self?.ready ?? false}
-                      className={`min-h-12 flex-1 rounded-xl px-4 py-3 text-sm font-black uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
                         self?.ready
                           ? "bg-rose-600 hover:bg-rose-500"
                           : "bg-sky-500 text-slate-950 hover:bg-sky-400"
                       }`}
-                      disabled={state.status !== "connected"}
-                      onClick={() =>
-                        void runAction(async () =>
-                          client.setReady(!self?.ready),
-                        )
+                      disabled={
+                        state.status !== "connected" ||
+                        isUpdatingReady ||
+                        isStartingGame
                       }
+                      onClick={() => {
+                        const targetReady = !self?.ready;
+                        setPendingReadyTarget(targetReady);
+                        void runAction(async () => {
+                          try {
+                            client.setReady(targetReady);
+                          } catch (error) {
+                            setPendingReadyTarget(null);
+                            throw error;
+                          }
+                        });
+                      }}
                       type="button"
                     >
-                      {self?.ready ? "I'm not ready" : "I'm ready"}
+                      {isUpdatingReady && (
+                        <Loader2
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 animate-spin"
+                        />
+                      )}
+                      <span>
+                        {isUpdatingReady
+                          ? pendingReadyTarget
+                            ? "Marking ready…"
+                            : "Updating…"
+                          : self?.ready
+                            ? "I'm not ready"
+                            : "I'm ready"}
+                      </span>
                     </button>
                     {isAdmin && (
                       <button
-                        className="min-h-12 flex-1 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-busy={isStartingGame}
+                        className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={
                           state.status !== "connected" ||
+                          isStartingGame ||
                           snapshot.players.length < 2 ||
                           snapshot.players.some(
                             (player) => !player.connected || !player.ready,
                           )
                         }
-                        onClick={() =>
-                          void runAction(async () => client.startRoom())
-                        }
+                        onClick={() => {
+                          setIsStartingGame(true);
+                          void runAction(async () => {
+                            try {
+                              client.startRoom();
+                            } catch (error) {
+                              setIsStartingGame(false);
+                              throw error;
+                            }
+                          });
+                        }}
                         type="button"
                       >
-                        Start game
+                        {isStartingGame && (
+                          <Loader2
+                            aria-hidden="true"
+                            className="h-4 w-4 shrink-0 animate-spin"
+                          />
+                        )}
+                        <span>
+                          {isStartingGame ? "Starting game…" : "Start game"}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -757,6 +849,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </p>
                 </div>
               </div>
+              {isStartingGame && (
+                <StartingGameOverlay
+                  modeLabel={snapshot.config.mode}
+                  playerCount={snapshot.players.length}
+                />
+              )}
             </div>
           ) : (
             <>

@@ -255,7 +255,7 @@ describe("MultiplayerExperience", () => {
     );
   });
 
-  it("sends lobby readiness and admin start actions", () => {
+  it("sends lobby readiness and admin start actions with responsive loading states", () => {
     const snapshot = createSnapshot();
     renderExperience(createClientState(snapshot));
 
@@ -263,7 +263,20 @@ describe("MultiplayerExperience", () => {
     expect(screen.getByText("Whole world")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "I'm not ready" }));
+    expect(
+      screen.getByRole("button", { name: "Updating…" }).getAttribute("aria-busy"),
+    ).toBe("true");
+
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(
+      screen
+        .getByRole("button", { name: "Starting game…" })
+        .getAttribute("aria-busy"),
+    ).toBe("true");
+    expect(screen.getByRole("status", { name: "Starting game" })).toBeTruthy();
+    expect(
+      screen.getByText("Preparing round 1 for 2 players…"),
+    ).toBeTruthy();
 
     expect(mocks.setReady).toHaveBeenCalledWith(false);
     expect(mocks.startRoom).toHaveBeenCalledOnce();
