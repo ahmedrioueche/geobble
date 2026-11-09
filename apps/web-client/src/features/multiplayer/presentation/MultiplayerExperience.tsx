@@ -5,6 +5,7 @@ import {
   Loader2,
   Pause,
   Play,
+  SlidersHorizontal,
   Users,
   Volume2,
   VolumeX,
@@ -730,11 +731,11 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
-              <span
-                className={`text-[10px] font-bold uppercase md:text-xs ${state.status === "connected" ? "text-emerald-300" : "text-amber-300"}`}
-              >
-                {state.status}
-              </span>
+              {state.status !== "connected" && (
+                <span className="text-[10px] font-bold uppercase text-amber-300 md:text-xs">
+                  {state.status}
+                </span>
+              )}
               {state.reconnectRequired && state.status === "error" && (
                 <button
                   className="text-[10px] font-black uppercase text-sky-300 underline"
@@ -794,6 +795,19 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </span>
                 </button>
               )}
+              {isAdmin && snapshot.status !== "waiting" && (
+                <button
+                  aria-label="Change settings"
+                  className="flex items-center gap-1 rounded-lg border border-white/15 p-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 disabled:opacity-50 md:px-3 md:py-2 md:text-xs"
+                  disabled={state.status !== "connected"}
+                  onClick={() => setShowSettings(true)}
+                  title="Change settings"
+                  type="button"
+                >
+                  <SlidersHorizontal aria-hidden="true" size={14} />
+                  <span className="hidden md:inline">Settings</span>
+                </button>
+              )}
               <button
                 aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
                 aria-pressed={soundEnabled}
@@ -814,7 +828,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 onClick={() => void leave()}
                 type="button"
               >
-                Leave room
+                Leave
               </button>
             </div>
           </header>
@@ -1072,8 +1086,8 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 </ul>
               </aside>
 
-              <div className="absolute right-3 top-16 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-5">
-                <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-sky-300">
+              <div className="absolute right-3 top-16 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3.5 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-4">
+                <div className="mb-1.5 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-sky-300">
                   <span>{snapshot.config.mode} mission</span>
                   <span>
                     {remainingTime === null
@@ -1081,15 +1095,31 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       : formatTime(remainingTime)}
                   </span>
                 </div>
-                <p className="text-sm font-bold uppercase leading-relaxed md:text-base">
-                  {isRoomPaused && !round?.revealed
-                    ? "Match paused — prompt hidden"
-                    : (round?.prompt.value ?? "Waiting for the next round")}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 text-sm font-bold uppercase leading-snug md:text-base">
+                    {isRoomPaused && !round?.revealed
+                      ? "Match paused — prompt hidden"
+                      : (round?.prompt.value ?? "Waiting for the next round")}
+                  </p>
+                  {isAdmin && !round?.revealed && (
+                    <button
+                      className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase text-white/85 transition hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
+                      disabled={waitingForCommand}
+                      onClick={() =>
+                        void runAction(async () => {
+                          await client.submitCommand({ type: "reveal" });
+                        })
+                      }
+                      type="button"
+                    >
+                      Reveal
+                    </button>
+                  )}
+                </div>
                 {isSelfPaused && !isRoomPaused && snapshot.status === "playing" && (
                   <button
                     aria-busy={isUpdatingPause}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
+                    className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
                     disabled={isUpdatingPause}
                     onClick={() => togglePause(false)}
                     type="button"
@@ -1116,7 +1146,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   round.deadlineAt != null && (
                     <div
                       aria-label={`${Math.ceil(roundRemainingMs / 1000)} seconds left`}
-                      className="mt-3"
+                      className="mt-2.5"
                       role="timer"
                     >
                       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -1134,11 +1164,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       </p>
                     </div>
                   )}
-                {round?.revealed && round.answerReveal && (
-                  <p className="mt-2 text-xs font-black uppercase text-emerald-300">
-                    Answer: {round.answerReveal.countryName}
-                  </p>
-                )}
+                {round?.revealed &&
+                  round.answerReveal &&
+                  (isChoiceMode || snapshot.config.subMode !== "name") &&
+                  round.prompt.value.trim().toLowerCase() !==
+                    round.answerReveal.countryName.trim().toLowerCase() && (
+                    <p className="mt-2 text-xs font-black uppercase text-emerald-300">
+                      Answer: {round.answerReveal.countryName}
+                    </p>
+                  )}
                 {self?.hint && !round?.revealed && (
                   <p
                     className="mt-2 rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-200"
@@ -1166,7 +1200,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </p>
                 )}
                 {isChoiceMode && round && !round.revealed && !isRoomPaused && (
-                  <div className="mt-4 grid gap-2">
+                  <div className="mt-3 grid gap-2">
                     {round.choices
                       .filter(
                         (choice) => !self?.hiddenChoiceIds?.includes(choice.id),
@@ -1212,44 +1246,6 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     result={round.result}
                     selfPlayerId={selfPlayerId}
                   />
-                )}
-                {isAdmin && !round?.revealed && (
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      className="flex-1 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-black uppercase hover:bg-white/10 disabled:opacity-40"
-                      disabled={waitingForCommand}
-                      onClick={() =>
-                        void runAction(async () => {
-                          await client.submitCommand({ type: "reveal" });
-                        })
-                      }
-                      type="button"
-                    >
-                      Reveal
-                    </button>
-                    <button
-                      className="flex-1 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-black uppercase hover:bg-white/10 disabled:opacity-40"
-                      disabled={waitingForCommand}
-                      onClick={() =>
-                        void runAction(async () => {
-                          await client.submitCommand({ type: "skip" });
-                        })
-                      }
-                      type="button"
-                    >
-                      Skip
-                    </button>
-                  </div>
-                )}
-                {isAdmin && (
-                  <button
-                    className="mt-3 w-full text-[10px] font-black uppercase text-sky-300 hover:text-sky-100"
-                    disabled={state.status !== "connected"}
-                    onClick={() => setShowSettings(true)}
-                    type="button"
-                  >
-                    Change settings
-                  </button>
                 )}
               </div>
               {snapshot.status === "playing" && isRoomPaused && (

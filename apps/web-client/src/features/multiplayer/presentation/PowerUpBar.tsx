@@ -55,7 +55,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
 }) => (
   <div
     aria-label="Power-ups"
-    className="mt-3 grid grid-cols-4 gap-1.5"
+    className="mt-2.5 grid grid-cols-4 gap-1.5"
   >
     {POWER_UP_ITEMS.map(({ kind, label, icon, title }) => {
       const available = powerUps[kind];
@@ -67,7 +67,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
       return (
         <button
           aria-label={label}
-          className={`flex flex-col items-center justify-center rounded-xl border px-2 py-1.5 text-[10px] font-black uppercase transition ${
+          className={`flex flex-row items-center justify-center gap-1 rounded-xl border px-1.5 py-1.5 text-[10px] font-black uppercase transition ${
             isDoubleActive
               ? "border-amber-300/70 bg-amber-300/20 text-amber-200"
               : available && modeSupported
@@ -80,10 +80,10 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           title={title}
           type="button"
         >
-          <span aria-hidden="true" className="text-xs">
+          <span aria-hidden="true" className="text-xs leading-none">
             {icon}
           </span>
-          <span className="mt-0.5 leading-tight">{label}</span>
+          <span className="leading-tight">{label}</span>
         </button>
       );
     })}

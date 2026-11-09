@@ -657,10 +657,58 @@ describe("MultiplayerExperience", () => {
     );
 
     expect(screen.getByLabelText("Round recap")).toBeTruthy();
+    expect(screen.getByText("Answer: Canada")).toBeTruthy();
     expect(screen.getByText(/Fastest: Grace \(2\.4s\)/)).toBeTruthy();
     expect(screen.getByText(/3 in a row/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "React with 🔥" }));
     expect(mocks.sendReaction).toHaveBeenCalledWith("🔥");
+
+    const countryPromptRevealedSnapshot = createSnapshot({
+      ...revealedSnapshot,
+      revision: 3,
+      config: {
+        mode: "identify",
+        pinDirection: "locate",
+        subMode: "name",
+        challengeType: "world",
+        challengeValue: 0,
+      },
+      game: {
+        ...revealedSnapshot.game,
+        round: {
+          ...revealedSnapshot.game.round!,
+          prompt: { type: "text", value: "Armenia" },
+          answerReveal: { countryCode: "ARM", countryName: "Armenia" },
+        },
+      },
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(countryPromptRevealedSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    expect(screen.getByText("Armenia")).toBeTruthy();
+    expect(screen.queryByText("Answer: Armenia")).toBeNull();
   });
 
   it("positions the player standings card at the bottom and closes it on mobile via the X button without closing on outside click", () => {
@@ -818,5 +866,57 @@ describe("MultiplayerExperience", () => {
     expect(screen.queryByText(/Spectating/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Resume playing" }));
     expect(mocks.setPaused).toHaveBeenCalledWith(false);
+  });
+
+  it("places Reveal inline with the prompt, moves Change settings to the navbar, hides 'connected', and shows 'Leave'", async () => {
+    const playingSnapshot = createSnapshot({
+      status: "playing",
+      players: [
+        {
+          ...createSnapshot().players[0]!,
+          powerUps: { fifty: true, hint: true, double: true, freeze: true },
+        },
+        createSnapshot().players[1]!,
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Croatia" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+    renderExperience(createClientState(playingSnapshot));
+
+    // "connected" status label is not rendered when connected
+    expect(screen.queryByText(/^connected$/i)).toBeNull();
+
+    // Navbar uses "Leave" instead of "Leave room"
+    expect(screen.getByRole("button", { name: "Leave" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Leave room" })).toBeNull();
+
+    // Skip button is removed; Reveal button sits on the same row as the prompt
+    expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
+    const revealButton = screen.getByRole("button", { name: "Reveal" });
+    fireEvent.click(revealButton);
+    await waitFor(() =>
+      expect(mocks.submitCommand).toHaveBeenCalledWith({ type: "reveal" }),
+    );
+
+    // Power-up buttons render icon and label on the same row
+    expect(
+      screen.getByRole("button", { name: "Hint" }).className,
+    ).toContain("flex-row");
+
+    // Admin Change settings button in the navbar opens the settings modal
+    fireEvent.click(screen.getByRole("button", { name: "Change settings" }));
+    expect(
+      screen.getByRole("heading", { name: /next round settings/i }),
+    ).toBeTruthy();
   });
 });
