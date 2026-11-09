@@ -21,6 +21,7 @@ import {
   revealRoomRound,
 } from './domain/room-rules.js';
 import {
+  buildRoundHint,
   calculateClosestPinBonus,
   calculateGreatCircleDistanceKm,
   calculateRoundPoints,
@@ -263,13 +264,8 @@ export class RoomGameplayService {
         return;
       }
       case 'hint': {
-        const firstLetter = round.targetCountryName.trim().charAt(0).toUpperCase();
-        const regionPart = round.targetRegion
-          ? `Region: ${round.targetRegion}`
-          : '';
-        const letterPart = firstLetter ? `Starts with "${firstLetter}"` : '';
         player.hintForMissionId = round.missionId;
-        player.hintText = [regionPart, letterPart].filter(Boolean).join(' · ') || 'Hint active';
+        player.hintText = buildRoundHint(room.config, round);
         player.powerUps.hint = false;
         return;
       }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRoundHint,
   calculateClosestPinBonus,
   calculateGreatCircleDistanceKm,
   calculateRoundPoints,
@@ -80,6 +81,81 @@ describe('room scoring', () => {
     expect(calculateClosestPinBonus(260, 100)).toBe(25);
     expect(calculateClosestPinBonus(800, 100)).toBe(10);
     expect(calculateClosestPinBonus(1500, 100)).toBe(0);
+  });
+
+  it('builds context-aware hints that never repeat what the prompt already shows', () => {
+    const sampleRound = {
+      targetCountryName: 'Spain',
+      targetRegion: 'Europe',
+      targetSubregion: 'Southern Europe',
+      targetCapital: 'Madrid',
+      targetFlag: '🇪🇸',
+      prompt: { type: 'text' as const, value: 'Spain' },
+    };
+
+    const namePromptHint = buildRoundHint(
+      {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+      },
+      sampleRound,
+    );
+    expect(namePromptHint).toBe(
+      'Region: Europe — Southern Europe · Capital: Madrid · Flag: 🇪🇸',
+    );
+    expect(namePromptHint).not.toContain('starts with');
+
+    const capitalPromptHint = buildRoundHint(
+      {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'capital',
+        challengeType: 'world',
+        challengeValue: 0,
+      },
+      { ...sampleRound, prompt: { type: 'text', value: 'Madrid' } },
+    );
+    expect(capitalPromptHint).toBe(
+      'Region: Europe — Southern Europe · Country starts with "S"',
+    );
+    expect(capitalPromptHint).not.toContain('Capital: Madrid');
+
+    const flagPromptHint = buildRoundHint(
+      {
+        mode: 'pin',
+        pinDirection: 'locate',
+        subMode: 'flag',
+        challengeType: 'world',
+        challengeValue: 0,
+      },
+      { ...sampleRound, prompt: { type: 'flag', value: '🇪🇸' } },
+    );
+    expect(flagPromptHint).toBe(
+      'Region: Europe — Southern Europe · Capital: Madrid · Country starts with "S"',
+    );
+
+    const reverseChoiceHint = buildRoundHint(
+      {
+        mode: 'reverse',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+      },
+      {
+        ...sampleRound,
+        prompt: {
+          type: 'instruction',
+          value: 'Identify the highlighted country',
+        },
+      },
+    );
+    expect(reverseChoiceHint).toBe(
+      'Region: Europe — Southern Europe · Capital: Madrid',
+    );
   });
 });
 

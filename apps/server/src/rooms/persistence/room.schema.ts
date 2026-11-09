@@ -150,6 +150,15 @@ class RoomRoundEntity implements RoomRoundRecord {
   @Prop({ type: String, default: '', select: false })
   targetRegion?: string;
 
+  @Prop({ type: String, default: '', select: false })
+  targetSubregion?: string;
+
+  @Prop({ type: String, default: '', select: false })
+  targetCapital?: string;
+
+  @Prop({ type: String, default: '', select: false })
+  targetFlag?: string;
+
   @Prop({ type: [Number], default: null, select: false })
   targetMapAnchor?: [number, number] | null;
 

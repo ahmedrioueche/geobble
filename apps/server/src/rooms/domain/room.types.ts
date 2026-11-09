@@ -113,6 +113,9 @@ export interface RoomRoundRecord {
   targetCountryCode: string;
   targetCountryName: string;
   targetRegion?: string;
+  targetSubregion?: string;
+  targetCapital?: string;
+  targetFlag?: string;
   targetMapAnchor?: [number, number] | null;
   prompt: PublicPrompt;
   choices: RoomChoiceRecord[];

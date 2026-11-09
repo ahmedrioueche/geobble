@@ -29,7 +29,7 @@ const POWER_UP_ITEMS: ReadonlyArray<{
     kind: "hint",
     label: "Hint",
     icon: "💡",
-    title: "Reveal region & first letter (once per match)",
+    title: "Reveal a clue tailored to this round (once per match)",
   },
   {
     kind: "double",

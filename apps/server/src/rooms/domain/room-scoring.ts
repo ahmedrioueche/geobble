@@ -1,3 +1,75 @@
+import type {
+  RoomConfiguration,
+  RoomRoundRecord,
+} from './room.types.js';
+
+export const buildRoundHint = (
+  config: RoomConfiguration,
+  round: Pick<
+    RoomRoundRecord,
+    | 'targetCountryName'
+    | 'targetRegion'
+    | 'targetSubregion'
+    | 'targetCapital'
+    | 'targetFlag'
+    | 'prompt'
+  >,
+): string => {
+  const isChoiceMode =
+    config.mode === 'reverse' ||
+    (config.mode === 'pin' && config.pinDirection === 'identify');
+  const promptShowsCountryName =
+    !isChoiceMode &&
+    (config.subMode === 'name' ||
+      (round.prompt.type === 'text' &&
+        round.prompt.value.trim().toLowerCase() ===
+          round.targetCountryName.trim().toLowerCase()));
+
+  const regionLabel = [round.targetRegion, round.targetSubregion]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' — ');
+  const regionPart = regionLabel ? `Region: ${regionLabel}` : '';
+  const capital = round.targetCapital?.trim() ?? '';
+
+  if (promptShowsCountryName) {
+    // Player already has the country name and needs to find it on the map.
+    const capitalPart = capital ? `Capital: ${capital}` : '';
+    const flagPart = round.targetFlag?.trim()
+      ? `Flag: ${round.targetFlag.trim()}`
+      : '';
+    return (
+      [regionPart, capitalPart, flagPart].filter(Boolean).join(' · ') ||
+      'Hint active'
+    );
+  }
+
+  if (isChoiceMode) {
+    // Player is picking among multiple choices; avoid giving away the choice label itself.
+    if (config.subMode === 'capital') {
+      return (
+        [regionPart, `Country: ${round.targetCountryName}`]
+          .filter(Boolean)
+          .join(' · ') || 'Hint active'
+      );
+    }
+    const capitalPart = capital ? `Capital: ${capital}` : '';
+    return (
+      [regionPart, capitalPart].filter(Boolean).join(' · ') || 'Hint active'
+    );
+  }
+
+  // Flag or Capital prompt on map-click modes: player needs to deduce the country and locate it.
+  const firstLetter = round.targetCountryName.trim().charAt(0).toUpperCase();
+  const letterPart = firstLetter ? `Country starts with "${firstLetter}"` : '';
+  const extraPart =
+    config.subMode === 'flag' && capital ? `Capital: ${capital}` : '';
+  return (
+    [regionPart, extraPart, letterPart].filter(Boolean).join(' · ') ||
+    'Hint active'
+  );
+};
+
 export interface SpeedScoringOptions {
   basePoints: number;
   streak: number;
