@@ -658,4 +658,46 @@ describe("MultiplayerExperience", () => {
     fireEvent.click(screen.getByRole("button", { name: "React with 🔥" }));
     expect(mocks.sendReaction).toHaveBeenCalledWith("🔥");
   });
+
+  it("positions the player standings card at the bottom and closes it on mobile via the X button without closing on outside click", () => {
+    const playingSnapshot = createSnapshot({
+      status: "playing",
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Croatia" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+    renderExperience(createClientState(playingSnapshot));
+
+    const toggleButton = screen.getByRole("button", { name: "Toggle players" });
+    const standings = screen.getByLabelText("Player standings");
+
+    expect(toggleButton.getAttribute("aria-expanded")).toBe("false");
+    expect(standings.className).toContain("hidden");
+    expect(standings.className).toContain("left-3");
+    expect(standings.className).toContain("md:bottom-6");
+    expect(standings.className).toContain("z-10");
+
+    fireEvent.click(toggleButton);
+    expect(toggleButton.getAttribute("aria-expanded")).toBe("true");
+    expect(standings.className).toContain("block");
+
+    // Clicking outside should NOT close the standings card
+    fireEvent.click(screen.getByText("Croatia"));
+    expect(toggleButton.getAttribute("aria-expanded")).toBe("true");
+    expect(standings.className).toContain("block");
+
+    // Clicking the X button on the card closes it
+    fireEvent.click(screen.getByRole("button", { name: "Close players" }));
+    expect(toggleButton.getAttribute("aria-expanded")).toBe("false");
+    expect(standings.className).toContain("hidden");
+  });
 });

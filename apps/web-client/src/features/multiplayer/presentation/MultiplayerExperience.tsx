@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Copy, Loader2, Users, Volume2, VolumeX } from "lucide-react";
+import { Copy, Loader2, Users, Volume2, VolumeX, X } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
@@ -859,11 +859,22 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           ) : (
             <>
               <aside
-                className={`${showStandings ? "block" : "hidden"} absolute left-3 top-16 z-30 max-h-[45vh] w-48 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur-xl md:left-6 md:top-24 md:block md:w-60 md:z-20 md:bg-slate-950/90`}
+                aria-label="Player standings"
+                className={`${showStandings ? "block" : "hidden"} absolute bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-3 z-10 max-h-[40vh] w-52 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl md:bottom-6 md:left-6 md:z-20 md:block md:max-h-[45vh] md:w-60 md:bg-slate-950/90`}
               >
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-300">
-                  Standings · Round {round?.number ?? 0}
-                </p>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-sky-300">
+                    Standings · Round {round?.number ?? 0}
+                  </p>
+                  <button
+                    aria-label="Close players"
+                    className="-mr-1 -mt-1 rounded-md p-1 text-white/55 transition hover:bg-white/10 hover:text-white md:hidden"
+                    onClick={() => setShowStandings(false)}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={14} />
+                  </button>
+                </div>
                 <ul className="space-y-2">
                   {[...snapshot.players]
                     .sort((first, second) => second.score - first.score)
