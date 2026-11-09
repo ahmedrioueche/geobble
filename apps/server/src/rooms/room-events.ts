@@ -1,8 +1,10 @@
 import type {
+  ReactionEmoji,
   RoomCommand,
   RoomConfiguration,
   RoomCreateRequest,
   RoomJoinRequest,
+  RoomReactionEvent,
   RoomReconnectRequest,
   RoomSnapshot,
 } from './domain/room.types.js';
@@ -17,6 +19,7 @@ export const ROOM_EVENTS = {
   start: 'room:start',
   changeSettings: 'room:change-settings',
   command: 'room:command',
+  reaction: 'room:reaction',
   leave: 'room:leave',
   joined: 'room:joined',
   updated: 'room:updated',
@@ -52,6 +55,7 @@ export interface RoomClientEvents {
     config: RoomConfiguration;
   }) => void;
   'room:command': (payload: RoomCommand) => void;
+  'room:reaction': (payload: { emoji: ReactionEmoji }) => void;
   'room:leave': (payload: { requestId: string }) => void;
 }
 
@@ -64,6 +68,7 @@ export interface RoomServerEvents {
     snapshot: RoomSnapshot;
   }) => void;
   'room:updated': (snapshot: RoomSnapshot) => void;
+  'room:reaction': (payload: RoomReactionEvent) => void;
   'room:command-accepted': (payload: {
     roomId: string;
     commandId: number;

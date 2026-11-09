@@ -36,6 +36,24 @@ const getSettings = (config: RoomConfiguration) => [
           ? `${config.challengeValue} rounds`
           : `${config.challengeValue} seconds`,
   },
+  {
+    label: "Round timer",
+    value:
+      (config.roundTimeLimitSeconds ?? 20) === 0
+        ? "Off"
+        : `${config.roundTimeLimitSeconds ?? 20}s`,
+  },
+  {
+    label: "Scoring",
+    value: [
+      config.speedScoring === false ? "Flat" : "Speed bonus",
+      (config.wrongAnswerPenalty ?? 0) > 0
+        ? `-${config.wrongAnswerPenalty} on wrong`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  },
 ];
 
 const SettingsList: React.FC<{ config: RoomConfiguration }> = ({ config }) => (

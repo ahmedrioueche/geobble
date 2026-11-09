@@ -73,6 +73,19 @@ export class InMemoryRoomRepository implements RoomRepository {
       .map((room) => structuredClone(room));
   }
 
+  async findDueRoundDeadlines(now: number): Promise<RoomRecord[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.status === 'playing' &&
+          room.game.advanceAt === null &&
+          room.game.round?.revealed === false &&
+          typeof room.game.round.deadlineAt === 'number' &&
+          room.game.round.deadlineAt <= now,
+      )
+      .map((room) => structuredClone(room));
+  }
+
   async findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]> {
     return [...this.rooms.values()]
       .filter((room) =>

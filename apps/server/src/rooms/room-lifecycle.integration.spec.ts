@@ -56,7 +56,9 @@ const apiCountries: Array<Record<string, unknown>> = [
   },
 ];
 
-const createConfig = (): ConfigService<ServerConfiguration, true> =>
+const createConfig = (
+  overrides: Partial<ServerConfiguration> = {},
+): ConfigService<ServerConfiguration, true> =>
   new ConfigService<ServerConfiguration, true>({
     port: 3000,
     mongoUri: 'mongodb://localhost/test',
@@ -68,12 +70,14 @@ const createConfig = (): ConfigService<ServerConfiguration, true> =>
     reconnectGraceMs: 60_000,
     roomExpiryHours: 24,
     roundAdvanceDelayMs: 0,
+    roundTimeLimitMs: 0,
     pointsPerCorrectAnswer: 10,
     streakBonusPoints: 5,
     choicesPerRound: 4,
     countryDataCacheMs: 3_600_000,
     restCountriesApiUrl: 'https://countries.example.test/all',
     restCountriesApiKey: null,
+    ...overrides,
   });
 
 describe('room lifecycle and competitive gameplay', () => {
@@ -105,6 +109,14 @@ describe('room lifecycle and competitive gameplay', () => {
     const host = await lifecycle.createRoom({
       requestId: 'request-create',
       playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 0,
+      },
     });
     expect(host.snapshot.roomId).toMatch(/^\d{4}$/);
     const guest = await lifecycle.joinRoom({
@@ -143,10 +155,111 @@ describe('room lifecycle and competitive gameplay', () => {
     expect(outcome.snapshot.players.find((player) => player.id === host.playerId))
       .toMatchObject({ score: 10, streak: 1, answered: true });
     expect(outcome.snapshot.game.round?.revealed).toBe(true);
+    expect(outcome.snapshot.game.round?.result).toMatchObject({
+      fastestPlayerId: host.playerId,
+      players: [
+        {
+          playerId: host.playerId,
+          correct: true,
+          pointsGained: 10,
+          streakAfter: 1,
+        },
+      ],
+    });
     expect(JSON.stringify(outcome.snapshot)).not.toContain('targetCountryCode');
     expect(JSON.stringify(outcome.snapshot)).not.toContain(
       host.reconnectToken,
     );
+  });
+
+  it('stamps round timing, reveals timed-out rounds, and reports a round result', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({ roundTimeLimitMs: 20_000 });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-timed',
+      playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 20,
+      },
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'request-join-timed',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    const round = started.game.round;
+    expect(round?.startedAt).toEqual(expect.any(Number));
+    expect(round?.deadlineAt).toBe((round?.startedAt ?? 0) + 20_000);
+    expect(round?.result).toBeNull();
+
+    // Nothing happens before the deadline.
+    expect((await runtime.tick((round?.startedAt ?? 0) + 1_000)).snapshots)
+      .toHaveLength(0);
+
+    // The host answers wrong, the guest never answers; the deadline reveals.
+    const stored = await repository.findById(host.snapshot.roomId);
+    const wrongCode = ['CAN', 'FRA', 'JPN', 'BRA'].find(
+      (code) => code !== stored?.game.round?.targetCountryCode,
+    );
+    const outcome = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'answer',
+        answerCountryCode: wrongCode ?? null,
+        commandId: 1,
+        expectedRevision: started.revision,
+        missionId: round?.missionId ?? '',
+      },
+    );
+    expect(outcome.accepted).toBe(true);
+    expect(outcome.snapshot.game.round?.revealed).toBe(false);
+    expect(outcome.snapshot.game.round?.result).toBeNull();
+
+    const updates = await runtime.tick((round?.deadlineAt ?? 0) + 1);
+    const revealed = updates.snapshots[0]?.game.round;
+    expect(revealed?.revealed).toBe(true);
+    expect(revealed?.result).toMatchObject({
+      fastestPlayerId: null,
+      players: [
+        { playerId: host.playerId, correct: false, pointsGained: 0 },
+      ],
+    });
   });
 
   it('supports queued live mode changes, then applies them when the next round starts', async () => {
@@ -173,6 +286,14 @@ describe('room lifecycle and competitive gameplay', () => {
     const host = await lifecycle.createRoom({
       requestId: 'request-create',
       playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 0,
+      },
     });
     const updatedSettings = await lifecycle.changeSettings(
       host.snapshot.roomId,
@@ -366,6 +487,14 @@ describe('room lifecycle and competitive gameplay', () => {
     const host = await lifecycle.createRoom({
       requestId: 'request-create',
       playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 0,
+      },
     });
     const guest = await lifecycle.joinRoom({
       requestId: 'request-join',
@@ -422,6 +551,14 @@ describe('room lifecycle and competitive gameplay', () => {
     const host = await lifecycle.createRoom({
       requestId: 'request-create',
       playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 0,
+      },
     });
 
     const reconnected = await lifecycle.reconnect({
@@ -500,5 +637,118 @@ describe('room lifecycle and competitive gameplay', () => {
     });
 
     expect(created.snapshot.roomId).toMatch(/^\d{5}$/);
+  });
+
+  it('supports power-ups (50/50, hint, double points, freeze) and closest-pin scoring', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({ roundTimeLimitMs: 20_000 });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-powerups',
+      playerName: 'Ada',
+      config: {
+        mode: 'reverse',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 20,
+      },
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'request-join-powerups',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    const missionId = started.game.round?.missionId ?? '';
+
+    const fifty = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'powerup',
+        kind: 'fifty',
+        commandId: 1,
+        expectedRevision: started.revision,
+        missionId,
+      },
+    );
+    expect(fifty.accepted).toBe(true);
+    const hostSelf = fifty.snapshot.players.find(
+      (player) => player.id === host.playerId,
+    );
+    expect(hostSelf?.hiddenChoiceIds).toHaveLength(2);
+    expect(hostSelf?.powerUps?.fifty).toBe(false);
+
+    const hint = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'powerup',
+        kind: 'hint',
+        commandId: 2,
+        expectedRevision: fifty.snapshot.revision,
+        missionId,
+      },
+    );
+    expect(hint.accepted).toBe(true);
+    expect(
+      hint.snapshot.players.find((player) => player.id === host.playerId)?.hint,
+    ).toContain('Region:');
+
+    const freeze = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'powerup',
+        kind: 'freeze',
+        commandId: 3,
+        expectedRevision: hint.snapshot.revision,
+        missionId,
+      },
+    );
+    expect(freeze.accepted).toBe(true);
+    expect(freeze.snapshot.game.round?.deadlineAt).toBe(
+      (started.game.round?.deadlineAt ?? 0) + 8_000,
+    );
+
+    const double = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'powerup',
+        kind: 'double',
+        commandId: 4,
+        expectedRevision: freeze.snapshot.revision,
+        missionId,
+      },
+    );
+    expect(double.accepted).toBe(true);
+    expect(
+      double.snapshot.players.find((player) => player.id === host.playerId)
+        ?.doubleActive,
+    ).toBe(true);
   });
 });

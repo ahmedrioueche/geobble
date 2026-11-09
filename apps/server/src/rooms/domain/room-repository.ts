@@ -15,6 +15,7 @@ export interface RoomRepository {
   findExpired(now: Date): Promise<RoomRecord[]>;
   findDueTimers(now: number): Promise<RoomRecord[]>;
   findDueAdvances(now: number): Promise<RoomRecord[]>;
+  findDueRoundDeadlines(now: number): Promise<RoomRecord[]>;
   findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]>;
   findRoomsWithConnectedPlayers(): Promise<RoomRecord[]>;
 }

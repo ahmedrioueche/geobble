@@ -73,4 +73,32 @@ describe('room snapshots', () => {
     expect(serialized).not.toContain('targetCountryName');
     expect(serialized).not.toContain('"countryCode":"CAN"');
   });
+
+  it('includes private power-up hint and hidden choices only for the recipient player', () => {
+    const withPowerUps: RoomRecord = {
+      ...room,
+      players: [
+        {
+          ...room.players[0]!,
+          hiddenChoiceIdsForMissionId: 'mission-1',
+          hiddenChoiceIds: ['choice-wrong-1', 'choice-wrong-2'],
+          hintForMissionId: 'mission-1',
+          hintText: 'Region: Americas · Starts with "C"',
+        },
+      ],
+    };
+
+    const otherView = toRoomSnapshot(withPowerUps, 'player-2');
+    expect(otherView.players[0]?.hiddenChoiceIds).toBeUndefined();
+    expect(otherView.players[0]?.hint).toBeUndefined();
+
+    const ownerView = toRoomSnapshot(withPowerUps, 'player-1');
+    expect(ownerView.players[0]?.hiddenChoiceIds).toEqual([
+      'choice-wrong-1',
+      'choice-wrong-2',
+    ]);
+    expect(ownerView.players[0]?.hint).toBe(
+      'Region: Americas · Starts with "C"',
+    );
+  });
 });

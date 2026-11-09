@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Copy, Users } from "lucide-react";
+import { Copy, Users, Volume2, VolumeX } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
@@ -8,13 +8,25 @@ import { resolveMapCountry } from "../../game/domain/gameRules";
 import { WorldMap } from "../../map/WorldMap";
 import type { WorldMapGameState } from "../../map/worldMapStoreSelectors";
 import type {
+  PowerUpKind,
+  ReactionEmoji,
   RoomConfiguration,
   RoomConnectInput,
+  RoomReactionEvent,
 } from "../contracts/multiplayerRoomProtocol";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
 import { RoomSettingsPanel } from "./RoomSettingsPanel";
+import { RoundRecapCard } from "./RoundRecapCard";
+import { PowerUpBar } from "./PowerUpBar";
+import {
+  readHapticsEnabled,
+  readSoundEnabled,
+  triggerMultiplayerCue,
+  writeHapticsEnabled,
+  writeSoundEnabled,
+} from "./multiplayerFeedback";
 import {
   readBrowserStorageItem,
   writeBrowserStorageItem,
@@ -60,8 +72,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     missionId: string;
     location: [number, number];
   } | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(readSoundEnabled);
+  const [hapticsEnabled] = useState(readHapticsEnabled);
+  const [floatingReactions, setFloatingReactions] = useState<
+    Array<RoomReactionEvent & { id: string; leftPercent: number }>
+  >([]);
   const [now, setNow] = useState(0);
   const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
+  const lastTickSecondRef = useRef<number | null>(null);
   const room = state.room;
   const snapshot = room?.snapshot;
   const round = snapshot?.game.round ?? null;
@@ -81,6 +99,36 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   useEffect(() => {
     writeBrowserStorageItem(PLAYER_NAME_STORAGE_KEY, playerName);
   }, [playerName]);
+
+  useEffect(() => {
+    writeSoundEnabled(soundEnabled);
+    writeHapticsEnabled(hapticsEnabled);
+  }, [soundEnabled, hapticsEnabled]);
+
+  useEffect(() => {
+    if (state.lastAnswerResult === null) return;
+    triggerMultiplayerCue(state.lastAnswerResult ? "correct" : "wrong", {
+      soundEnabled,
+      hapticsEnabled,
+    });
+  }, [state.lastAnswerResult, soundEnabled, hapticsEnabled]);
+
+  useEffect(() => {
+    const reaction = state.lastReaction;
+    if (!reaction) return;
+    const id = `${reaction.playerId}-${reaction.timestamp}`;
+    const leftPercent = 25 + ((reaction.timestamp % 50) + 50) % 50;
+    setFloatingReactions((current) => [
+      ...current.slice(-11),
+      { ...reaction, id, leftPercent },
+    ]);
+    const timeout = window.setTimeout(() => {
+      setFloatingReactions((current) =>
+        current.filter((item) => item.id !== id),
+      );
+    }, 2400);
+    return () => window.clearTimeout(timeout);
+  }, [state.lastReaction]);
 
   useEffect(() => {
     if (snapshot?.status !== "playing") return;
@@ -112,6 +160,13 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     const previousRound = previous.game.round;
     const currentRound = snapshot.game.round;
     if (
+      currentRound &&
+      (!previousRound || previousRound.missionId !== currentRound.missionId)
+    ) {
+      lastTickSecondRef.current = null;
+      triggerMultiplayerCue("round-start", { soundEnabled, hapticsEnabled });
+    }
+    if (
       previousRound &&
       currentRound &&
       previousRound.missionId === currentRound.missionId &&
@@ -130,6 +185,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         const names = scorers.map((player) =>
           player.id === selfPlayerId ? "You" : player.name,
         );
+        const maxStreak = Math.max(...scorers.map((player) => player.streak));
         const promptValue = currentRound.prompt.value.trim().toLowerCase();
         const answerIsObvious =
           currentRound.prompt.type === "text" &&
@@ -150,12 +206,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 .
               </>
             )}
+            {maxStreak >= 2 && (
+              <span className="ml-1.5 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-300">
+                🔥 {maxStreak} in a row!
+              </span>
+            )}
           </span>,
           { icon: "🎯" },
         );
       }
     }
-  }, [snapshot, selfPlayerId]);
+  }, [snapshot, selfPlayerId, soundEnabled, hapticsEnabled]);
 
   const settingsAccepted = state.settingsAccepted;
   const [visibleSettingsNotice, setVisibleSettingsNotice] =
@@ -231,6 +292,36 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           snapshot.game.timerDeadlineAt -
             (now === 0 ? snapshot.game.timerDeadlineAt : now),
         );
+
+  const roundRemainingMs =
+    round?.deadlineAt != null
+      ? Math.max(0, round.deadlineAt - (now === 0 ? (round.startedAt ?? round.deadlineAt) : now))
+      : 0;
+
+  useEffect(() => {
+    if (!round || round.revealed || round.deadlineAt == null) return;
+    const remainingSec = Math.ceil(roundRemainingMs / 1000);
+    if (
+      remainingSec >= 1 &&
+      remainingSec <= 5 &&
+      lastTickSecondRef.current !== remainingSec
+    ) {
+      lastTickSecondRef.current = remainingSec;
+      triggerMultiplayerCue("tick", { soundEnabled, hapticsEnabled });
+    }
+  }, [round, roundRemainingMs, soundEnabled, hapticsEnabled]);
+
+  const usePowerUp = (kind: PowerUpKind) => {
+    if (!round || round.revealed || hasAnswered) return;
+    triggerMultiplayerCue("powerup", { soundEnabled, hapticsEnabled });
+    void runAction(async () => {
+      await client.submitCommand({ type: "powerup", kind });
+    });
+  };
+
+  const sendReaction = (emoji: ReactionEmoji) => {
+    client.sendReaction(emoji);
+  };
 
   const runAction = async (action: () => Promise<void>) => {
     setActionError(null);
@@ -478,9 +569,24 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   type="button"
                 >
                   <Users aria-hidden="true" size={14} />
+                  {snapshot.players.filter((player) => player.answered).length}/
                   {snapshot.players.length}
                 </button>
               )}
+              <button
+                aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+                aria-pressed={soundEnabled}
+                className="rounded-lg border border-white/15 p-1.5 text-white/75 hover:bg-white/10 hover:text-white md:p-2"
+                onClick={() => setSoundEnabled((value) => !value)}
+                title={soundEnabled ? "Sound on" : "Sound muted"}
+                type="button"
+              >
+                {soundEnabled ? (
+                  <Volume2 aria-hidden="true" size={14} />
+                ) : (
+                  <VolumeX aria-hidden="true" size={14} />
+                )}
+              </button>
               <button
                 className="rounded-lg border border-white/15 px-2 py-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 md:px-3 md:py-2 md:text-xs"
                 disabled={state.status !== "connected"}
@@ -621,9 +727,42 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                         className="flex items-center justify-between gap-2 text-xs"
                         key={player.id}
                       >
-                        <span className="truncate font-bold">
-                          {player.name}
-                          {player.id === room.playerId ? " (you)" : ""}
+                        <span className="flex min-w-0 items-center gap-1.5 truncate font-bold">
+                          <span
+                            aria-label={
+                              player.lockedOut
+                                ? `${player.name} locked out`
+                                : player.answered
+                                  ? `${player.name} answered`
+                                  : `${player.name} thinking`
+                            }
+                            className={`inline-block h-2 w-2 shrink-0 rounded-full transition ${
+                              player.lockedOut
+                                ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]"
+                                : player.answered
+                                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]"
+                                  : "bg-white/20"
+                            }`}
+                            title={
+                              player.lockedOut
+                                ? "Locked out this round"
+                                : player.answered
+                                  ? "Locked in"
+                                  : "Thinking…"
+                            }
+                          />
+                          <span className="truncate">
+                            {player.name}
+                            {player.id === room.playerId ? " (you)" : ""}
+                          </span>
+                          {player.streak >= 2 && (
+                            <span
+                              className="shrink-0 rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-black text-amber-300"
+                              title={`${player.streak} streak`}
+                            >
+                              🔥{player.streak}
+                            </span>
+                          )}
                         </span>
                         <span className="font-mono font-black text-sky-200">
                           {player.score}
@@ -645,19 +784,52 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 <p className="text-sm font-bold uppercase leading-relaxed md:text-base">
                   {round?.prompt.value ?? "Waiting for the next round"}
                 </p>
+                {round &&
+                  !round.revealed &&
+                  round.startedAt != null &&
+                  round.deadlineAt != null && (
+                    <div
+                      aria-label={`${Math.ceil(roundRemainingMs / 1000)} seconds left`}
+                      className="mt-3"
+                      role="timer"
+                    >
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-200 ease-linear ${roundRemainingMs <= 5000 ? "bg-rose-400" : "bg-sky-400"}`}
+                          style={{
+                            width: `${Math.min(100, (roundRemainingMs / Math.max(1, round.deadlineAt - round.startedAt)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <p
+                        className={`mt-1 text-right font-mono text-[10px] font-black ${roundRemainingMs <= 5000 ? "text-rose-300" : "text-white/50"}`}
+                      >
+                        {Math.ceil(roundRemainingMs / 1000)}s
+                      </p>
+                    </div>
+                  )}
                 {round?.revealed && round.answerReveal && (
                   <p className="mt-2 text-xs font-black uppercase text-emerald-300">
                     Answer: {round.answerReveal.countryName}
                   </p>
                 )}
-                {state.lastAnswerResult === false && (
+                {self?.hint && !round?.revealed && (
                   <p
-                    className="mt-2 text-xs font-black uppercase text-rose-300"
-                    role="status"
+                    className="mt-2 rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-200"
+                    role="note"
                   >
-                    Answer submitted
+                    💡 {self.hint}
                   </p>
                 )}
+                {(state.lastAnswerResult === false || self?.lockedOut) &&
+                  !round?.revealed && (
+                    <p
+                      className="mt-2 text-xs font-black uppercase text-rose-300"
+                      role="status"
+                    >
+                      Locked out — waiting for other players
+                    </p>
+                  )}
                 {visibleSettingsNotice && (
                   <p className="mt-2 text-[10px] font-bold text-amber-200">
                     Settings{" "}
@@ -669,18 +841,41 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 )}
                 {isChoiceMode && round && !round.revealed && (
                   <div className="mt-4 grid gap-2">
-                    {round.choices.map((choice) => (
-                      <button
-                        className="rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-left text-xs font-black uppercase hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
-                        disabled={hasAnswered || waitingForCommand}
-                        key={choice.id}
-                        onClick={() => submitChoice(choice.id)}
-                        type="button"
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
+                    {round.choices
+                      .filter(
+                        (choice) => !self?.hiddenChoiceIds?.includes(choice.id),
+                      )
+                      .map((choice) => (
+                        <button
+                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-left text-xs font-black uppercase hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
+                          disabled={hasAnswered || waitingForCommand}
+                          key={choice.id}
+                          onClick={() => submitChoice(choice.id)}
+                          type="button"
+                        >
+                          {choice.label}
+                        </button>
+                      ))}
                   </div>
+                )}
+                {round && !round.revealed && self?.powerUps && (
+                  <PowerUpBar
+                    disabled={hasAnswered || waitingForCommand}
+                    doubleActive={Boolean(self.doubleActive)}
+                    hasRoundTimer={round.deadlineAt != null}
+                    isChoiceMode={Boolean(isChoiceMode)}
+                    onUsePowerUp={usePowerUp}
+                    powerUps={self.powerUps}
+                  />
+                )}
+                {round?.revealed && round.result && (
+                  <RoundRecapCard
+                    answerName={round.answerReveal?.countryName}
+                    onSendReaction={sendReaction}
+                    players={snapshot.players}
+                    result={round.result}
+                    selfPlayerId={selfPlayerId}
+                  />
                 )}
                 {isAdmin && !round?.revealed && (
                   <div className="mt-4 flex gap-2">
@@ -722,6 +917,28 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 )}
               </div>
             </>
+          )}
+
+          {floatingReactions.length > 0 && (
+            <div
+              aria-live="polite"
+              className="pointer-events-none absolute inset-x-0 bottom-16 z-40 overflow-hidden"
+            >
+              {floatingReactions.map((item) => (
+                <div
+                  className=" inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-slate-950/90 px-3 py-1 text-xs font-bold text-white shadow-lg animate-bounce"
+                  key={item.id}
+                  style={{
+                    marginLeft: `${item.leftPercent}%`,
+                  }}
+                >
+                  <span className="text-base">{item.emoji}</span>
+                  <span className="text-[10px] font-black uppercase text-sky-300">
+                    {item.playerId === selfPlayerId ? "You" : item.playerName}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
 
           {(actionError || state.error) && (

@@ -5,6 +5,9 @@ import type { RoomRepository } from '../domain/room-repository.js';
 import type { RoomRecord } from '../domain/room.types.js';
 import { ROOM_MODEL, RoomEntity } from './room.schema.js';
 
+const ROOM_PRIVATE_SELECT =
+  '+players.reconnectTokenHash +players.hiddenChoiceIdsForMissionId +players.hiddenChoiceIds +players.hintForMissionId +players.hintText +game.round.targetCountryCode +game.round.targetCountryName +game.round.targetRegion +game.round.targetMapAnchor +game.round.choices.countryCode';
+
 @Injectable()
 export class MongoRoomRepository implements RoomRepository {
   constructor(
@@ -19,9 +22,7 @@ export class MongoRoomRepository implements RoomRepository {
   findById(roomId: string): Promise<RoomRecord | null> {
     return this.roomModel
       .findOne({ roomId })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord>()
       .exec();
   }
@@ -37,9 +38,7 @@ export class MongoRoomRepository implements RoomRepository {
       })
       .sort({ updatedAt: 1 })
       .limit(50)
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }
@@ -68,9 +67,7 @@ export class MongoRoomRepository implements RoomRepository {
         },
         { returnDocument: 'after', runValidators: true },
       )
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord>()
       .exec();
   }
@@ -82,9 +79,7 @@ export class MongoRoomRepository implements RoomRepository {
   findExpired(now: Date): Promise<RoomRecord[]> {
     return this.roomModel
       .find({ expiresAt: { $lte: now } })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }
@@ -95,9 +90,7 @@ export class MongoRoomRepository implements RoomRepository {
         status: 'playing',
         'game.timerDeadlineAt': { $lte: now },
       })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }
@@ -108,9 +101,20 @@ export class MongoRoomRepository implements RoomRepository {
         status: 'playing',
         'game.advanceAt': { $ne: null, $lte: now },
       })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
+      .lean<RoomRecord[]>()
+      .exec();
+  }
+
+  findDueRoundDeadlines(now: number): Promise<RoomRecord[]> {
+    return this.roomModel
+      .find({
+        status: 'playing',
+        'game.advanceAt': null,
+        'game.round.revealed': false,
+        'game.round.deadlineAt': { $ne: null, $lte: now },
+      })
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }
@@ -125,9 +129,7 @@ export class MongoRoomRepository implements RoomRepository {
           },
         },
       })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }
@@ -135,9 +137,7 @@ export class MongoRoomRepository implements RoomRepository {
   findRoomsWithConnectedPlayers(): Promise<RoomRecord[]> {
     return this.roomModel
       .find({ 'players.connected': true })
-      .select(
-        '+players.reconnectTokenHash +game.round.targetCountryCode +game.round.targetCountryName +game.round.choices.countryCode',
-      )
+      .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()
       .exec();
   }

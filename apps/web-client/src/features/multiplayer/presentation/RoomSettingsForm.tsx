@@ -111,6 +111,56 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         </label>
       )}
 
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
+          Round timer (s, 0 = off)
+          <input
+            className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-slate-950 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-sky-300/50 hover:bg-slate-900 focus:border-sky-300"
+            type="number"
+            min={0}
+            max={120}
+            value={config.roundTimeLimitSeconds ?? 20}
+            onChange={(event) =>
+              update({
+                roundTimeLimitSeconds: Math.max(
+                  0,
+                  Math.min(120, Math.trunc(Number(event.target.value) || 0)),
+                ),
+              })
+            }
+          />
+        </label>
+
+        <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
+          Wrong penalty (pts)
+          <input
+            className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-slate-950 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-sky-300/50 hover:bg-slate-900 focus:border-sky-300"
+            type="number"
+            min={0}
+            max={100}
+            value={config.wrongAnswerPenalty ?? 0}
+            onChange={(event) =>
+              update({
+                wrongAnswerPenalty: Math.max(
+                  0,
+                  Math.min(100, Math.trunc(Number(event.target.value) || 0)),
+                ),
+              })
+            }
+          />
+        </label>
+      </div>
+
+      <label className="flex items-center justify-between rounded-xl border border-white/15 bg-slate-950 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white/80">
+        <span>Speed scoring bonus</span>
+        <input
+          checked={config.speedScoring !== false}
+          className="h-4 w-4 accent-sky-400"
+          onChange={(event) => update({ speedScoring: event.target.checked })}
+          type="checkbox"
+        />
+      </label>
+
       {saveError && (
         <p className="text-sm text-rose-300" role="alert">
           {saveError}

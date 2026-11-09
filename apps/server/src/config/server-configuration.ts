@@ -11,6 +11,8 @@ export interface ServerConfiguration {
   reconnectGraceMs: number;
   roomExpiryHours: number;
   roundAdvanceDelayMs: number;
+  /** Per-round answer window in milliseconds. 0 disables the round timer. */
+  roundTimeLimitMs: number;
   pointsPerCorrectAnswer: number;
   streakBonusPoints: number;
   choicesPerRound: number;
@@ -101,6 +103,12 @@ export const validateEnvironment = (
     1_500,
     0,
   );
+  const roundTimeLimitMs = readInteger(
+    env,
+    'ROUND_TIME_LIMIT_MS',
+    20_000,
+    0,
+  );
   const pointsPerCorrectAnswer = readInteger(
     env,
     'POINTS_PER_CORRECT_ANSWER',
@@ -145,6 +153,7 @@ export const validateEnvironment = (
     reconnectGraceMs,
     roomExpiryHours,
     roundAdvanceDelayMs,
+    roundTimeLimitMs,
     pointsPerCorrectAnswer,
     streakBonusPoints,
     choicesPerRound,

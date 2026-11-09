@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Schema as MongooseSchema } from 'mongoose';
 import type {
+  PlayerPowerUps,
   PublicPrompt,
   RoomChoiceRecord,
   RoomConfiguration,
@@ -8,6 +9,7 @@ import type {
   RoomPlayerRecord,
   RoomRecord,
   RoomRoundRecord,
+  RoundAnswerRecord,
 } from '../domain/room.types.js';
 
 @Schema({ _id: false })
@@ -26,6 +28,15 @@ class RoomConfigurationEntity implements RoomConfiguration {
 
   @Prop({ required: true, min: 0 })
   challengeValue!: number;
+
+  @Prop({ type: Number, default: 20, min: 0 })
+  roundTimeLimitSeconds?: number;
+
+  @Prop({ type: Boolean, default: true })
+  speedScoring?: boolean;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  wrongAnswerPenalty?: number;
 }
 
 const RoomConfigurationSchema = SchemaFactory.createForClass(
@@ -72,6 +83,24 @@ class RoomPlayerEntity implements RoomPlayerRecord {
 
   @Prop({ required: true, default: 0, min: 0 })
   lastCommandId!: number;
+
+  @Prop({ type: MongooseSchema.Types.Mixed, default: () => ({ fifty: true, hint: true, double: true, freeze: true }) })
+  powerUps?: PlayerPowerUps;
+
+  @Prop({ type: String, default: null })
+  doubleActiveForMissionId?: string | null;
+
+  @Prop({ type: String, default: null, select: false })
+  hiddenChoiceIdsForMissionId?: string | null;
+
+  @Prop({ type: [String], default: [], select: false })
+  hiddenChoiceIds?: string[];
+
+  @Prop({ type: String, default: null, select: false })
+  hintForMissionId?: string | null;
+
+  @Prop({ type: String, default: null, select: false })
+  hintText?: string | null;
 }
 
 const RoomPlayerSchema = SchemaFactory.createForClass(RoomPlayerEntity);
@@ -118,6 +147,12 @@ class RoomRoundEntity implements RoomRoundRecord {
   @Prop({ required: true, maxlength: 128, select: false })
   targetCountryName!: string;
 
+  @Prop({ type: String, default: '', select: false })
+  targetRegion?: string;
+
+  @Prop({ type: [Number], default: null, select: false })
+  targetMapAnchor?: [number, number] | null;
+
   @Prop({ type: PublicPromptSchema, required: true })
   prompt!: PublicPrompt;
 
@@ -129,6 +164,15 @@ class RoomRoundEntity implements RoomRoundRecord {
 
   @Prop({ type: MongooseSchema.Types.Mixed, default: null })
   answerReveal!: RoomRoundRecord['answerReveal'];
+
+  @Prop({ type: Number, default: null })
+  startedAt!: number | null;
+
+  @Prop({ type: Number, default: null })
+  deadlineAt!: number | null;
+
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  answers!: RoundAnswerRecord[];
 }
 
 const RoomRoundSchema = SchemaFactory.createForClass(RoomRoundEntity);
@@ -197,4 +241,5 @@ export const RoomSchema = SchemaFactory.createForClass(RoomEntity);
 RoomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 RoomSchema.index({ status: 1, 'game.timerDeadlineAt': 1 });
 RoomSchema.index({ status: 1, 'game.advanceAt': 1 });
+RoomSchema.index({ status: 1, 'game.round.deadlineAt': 1 });
 RoomSchema.set('toObject', { flattenMaps: true });

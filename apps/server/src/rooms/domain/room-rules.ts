@@ -1,5 +1,20 @@
-import type { RoomRecord, RoomPlayerRecord } from './room.types.js';
+import type {
+  RoomConfiguration,
+  RoomRecord,
+  RoomPlayerRecord,
+  RoomRoundRecord,
+} from './room.types.js';
 import { RoomDomainError } from './room-errors.js';
+
+export const resolveRoundTimeLimitMs = (
+  roomConfig: RoomConfiguration,
+  defaultTimeLimitMs: number,
+): number => {
+  if (typeof roomConfig.roundTimeLimitSeconds === 'number') {
+    return Math.max(0, roomConfig.roundTimeLimitSeconds * 1_000);
+  }
+  return Math.max(0, defaultTimeLimitMs);
+};
 
 export const getNextAdminPlayerId = (
   players: RoomPlayerRecord[],
@@ -15,6 +30,16 @@ export const getNextAdminPlayerId = (
   return oldest.playerId;
 };
 
+export const stampRoundTiming = (
+  round: RoomRoundRecord,
+  now: number,
+  timeLimitMs: number,
+): void => {
+  round.startedAt = now;
+  round.deadlineAt = timeLimitMs > 0 ? now + timeLimitMs : null;
+  round.answers = [];
+};
+
 export const revealRoomRound = (
   room: RoomRecord,
   now: number,
@@ -22,6 +47,11 @@ export const revealRoomRound = (
 ): void => {
   const round = room.game.round;
   if (!round) throw new RoomDomainError('INVALID_COMMAND');
+  for (const player of room.players) {
+    if (player.answeredMissionId !== round.missionId) {
+      player.streak = 0;
+    }
+  }
   round.revealed = true;
   round.answerReveal = {
     countryCode: round.targetCountryCode,

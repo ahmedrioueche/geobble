@@ -2,6 +2,8 @@ import type {
   ChallengeType,
   GameMode,
   PinDirection,
+  PowerUpKind,
+  ReactionEmoji,
   RoomConfiguration,
   RoomCreateRequest,
   RoomCommand,
@@ -10,6 +12,22 @@ import type {
   SubMode,
 } from './room.types.js';
 import { RoomDomainError } from './room-errors.js';
+
+export const ALLOWED_REACTION_EMOJIS: readonly ReactionEmoji[] = [
+  '🔥',
+  '👏',
+  '😱',
+  '😂',
+  '🎯',
+  '💀',
+];
+
+const POWER_UP_KINDS: readonly PowerUpKind[] = [
+  'fifty',
+  'hint',
+  'double',
+  'freeze',
+];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -59,6 +77,40 @@ export const parseRoomConfiguration = (
     throw new RoomDomainError('INVALID_REQUEST');
   }
 
+  let roundTimeLimitSeconds: number | undefined;
+  if (value.roundTimeLimitSeconds !== undefined) {
+    if (
+      typeof value.roundTimeLimitSeconds !== 'number' ||
+      !Number.isSafeInteger(value.roundTimeLimitSeconds) ||
+      value.roundTimeLimitSeconds < 0 ||
+      value.roundTimeLimitSeconds > 120
+    ) {
+      throw new RoomDomainError('INVALID_REQUEST');
+    }
+    roundTimeLimitSeconds = value.roundTimeLimitSeconds;
+  }
+
+  let speedScoring: boolean | undefined;
+  if (value.speedScoring !== undefined) {
+    if (typeof value.speedScoring !== 'boolean') {
+      throw new RoomDomainError('INVALID_REQUEST');
+    }
+    speedScoring = value.speedScoring;
+  }
+
+  let wrongAnswerPenalty: number | undefined;
+  if (value.wrongAnswerPenalty !== undefined) {
+    if (
+      typeof value.wrongAnswerPenalty !== 'number' ||
+      !Number.isSafeInteger(value.wrongAnswerPenalty) ||
+      value.wrongAnswerPenalty < 0 ||
+      value.wrongAnswerPenalty > 100
+    ) {
+      throw new RoomDomainError('INVALID_REQUEST');
+    }
+    wrongAnswerPenalty = value.wrongAnswerPenalty;
+  }
+
   return {
     mode: mode as GameMode,
     pinDirection:
@@ -66,6 +118,11 @@ export const parseRoomConfiguration = (
     subMode: subMode as SubMode,
     challengeType: challengeType as ChallengeType,
     challengeValue,
+    ...(roundTimeLimitSeconds !== undefined
+      ? { roundTimeLimitSeconds }
+      : {}),
+    ...(speedScoring !== undefined ? { speedScoring } : {}),
+    ...(wrongAnswerPenalty !== undefined ? { wrongAnswerPenalty } : {}),
   };
 };
 
@@ -159,6 +216,20 @@ export const parseRoomCommand = (value: unknown): RoomCommand => {
     return { ...identity, type: value.type };
   }
 
+  if (value.type === 'powerup') {
+    if (
+      typeof value.kind !== 'string' ||
+      !POWER_UP_KINDS.includes(value.kind as PowerUpKind)
+    ) {
+      throw new RoomDomainError('INVALID_COMMAND');
+    }
+    return {
+      ...identity,
+      type: 'powerup',
+      kind: value.kind as PowerUpKind,
+    };
+  }
+
   if (
     value.type !== 'answer' ||
     (value.answerCountryCode !== null &&
@@ -196,3 +267,13 @@ export const parsePlayerName = (value: unknown): string => {
 
 export const isSafeIdentifier = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+
+export const parseReactionEmoji = (value: unknown): ReactionEmoji => {
+  if (!isRecord(value) || typeof value.emoji !== 'string') {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  if (!ALLOWED_REACTION_EMOJIS.includes(value.emoji as ReactionEmoji)) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  return value.emoji as ReactionEmoji;
+};

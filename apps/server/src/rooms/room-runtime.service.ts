@@ -13,7 +13,9 @@ import type { RoomMutationResult } from './room-mutation.service.js';
 import {
   areConnectedPlayersDone,
   getNextAdminPlayerId,
+  resolveRoundTimeLimitMs,
   revealRoomRound,
+  stampRoundTiming,
 } from './domain/room-rules.js';
 import { toRoomSnapshot } from './domain/room-snapshot.js';
 import { RoomMutationService } from './room-mutation.service.js';
@@ -58,9 +60,43 @@ export class RoomRuntimeService implements OnModuleInit {
     await this.removeExpiredRooms(now, removedRoomIds);
     await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds);
     await this.finishExpiredMatches(now, snapshots);
+    await this.revealTimedOutRounds(now, snapshots);
     await this.advanceCompletedRounds(now, snapshots);
 
     return { snapshots, removedRoomIds };
+  }
+
+  private async revealTimedOutRounds(
+    now: number,
+    snapshots: RoomSnapshot[],
+  ): Promise<void> {
+    const due = await this.repository.findDueRoundDeadlines(now);
+    for (const candidate of due) {
+      const mutation = await this.mutateSafely(candidate.roomId, (draft) => {
+        const round = draft.game.round;
+        if (
+          draft.status !== 'playing' ||
+          draft.game.advanceAt !== null ||
+          !round ||
+          round.revealed ||
+          round.deadlineAt == null ||
+          round.deadlineAt > now
+        ) {
+          return false;
+        }
+        for (const player of draft.players) {
+          if (player.answeredMissionId !== round.missionId) player.streak = 0;
+        }
+        revealRoomRound(
+          draft,
+          now,
+          this.config.getOrThrow('roundAdvanceDelayMs'),
+        );
+        return true;
+      });
+      if (!mutation?.room) continue;
+      snapshots.push(toRoomSnapshot(mutation.room));
+    }
   }
 
   private async removeExpiredRooms(
@@ -229,11 +265,24 @@ export class RoomRuntimeService implements OnModuleInit {
       return;
     }
 
+    stampRoundTiming(
+      nextRound.round,
+      now,
+      resolveRoundTimeLimitMs(
+        room.config,
+        this.config.getOrThrow('roundTimeLimitMs'),
+      ),
+    );
     room.game.round = nextRound.round;
     room.game.usedCountryCodes = nextRound.usedCountryCodes;
     room.game.advanceAt = null;
     for (const player of room.players) {
       player.pinLocation = null;
+      player.doubleActiveForMissionId = null;
+      player.hiddenChoiceIdsForMissionId = null;
+      player.hiddenChoiceIds = [];
+      player.hintForMissionId = null;
+      player.hintText = null;
     }
   }
 

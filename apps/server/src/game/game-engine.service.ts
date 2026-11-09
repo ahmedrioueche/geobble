@@ -56,6 +56,8 @@ export class GameEngineService {
         number: roundNumber,
         targetCountryCode: target.cca3,
         targetCountryName: target.name,
+        targetRegion: target.region,
+        targetMapAnchor: target.mapAnchor,
         prompt,
         choices,
         revealed: false,

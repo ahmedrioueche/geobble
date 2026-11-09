@@ -148,4 +148,49 @@ describe('room request validation', () => {
       }),
     ).toThrow(RoomDomainError);
   });
+
+  it('validates power-up commands, optional round settings, and reaction emojis', () => {
+    expect(
+      parseRoomCommand({
+        type: 'powerup',
+        kind: 'fifty',
+        commandId: 2,
+        expectedRevision: 1,
+        missionId: 'mission-1',
+      }),
+    ).toEqual({
+      type: 'powerup',
+      kind: 'fifty',
+      commandId: 2,
+      expectedRevision: 1,
+      missionId: 'mission-1',
+    });
+
+    expect(() =>
+      parseRoomCommand({
+        type: 'powerup',
+        kind: 'unknown',
+        commandId: 2,
+        expectedRevision: 1,
+        missionId: 'mission-1',
+      }),
+    ).toThrow(RoomDomainError);
+
+    expect(
+      parseRoomConfiguration({
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 15,
+        speedScoring: false,
+        wrongAnswerPenalty: 5,
+      }),
+    ).toMatchObject({
+      roundTimeLimitSeconds: 15,
+      speedScoring: false,
+      wrongAnswerPenalty: 5,
+    });
+  });
 });

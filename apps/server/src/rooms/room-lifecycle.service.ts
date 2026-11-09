@@ -5,6 +5,7 @@ import type { ServerConfiguration } from '../config/server-configuration.js';
 import { CountryCatalogService } from '../game/country-catalog.service.js';
 import { GameEngineService } from '../game/game-engine.service.js';
 import {
+  DEFAULT_PLAYER_POWER_UPS,
   DEFAULT_ROOM_CONFIGURATION,
   type RoomConfiguration,
   type RoomCreateRequest,
@@ -27,7 +28,9 @@ import {
 import {
   areConnectedPlayersDone,
   getNextAdminPlayerId,
+  resolveRoundTimeLimitMs,
   revealRoomRound,
+  stampRoundTiming,
 } from './domain/room-rules.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
@@ -69,6 +72,12 @@ const createPlayer = (
   pinLocation: null,
   answeredMissionId: null,
   lastCommandId: 0,
+  powerUps: { ...DEFAULT_PLAYER_POWER_UPS },
+  doubleActiveForMissionId: null,
+  hiddenChoiceIdsForMissionId: null,
+  hiddenChoiceIds: [],
+  hintForMissionId: null,
+  hintText: null,
 });
 
 export interface RoomSettingsResult {
@@ -299,6 +308,14 @@ export class RoomLifecycleService {
         throw new RoomDomainError('ROUND_UNAVAILABLE');
       }
 
+      stampRoundTiming(
+        created.round,
+        now,
+        resolveRoundTimeLimitMs(
+          draft.config,
+          this.config.getOrThrow('roundTimeLimitMs'),
+        ),
+      );
       draft.status = 'playing';
       draft.pendingConfig = null;
       draft.players = draft.players.map((player) => ({
@@ -309,6 +326,12 @@ export class RoomLifecycleService {
         pinLocation: null,
         answeredMissionId: null,
         lastCommandId: 0,
+        powerUps: { ...DEFAULT_PLAYER_POWER_UPS },
+        doubleActiveForMissionId: null,
+        hiddenChoiceIdsForMissionId: null,
+        hiddenChoiceIds: [],
+        hintForMissionId: null,
+        hintText: null,
       }));
       draft.game = {
         startedAt: now,
@@ -423,8 +446,11 @@ export class RoomLifecycleService {
     return room ? toRoomSnapshot(room) : null;
   }
 
-  async getSnapshot(roomId: string): Promise<RoomSnapshot> {
-    return toRoomSnapshot(await this.mutations.get(roomId));
+  async getSnapshot(
+    roomId: string,
+    recipientPlayerId?: string | null,
+  ): Promise<RoomSnapshot> {
+    return toRoomSnapshot(await this.mutations.get(roomId), recipientPlayerId);
   }
 
   private validateConfiguration(value: unknown): RoomConfiguration {

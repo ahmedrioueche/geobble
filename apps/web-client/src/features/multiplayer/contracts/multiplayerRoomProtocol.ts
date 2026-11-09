@@ -5,12 +5,35 @@ import type {
   SubMode,
 } from "../../game/domain/gameSession";
 
+export type PowerUpKind = "fifty" | "hint" | "double" | "freeze";
+
+export type ReactionEmoji = "🔥" | "👏" | "😱" | "😂" | "🎯" | "💀";
+
+export const REACTION_EMOJIS: readonly ReactionEmoji[] = [
+  "🔥",
+  "👏",
+  "😱",
+  "😂",
+  "🎯",
+  "💀",
+];
+
+export interface PlayerPowerUps {
+  fifty: boolean;
+  hint: boolean;
+  double: boolean;
+  freeze: boolean;
+}
+
 export interface RoomConfiguration {
   mode: GameMode;
   pinDirection: PinDirection;
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  roundTimeLimitSeconds?: number;
+  speedScoring?: boolean;
+  wrongAnswerPenalty?: number;
 }
 
 export interface RoomPlayer {
@@ -24,6 +47,28 @@ export interface RoomPlayer {
   maxStreak: number;
   pinLocation: [number, number] | null;
   answered: boolean;
+  lockedOut?: boolean;
+  powerUps?: PlayerPowerUps;
+  doubleActive?: boolean;
+  hiddenChoiceIds?: string[];
+  hint?: string | null;
+}
+
+export interface RoundResultPlayer {
+  playerId: string;
+  correct: boolean;
+  elapsedMs: number;
+  pointsGained: number;
+  streakBonus?: number;
+  streakAfter: number;
+  distanceKm?: number | null;
+}
+
+export interface RoundResult {
+  fastestPlayerId: string | null;
+  closestPinPlayerId?: string | null;
+  closestPinDistanceKm?: number | null;
+  players: RoundResultPlayer[];
 }
 
 export interface RoomRound {
@@ -37,6 +82,9 @@ export interface RoomRound {
   choices: Array<{ id: string; label: string }>;
   revealed: boolean;
   answerReveal: { countryCode: string; countryName: string } | null;
+  startedAt?: number | null;
+  deadlineAt?: number | null;
+  result?: RoundResult | null;
 }
 
 export interface RoomSnapshot {
@@ -72,8 +120,20 @@ export type RoomCommandInput =
       choiceId?: string;
       pinLocation?: [number, number];
     }
+  | {
+      type: "powerup";
+      kind: PowerUpKind;
+    }
   | { type: "reveal" }
   | { type: "skip" };
+
+export interface RoomReactionEvent {
+  roomId: string;
+  playerId: string;
+  playerName: string;
+  emoji: ReactionEmoji;
+  timestamp: number;
+}
 
 export type RoomCommand = RoomCommandInput & {
   commandId: number;
@@ -138,6 +198,7 @@ export type RoomServerEvent =
     }
   | { type: "left"; payload: { roomId: string } }
   | { type: "closed"; payload: { roomId: string } }
+  | { type: "reaction"; payload: RoomReactionEvent }
   | {
       type: "error";
       payload: {
@@ -196,7 +257,20 @@ const isConfiguration = (value: unknown): value is RoomConfiguration =>
   ["locate", "identify"].includes(String(value.pinDirection)) &&
   ["name", "flag", "capital"].includes(String(value.subMode)) &&
   ["world", "count", "timer"].includes(String(value.challengeType)) &&
-  isInteger(value.challengeValue);
+  isInteger(value.challengeValue) &&
+  (value.roundTimeLimitSeconds === undefined ||
+    isInteger(value.roundTimeLimitSeconds)) &&
+  (value.speedScoring === undefined ||
+    typeof value.speedScoring === "boolean") &&
+  (value.wrongAnswerPenalty === undefined ||
+    isInteger(value.wrongAnswerPenalty));
+
+const isPowerUps = (value: unknown): value is PlayerPowerUps =>
+  isRecord(value) &&
+  typeof value.fifty === "boolean" &&
+  typeof value.hint === "boolean" &&
+  typeof value.double === "boolean" &&
+  typeof value.freeze === "boolean";
 
 const isPlayer = (value: unknown): value is RoomPlayer =>
   isRecord(value) &&
@@ -209,7 +283,36 @@ const isPlayer = (value: unknown): value is RoomPlayer =>
   isInteger(value.streak) &&
   isInteger(value.maxStreak) &&
   (value.pinLocation === null || isCoordinate(value.pinLocation)) &&
-  typeof value.answered === "boolean";
+  typeof value.answered === "boolean" &&
+  (value.lockedOut === undefined || typeof value.lockedOut === "boolean") &&
+  (value.powerUps === undefined || isPowerUps(value.powerUps)) &&
+  (value.doubleActive === undefined ||
+    typeof value.doubleActive === "boolean") &&
+  (value.hiddenChoiceIds === undefined ||
+    (Array.isArray(value.hiddenChoiceIds) &&
+      value.hiddenChoiceIds.every(isString))) &&
+  (value.hint === undefined || value.hint === null || isString(value.hint));
+
+const isRoundResult = (value: unknown): value is RoundResult =>
+  isRecord(value) &&
+  (value.fastestPlayerId === null || isString(value.fastestPlayerId)) &&
+  (value.closestPinPlayerId === undefined ||
+    value.closestPinPlayerId === null ||
+    isString(value.closestPinPlayerId)) &&
+  (value.closestPinDistanceKm === undefined ||
+    isNullableInteger(value.closestPinDistanceKm)) &&
+  Array.isArray(value.players) &&
+  value.players.every(
+    (player) =>
+      isRecord(player) &&
+      isString(player.playerId) &&
+      typeof player.correct === "boolean" &&
+      isInteger(player.elapsedMs) &&
+      isInteger(player.pointsGained) &&
+      (player.streakBonus === undefined || isInteger(player.streakBonus)) &&
+      isInteger(player.streakAfter) &&
+      (player.distanceKm === undefined || isNullableInteger(player.distanceKm)),
+  );
 
 const isRound = (value: unknown): value is RoomRound =>
   isRecord(value) &&
@@ -230,7 +333,12 @@ const isRound = (value: unknown): value is RoomRound =>
   (value.answerReveal === null ||
     (isRecord(value.answerReveal) &&
       isString(value.answerReveal.countryCode) &&
-      isString(value.answerReveal.countryName)));
+      isString(value.answerReveal.countryName))) &&
+  (value.startedAt === undefined || isNullableInteger(value.startedAt)) &&
+  (value.deadlineAt === undefined || isNullableInteger(value.deadlineAt)) &&
+  (value.result === undefined ||
+    value.result === null ||
+    isRoundResult(value.result));
 
 export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value) &&
@@ -288,6 +396,14 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
     case "left":
     case "closed":
       return isString(payload.roomId);
+    case "reaction":
+      return (
+        isString(payload.roomId) &&
+        isString(payload.playerId) &&
+        isString(payload.playerName) &&
+        REACTION_EMOJIS.includes(payload.emoji as ReactionEmoji) &&
+        isInteger(payload.timestamp)
+      );
     case "error":
       return (
         (payload.requestId === null || isString(payload.requestId)) &&

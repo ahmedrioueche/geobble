@@ -1,9 +1,11 @@
 import type {
+  ReactionEmoji,
   RoomCommand,
   RoomCommandInput,
   RoomConfiguration,
   RoomErrorCode,
   RoomJoinedEvent,
+  RoomReactionEvent,
   RoomServerEvent,
   RoomSnapshot,
 } from "../contracts/multiplayerRoomProtocol";
@@ -54,6 +56,7 @@ export interface RoomClientState {
   lastAcknowledgedRevision: number | null;
   lastAnswerResult: boolean | null;
   settingsAccepted: { queued: boolean; revision: number } | null;
+  lastReaction: RoomReactionEvent | null;
   error: string | null;
   reconnectAvailable: boolean;
   reconnectRequired: boolean;
@@ -87,6 +90,7 @@ export interface RoomClient {
   startRoom: () => void;
   changeSettings: (config: RoomConfiguration) => Promise<void>;
   submitCommand: (command: RoomCommandInput) => Promise<number>;
+  sendReaction: (emoji: ReactionEmoji) => void;
   leaveRoom: () => Promise<void>;
   forgetReconnect: () => void;
   disconnect: () => void;
@@ -168,6 +172,7 @@ export const createRoomClient = (
     lastAcknowledgedRevision: null,
     lastAnswerResult: null,
     settingsAccepted: null,
+    lastReaction: null,
     error: null,
     reconnectAvailable: false,
     reconnectRequired: false,
@@ -344,6 +349,10 @@ export const createRoomClient = (
             revision: event.payload.revision,
           },
         });
+        return;
+      case "reaction":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        updateState({ lastReaction: event.payload });
         return;
       case "error":
         rejectPendingJoins(
@@ -720,6 +729,14 @@ export const createRoomClient = (
               : "Could not send the room command.",
         });
         throw error;
+      }
+    },
+    sendReaction: (emoji) => {
+      if (!state.room || state.status !== "connected") return;
+      try {
+        transport.emit("room:reaction", { emoji });
+      } catch {
+        // Ignore reaction errors on disconnected sockets.
       }
     },
     leaveRoom: async () => {

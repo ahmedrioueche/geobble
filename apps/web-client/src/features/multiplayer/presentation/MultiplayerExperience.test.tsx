@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   setReady: vi.fn(),
   startRoom: vi.fn(),
   submitCommand: vi.fn(),
+  sendReaction: vi.fn(),
   createRoom: vi.fn(),
   joinRoom: vi.fn(),
   joinPublicRoom: vi.fn(),
@@ -83,6 +84,7 @@ const createClientState = (snapshot?: RoomSnapshot): RoomClientState => ({
   lastAcknowledgedRevision: null,
   lastAnswerResult: null,
   settingsAccepted: null,
+  lastReaction: null,
   error: null,
   reconnectAvailable: false,
   reconnectRequired: false,
@@ -113,6 +115,7 @@ beforeEach(() => {
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
+      sendReaction: mocks.sendReaction,
       leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
       forgetReconnect: mocks.forgetReconnect,
       retryReconnect: mocks.retryReconnect.mockResolvedValue(undefined),
@@ -297,6 +300,7 @@ describe("MultiplayerExperience", () => {
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
         submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
         leaveRoom: mocks.leaveRoom,
         forgetReconnect: mocks.forgetReconnect,
         retryReconnect: mocks.retryReconnect,
@@ -415,6 +419,7 @@ describe("MultiplayerExperience", () => {
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
+      sendReaction: mocks.sendReaction,
       leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
       forgetReconnect: mocks.forgetReconnect,
       retryReconnect: mocks.retryReconnect.mockResolvedValue(undefined),
@@ -484,5 +489,112 @@ describe("MultiplayerExperience", () => {
     expect(
       screen.getByRole("heading", { name: /geobble multiplayer/i }),
     ).toBeTruthy();
+  });
+
+  it("renders power-ups during play, round recap on reveal, and sends emoji reactions", () => {
+    const playingSnapshot = createSnapshot({
+      status: "playing",
+      config: {
+        mode: "reverse",
+        pinDirection: "locate",
+        subMode: "name",
+        challengeType: "world",
+        challengeValue: 0,
+      },
+      players: [
+        {
+          ...createSnapshot().players[0]!,
+          powerUps: { fifty: true, hint: true, double: true, freeze: true },
+          hint: 'Region: Americas · Starts with "C"',
+        },
+        {
+          ...createSnapshot().players[1]!,
+          answered: true,
+          streak: 3,
+        },
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "Ottawa" },
+          choices: [
+            { id: "choice-canada", label: "Canada" },
+            { id: "choice-france", label: "France" },
+          ],
+          revealed: false,
+          answerReveal: null,
+          startedAt: 1000,
+          deadlineAt: 21000,
+        },
+      },
+    });
+    const view = renderExperience(createClientState(playingSnapshot));
+
+    expect(screen.getByText(/Region: Americas/)).toBeTruthy();
+    expect(screen.getByLabelText("Grace answered")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "50/50" }));
+    expect(mocks.submitCommand).toHaveBeenCalledWith({
+      type: "powerup",
+      kind: "fifty",
+    });
+
+    const revealedSnapshot = createSnapshot({
+      ...playingSnapshot,
+      revision: 2,
+      game: {
+        ...playingSnapshot.game,
+        round: {
+          ...playingSnapshot.game.round!,
+          revealed: true,
+          answerReveal: { countryCode: "CAN", countryName: "Canada" },
+          result: {
+            fastestPlayerId: "player-2",
+            closestPinPlayerId: "player-2",
+            closestPinDistanceKm: 120,
+            players: [
+              {
+                playerId: "player-2",
+                correct: true,
+                elapsedMs: 2400,
+                pointsGained: 19,
+                streakAfter: 3,
+              },
+            ],
+          },
+        },
+      },
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(revealedSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    expect(screen.getByLabelText("Round recap")).toBeTruthy();
+    expect(screen.getByText(/Fastest: Grace \(2\.4s\)/)).toBeTruthy();
+    expect(screen.getByText(/3 in a row/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "React with 🔥" }));
+    expect(mocks.sendReaction).toHaveBeenCalledWith("🔥");
   });
 });

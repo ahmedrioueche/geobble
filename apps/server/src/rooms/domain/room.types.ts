@@ -5,12 +5,33 @@ export type ChallengeType = 'world' | 'count' | 'timer';
 export type RoomStatus = 'waiting' | 'playing' | 'finished';
 export type RoomVisibility = 'public' | 'private';
 
+export type PowerUpKind = 'fifty' | 'hint' | 'double' | 'freeze';
+
+export type ReactionEmoji = '🔥' | '👏' | '😱' | '😂' | '🎯' | '💀';
+
+export interface PlayerPowerUps {
+  fifty: boolean;
+  hint: boolean;
+  double: boolean;
+  freeze: boolean;
+}
+
+export const DEFAULT_PLAYER_POWER_UPS: PlayerPowerUps = {
+  fifty: true,
+  hint: true,
+  double: true,
+  freeze: true,
+};
+
 export interface RoomConfiguration {
   mode: GameMode;
   pinDirection: PinDirection;
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  roundTimeLimitSeconds?: number;
+  speedScoring?: boolean;
+  wrongAnswerPenalty?: number;
 }
 
 export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
@@ -19,6 +40,9 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
   subMode: 'name',
   challengeType: 'world',
   challengeValue: 0,
+  roundTimeLimitSeconds: 20,
+  speedScoring: true,
+  wrongAnswerPenalty: 0,
 };
 
 export interface RoomPlayerRecord {
@@ -35,6 +59,12 @@ export interface RoomPlayerRecord {
   pinLocation: [number, number] | null;
   answeredMissionId: string | null;
   lastCommandId: number;
+  powerUps?: PlayerPowerUps;
+  doubleActiveForMissionId?: string | null;
+  hiddenChoiceIdsForMissionId?: string | null;
+  hiddenChoiceIds?: string[];
+  hintForMissionId?: string | null;
+  hintText?: string | null;
 }
 
 export interface PublicPrompt {
@@ -49,15 +79,49 @@ export interface RoomChoiceRecord {
   countryCode: string;
 }
 
+export interface RoundAnswerRecord {
+  playerId: string;
+  /** Milliseconds elapsed since the round started when the answer arrived. */
+  elapsedMs: number;
+  correct: boolean;
+  pointsGained: number;
+  streakBonus?: number;
+  streakAfter: number;
+  distanceKm?: number | null;
+}
+
+export interface RoundResultPlayer {
+  playerId: string;
+  correct: boolean;
+  elapsedMs: number;
+  pointsGained: number;
+  streakBonus?: number;
+  streakAfter: number;
+  distanceKm?: number | null;
+}
+
+export interface RoundResult {
+  fastestPlayerId: string | null;
+  closestPinPlayerId?: string | null;
+  closestPinDistanceKm?: number | null;
+  players: RoundResultPlayer[];
+}
+
 export interface RoomRoundRecord {
   missionId: string;
   number: number;
   targetCountryCode: string;
   targetCountryName: string;
+  targetRegion?: string;
+  targetMapAnchor?: [number, number] | null;
   prompt: PublicPrompt;
   choices: RoomChoiceRecord[];
   revealed: boolean;
   answerReveal: { countryCode: string; countryName: string } | null;
+  /** Absent on rounds persisted before round timing existed. */
+  startedAt?: number | null;
+  deadlineAt?: number | null;
+  answers?: RoundAnswerRecord[];
 }
 
 export interface RoomGameRecord {
@@ -94,6 +158,11 @@ export interface RoomPlayerSnapshot {
   maxStreak: number;
   pinLocation: [number, number] | null;
   answered: boolean;
+  lockedOut?: boolean;
+  powerUps?: PlayerPowerUps;
+  doubleActive?: boolean;
+  hiddenChoiceIds?: string[];
+  hint?: string | null;
 }
 
 export interface RoomSnapshot {
@@ -115,6 +184,9 @@ export interface RoomSnapshot {
       choices: Array<Pick<RoomChoiceRecord, 'id' | 'label'>>;
       revealed: boolean;
       answerReveal: { countryCode: string; countryName: string } | null;
+      startedAt: number | null;
+      deadlineAt: number | null;
+      result: RoundResult | null;
     } | null;
   };
 }
@@ -146,8 +218,20 @@ export type RoomCommandInput =
       choiceId?: string;
       pinLocation?: [number, number];
     }
+  | {
+      type: 'powerup';
+      kind: PowerUpKind;
+    }
   | { type: 'reveal' }
   | { type: 'skip' };
+
+export interface RoomReactionEvent {
+  roomId: string;
+  playerId: string;
+  playerName: string;
+  emoji: ReactionEmoji;
+  timestamp: number;
+}
 
 export type RoomCommand = RoomCommandInput & {
   commandId: number;

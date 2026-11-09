@@ -19,7 +19,15 @@ import {
   type ServerConfiguration,
 } from '../config/server-configuration.js';
 import { RoomDomainError } from './domain/room-errors.js';
-import { parseCreateRequest, parseJoinRequest, parseReconnectRequest, parseRoomCommand } from './domain/room-validation.js';
+import { toRoomSnapshot } from './domain/room-snapshot.js';
+import type { RoomRecord, RoomSnapshot } from './domain/room.types.js';
+import {
+  parseCreateRequest,
+  parseJoinRequest,
+  parseReactionEmoji,
+  parseReconnectRequest,
+  parseRoomCommand,
+} from './domain/room-validation.js';
 import { RoomGameplayService } from './room-gameplay.service.js';
 import { RoomLifecycleService } from './room-lifecycle.service.js';
 import { RoomRuntimeService } from './room-runtime.service.js';
@@ -33,6 +41,7 @@ import {
 interface RoomSocketData extends Record<string, unknown> {
   roomIdentity?: RoomSocketIdentity;
   eventRateLimit?: { windowStartedAt: number; count: number };
+  lastReactionAt?: number;
 }
 
 type RoomSocket = Socket<
@@ -323,9 +332,7 @@ export class RoomGateway
         command,
       );
       if (outcome.accepted) {
-        this.namespace
-          .to(identity.roomId)
-          .emit(ROOM_EVENTS.updated, outcome.snapshot);
+        this.broadcastRoomSnapshot(identity.roomId, outcome.roomRecord, outcome.snapshot);
         client.emit(ROOM_EVENTS.commandAccepted, {
           roomId: identity.roomId,
           commandId: outcome.commandId,
@@ -343,6 +350,44 @@ export class RoomGateway
       });
       client.emit(ROOM_EVENTS.updated, outcome.snapshot);
     });
+  }
+
+  @SubscribeMessage(ROOM_EVENTS.reaction)
+  async reaction(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const identity = client.data.roomIdentity;
+    if (!identity) return;
+    const now = Date.now();
+    if (
+      client.data.lastReactionAt !== undefined &&
+      now - client.data.lastReactionAt < 800
+    ) {
+      return;
+    }
+    try {
+      this.enforceEventRate(client);
+      const emoji = parseReactionEmoji(value);
+      const snapshot = await this.lifecycle.getSnapshot(
+        identity.roomId,
+        identity.playerId,
+      );
+      const player = snapshot.players.find(
+        (member) => member.id === identity.playerId,
+      );
+      if (!player) return;
+      client.data.lastReactionAt = now;
+      this.namespace.to(identity.roomId).emit(ROOM_EVENTS.reaction, {
+        roomId: identity.roomId,
+        playerId: player.id,
+        playerName: player.name,
+        emoji,
+        timestamp: now,
+      });
+    } catch {
+      // Ignore invalid or throttled ephemeral reactions.
+    }
   }
 
   @SubscribeMessage(ROOM_EVENTS.leave)
@@ -374,6 +419,28 @@ export class RoomGateway
       }
       client.emit(ROOM_EVENTS.left, { roomId: identity.roomId });
     });
+  }
+
+  private broadcastRoomSnapshot(
+    roomId: string,
+    roomRecord: RoomRecord,
+    fallbackSnapshot: RoomSnapshot,
+  ): void {
+    let emittedAny = false;
+    for (const player of roomRecord.players) {
+      const socket = this.playerSockets.get(
+        this.getPlayerSocketKey(roomId, player.playerId),
+      );
+      if (!socket) continue;
+      emittedAny = true;
+      socket.emit(
+        ROOM_EVENTS.updated,
+        toRoomSnapshot(roomRecord, player.playerId),
+      );
+    }
+    if (!emittedAny) {
+      this.namespace.to(roomId).emit(ROOM_EVENTS.updated, fallbackSnapshot);
+    }
   }
 
   private async markDisconnected(identity: RoomSocketIdentity): Promise<void> {
