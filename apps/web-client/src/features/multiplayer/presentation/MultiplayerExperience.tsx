@@ -1365,18 +1365,28 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           )}
 
           {showSettings && isAdmin && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
-              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
-                <h2 className="mb-4 text-lg font-black uppercase">
-                  {snapshot.status === "playing"
-                    ? "Next round settings"
-                    : "Room settings"}
-                </h2>
-                {snapshot.pendingConfig && (
-                  <p className="mb-3 text-xs text-amber-200">
-                    A settings change is already queued. Saving replaces it.
-                  </p>
-                )}
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-md md:items-center md:p-4">
+              <div
+                aria-labelledby="room-settings-modal-title"
+                aria-modal="true"
+                className="flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-slate-900 md:h-auto md:max-h-[calc(100dvh-2rem)] md:max-w-md md:rounded-2xl md:border md:border-white/10 md:shadow-2xl"
+                role="dialog"
+              >
+                <div className="shrink-0 border-b border-white/10 px-5 pb-3 pt-[calc(1rem+env(safe-area-inset-top))] md:pt-5">
+                  <h2
+                    className="text-lg font-black uppercase"
+                    id="room-settings-modal-title"
+                  >
+                    {snapshot.status === "playing"
+                      ? "Next round settings"
+                      : "Room settings"}
+                  </h2>
+                  {snapshot.pendingConfig && (
+                    <p className="mt-2 text-xs text-amber-200">
+                      A settings change is already queued. Saving replaces it.
+                    </p>
+                  )}
+                </div>
                 <RoomSettingsForm
                   initial={snapshot.pendingConfig ?? snapshot.config}
                   onCancel={() => setShowSettings(false)}

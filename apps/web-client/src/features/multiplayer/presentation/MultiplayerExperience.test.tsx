@@ -961,9 +961,10 @@ describe("MultiplayerExperience", () => {
 
     // Admin Change settings button in the navbar opens the settings modal
     fireEvent.click(screen.getByRole("button", { name: "Change settings" }));
-    expect(
-      screen.getByRole("heading", { name: /next round settings/i }),
-    ).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: /next round settings/i });
+    expect(dialog.className).toContain("h-[100dvh]");
+    expect(dialog.className).toContain("md:max-h-[calc(100dvh-2rem)]");
+    expect(dialog.parentElement?.className).toContain("items-end");
   });
 
   it("auto-dismisses error messages after 5 seconds", () => {

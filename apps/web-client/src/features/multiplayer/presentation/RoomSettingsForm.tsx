@@ -29,7 +29,7 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
 
   return (
     <form
-      className="space-y-4"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
         setSaveError(null);
@@ -45,7 +45,8 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
           .finally(() => setSaving(false));
       }}
     >
-      <CustomSelect<RoomConfiguration["mode"]>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
+        <CustomSelect<RoomConfiguration["mode"]>
         title="Mode"
         onChange={(mode) => update({ mode })}
         options={[
@@ -184,7 +185,8 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
           {saveError}
         </p>
       )}
-      <div className="flex justify-end gap-3 pt-2">
+      </div>
+      <div className="shrink-0 flex justify-end gap-3 border-t border-white/10 bg-slate-900 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:py-4">
         <button
           className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/70 hover:text-white"
           onClick={onCancel}
