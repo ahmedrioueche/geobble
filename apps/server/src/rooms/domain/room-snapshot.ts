@@ -44,6 +44,9 @@ export const toRoomSnapshot = (
         ready: player.ready,
         connected: player.connected,
         ...(player.paused ? { paused: true } : {}),
+        ...(player.paused && player.spectatorPromptDeadlineAt != null
+          ? { spectatorPromptDeadlineAt: player.spectatorPromptDeadlineAt }
+          : {}),
         score: player.score,
         streak: player.streak,
         maxStreak: player.maxStreak,

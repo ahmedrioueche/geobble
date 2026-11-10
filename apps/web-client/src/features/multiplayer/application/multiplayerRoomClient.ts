@@ -393,7 +393,7 @@ export const createRoomClient = (
           error: event.payload.message,
         });
         return;
-      case "left":
+      case "left": {
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
         if (leaving) {
           clearTimeout(leaving.timeout);
@@ -406,15 +406,20 @@ export const createRoomClient = (
         } catch {
           updateState({ error: "Room left, but reconnect details could not be cleared." });
         }
+        const kickedForInactivity = event.payload.reason === "inactivity";
         updateState({
-          status: "disconnected",
+          status: kickedForInactivity ? "error" : "disconnected",
           room: null,
           pendingCommandIds: [],
           reconnectAvailable: false,
           reconnectRequired: false,
+          error: kickedForInactivity
+            ? "You were removed from the room due to inactivity."
+            : null,
         });
         return;
-      case "closed":
+      }
+      case "closed": {
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
         if (leaving) {
           clearTimeout(leaving.timeout);
@@ -427,14 +432,19 @@ export const createRoomClient = (
         } catch {
           updateState({ error: "Room closed, but reconnect details could not be cleared." });
         }
+        const closedForInactivity = event.payload.reason === "inactivity";
         updateState({
           status: "error",
           room: null,
           pendingCommandIds: [],
           reconnectAvailable: false,
           reconnectRequired: false,
-          error: "This room has closed.",
+          error: closedForInactivity
+            ? "This room was closed due to inactivity."
+            : "This room has closed.",
         });
+        return;
+      }
     }
   };
 

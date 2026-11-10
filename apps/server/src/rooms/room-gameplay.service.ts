@@ -124,7 +124,10 @@ export class RoomGameplayService {
       if (playerId !== room.adminPlayerId) {
         throw new RoomDomainError('NOT_ADMIN');
       }
-      this.completeRound(room, Date.now());
+      const now = Date.now();
+      player.lastActiveAt = now;
+      room.lastActivityAt = now;
+      this.completeRound(room, now);
       player.lastCommandId = command.commandId;
       return null;
     }
@@ -136,9 +139,14 @@ export class RoomGameplayService {
     if (round.revealed || player.answeredMissionId === round.missionId) {
       throw new RoomDomainError('DUPLICATE_COMMAND');
     }
-    if (round.deadlineAt != null && Date.now() > round.deadlineAt) {
+    const now = Date.now();
+    if (round.deadlineAt != null && now > round.deadlineAt) {
       throw new RoomDomainError('INVALID_COMMAND');
     }
+
+    player.lastActiveAt = now;
+    player.missedRoundsCount = 0;
+    room.lastActivityAt = now;
 
     if (command.type === 'powerup') {
       this.applyPowerUp(room, round, player, command.kind);
@@ -152,7 +160,6 @@ export class RoomGameplayService {
     player.pinLocation = command.pinLocation
       ? [command.pinLocation[0], command.pinLocation[1]]
       : null;
-    const now = Date.now();
     const elapsedMs = Math.max(0, now - (round.startedAt ?? now));
     round.answers ??= [];
     const isCorrect = selectedCountryCode === round.targetCountryCode;

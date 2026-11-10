@@ -866,6 +866,51 @@ describe("MultiplayerExperience", () => {
     expect(screen.queryByText(/Spectating/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Resume playing" }));
     expect(mocks.setPaused).toHaveBeenCalledWith(false);
+
+    // When spectatorPromptDeadlineAt is set, Ada sees the "Still spectating?" prompt with "Still watching" button
+    const promptAfkSnapshot = createSnapshot({
+      ...activeSnapshot,
+      revision: 4,
+      players: [
+        {
+          ...activeSnapshot.players[0]!,
+          paused: true,
+          spectatorPromptDeadlineAt: Date.now() + 25_000,
+        },
+        activeSnapshot.players[1]!,
+      ],
+    });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(promptAfkSnapshot),
+    });
+    view.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
+
+    expect(
+      screen.getByRole("alert", { name: "Spectator inactivity check" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Still spectating?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Still watching" }));
+    expect(mocks.setPaused).toHaveBeenCalledWith(true);
   });
 
   it("places Reveal inline with the prompt, moves Change settings to the navbar, hides 'connected', and shows 'Leave'", async () => {

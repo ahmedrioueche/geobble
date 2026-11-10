@@ -52,6 +52,9 @@ export interface RoomPlayerRecord {
   connected: boolean;
   paused?: boolean;
   pausedAt?: number | null;
+  lastActiveAt?: number;
+  missedRoundsCount?: number;
+  spectatorPromptDeadlineAt?: number | null;
   joinedAt: number;
   disconnectedAt: number | null;
   reconnectTokenHash: string;
@@ -153,6 +156,7 @@ export interface RoomRecord {
   pendingConfig: RoomConfiguration | null;
   players: RoomPlayerRecord[];
   game: RoomGameRecord;
+  lastActivityAt?: number;
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -165,6 +169,7 @@ export interface RoomPlayerSnapshot {
   ready: boolean;
   connected: boolean;
   paused?: boolean;
+  spectatorPromptDeadlineAt?: number | null;
   score: number;
   streak: number;
   maxStreak: number;

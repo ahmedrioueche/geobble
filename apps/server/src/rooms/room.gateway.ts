@@ -480,13 +480,38 @@ export class RoomGateway
   private async publishRuntimeUpdates(): Promise<void> {
     try {
       const result = await this.runtime.tick();
+      for (const kicked of result.kickedPlayers ?? []) {
+        const key = this.getPlayerSocketKey(kicked.roomId, kicked.playerId);
+        const socket = this.playerSockets.get(key);
+        if (!socket) continue;
+        await socket.leave(kicked.roomId);
+        delete socket.data.roomIdentity;
+        this.playerSockets.delete(key);
+        socket.emit(ROOM_EVENTS.left, {
+          roomId: kicked.roomId,
+          reason: kicked.reason,
+        });
+      }
       for (const snapshot of result.snapshots) {
         this.namespace
           .to(snapshot.roomId)
           .emit(ROOM_EVENTS.updated, snapshot);
       }
+      const closedReasonByRoom = new Map(
+        (result.closedRooms ?? []).map((item) => [item.roomId, item.reason]),
+      );
       for (const roomId of result.removedRoomIds) {
-        this.namespace.to(roomId).emit(ROOM_EVENTS.closed, { roomId });
+        const reason = closedReasonByRoom.get(roomId);
+        this.namespace.to(roomId).emit(ROOM_EVENTS.closed, {
+          roomId,
+          ...(reason ? { reason } : {}),
+        });
+        for (const [key, socket] of this.playerSockets.entries()) {
+          if (key.startsWith(`${roomId}:`)) {
+            delete socket.data.roomIdentity;
+            this.playerSockets.delete(key);
+          }
+        }
       }
     } catch (error) {
       this.logUnexpectedError('room maintenance', error);

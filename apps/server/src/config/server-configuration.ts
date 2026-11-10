@@ -10,6 +10,11 @@ export interface ServerConfiguration {
   maxChallengeValue: number;
   reconnectGraceMs: number;
   roomExpiryHours: number;
+  roomPlayingInactivityMs: number;
+  roomWaitingInactivityMs: number;
+  playerIdleToSpectatorMs: number;
+  spectatorPromptDelayMs: number;
+  spectatorPromptGraceMs: number;
   roundAdvanceDelayMs: number;
   /** Per-round answer window in milliseconds. 0 disables the round timer. */
   roundTimeLimitMs: number;
@@ -97,6 +102,36 @@ export const validateEnvironment = (
     1_000,
   );
   const roomExpiryHours = readInteger(env, 'ROOM_EXPIRY_HOURS', 24, 1);
+  const roomPlayingInactivityMs = readInteger(
+    env,
+    'ROOM_PLAYING_INACTIVITY_MS',
+    90_000,
+    1_000,
+  );
+  const roomWaitingInactivityMs = readInteger(
+    env,
+    'ROOM_WAITING_INACTIVITY_MS',
+    300_000,
+    1_000,
+  );
+  const playerIdleToSpectatorMs = readInteger(
+    env,
+    'PLAYER_IDLE_TO_SPECTATOR_MS',
+    45_000,
+    1_000,
+  );
+  const spectatorPromptDelayMs = readInteger(
+    env,
+    'SPECTATOR_PROMPT_DELAY_MS',
+    180_000,
+    1_000,
+  );
+  const spectatorPromptGraceMs = readInteger(
+    env,
+    'SPECTATOR_PROMPT_GRACE_MS',
+    30_000,
+    1_000,
+  );
   const roundAdvanceDelayMs = readInteger(
     env,
     'ROUND_ADVANCE_DELAY_MS',
@@ -152,6 +187,11 @@ export const validateEnvironment = (
     maxChallengeValue,
     reconnectGraceMs,
     roomExpiryHours,
+    roomPlayingInactivityMs,
+    roomWaitingInactivityMs,
+    playerIdleToSpectatorMs,
+    spectatorPromptDelayMs,
+    spectatorPromptGraceMs,
     roundAdvanceDelayMs,
     roundTimeLimitMs,
     pointsPerCorrectAnswer,

@@ -21,9 +21,22 @@ import {
 import { toRoomSnapshot } from './domain/room-snapshot.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
+export interface KickedPlayerNotice {
+  roomId: string;
+  playerId: string;
+  reason: 'inactivity';
+}
+
+export interface ClosedRoomNotice {
+  roomId: string;
+  reason?: 'inactivity';
+}
+
 export interface RoomRuntimeUpdate {
   snapshots: RoomSnapshot[];
   removedRoomIds: string[];
+  closedRooms?: ClosedRoomNotice[];
+  kickedPlayers?: KickedPlayerNotice[];
 }
 
 @Injectable()
@@ -57,6 +70,8 @@ export class RoomRuntimeService implements OnModuleInit {
   async tick(now = Date.now()): Promise<RoomRuntimeUpdate> {
     const snapshots: RoomSnapshot[] = [];
     const removedRoomIds: string[] = [];
+    const closedRooms: ClosedRoomNotice[] = [];
+    const kickedPlayers: KickedPlayerNotice[] = [];
 
     await this.removeExpiredRooms(now, removedRoomIds);
     await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds);
@@ -64,8 +79,200 @@ export class RoomRuntimeService implements OnModuleInit {
     await this.finishExpiredMatches(now, snapshots);
     await this.revealTimedOutRounds(now, snapshots);
     await this.advanceCompletedRounds(now, snapshots);
+    await this.processInactivity(
+      now,
+      snapshots,
+      removedRoomIds,
+      closedRooms,
+      kickedPlayers,
+    );
 
-    return { snapshots, removedRoomIds };
+    return { snapshots, removedRoomIds, closedRooms, kickedPlayers };
+  }
+
+  private async processInactivity(
+    now: number,
+    snapshots: RoomSnapshot[],
+    removedRoomIds: string[],
+    closedRooms: ClosedRoomNotice[],
+    kickedPlayers: KickedPlayerNotice[],
+  ): Promise<void> {
+    const activeRooms = await this.repository.findRoomsWithConnectedPlayers();
+    const waitingLimitMs = this.config.getOrThrow('roomWaitingInactivityMs');
+    const playingLimitMs = this.config.getOrThrow('roomPlayingInactivityMs');
+    const idleToSpectatorMs = this.config.getOrThrow('playerIdleToSpectatorMs');
+    const promptDelayMs = this.config.getOrThrow('spectatorPromptDelayMs');
+    const promptGraceMs = this.config.getOrThrow('spectatorPromptGraceMs');
+
+    const upsertSnapshot = (snapshot: RoomSnapshot) => {
+      const existingIndex = snapshots.findIndex(
+        (item) => item.roomId === snapshot.roomId,
+      );
+      if (existingIndex >= 0) {
+        snapshots[existingIndex] = snapshot;
+      } else {
+        snapshots.push(snapshot);
+      }
+    };
+
+    const removeSnapshotsForRoom = (roomId: string) => {
+      for (let index = snapshots.length - 1; index >= 0; index -= 1) {
+        if (snapshots[index]?.roomId === roomId) {
+          snapshots.splice(index, 1);
+        }
+      }
+    };
+
+    for (const candidate of activeRooms) {
+      if (removedRoomIds.includes(candidate.roomId)) continue;
+
+      const roomLastActive =
+        candidate.lastActivityAt ?? candidate.updatedAt.getTime();
+      const roomInactivityLimitMs =
+        candidate.status === 'waiting' ? waitingLimitMs : playingLimitMs;
+
+      if (now - roomLastActive >= roomInactivityLimitMs) {
+        await this.mutations.delete(candidate.roomId);
+        removeSnapshotsForRoom(candidate.roomId);
+        removedRoomIds.push(candidate.roomId);
+        closedRooms.push({ roomId: candidate.roomId, reason: 'inactivity' });
+        continue;
+      }
+
+      const needsPlayerUpdate = candidate.players.some((player) => {
+        if (!player.connected) return false;
+        if (player.paused) {
+          if (
+            player.spectatorPromptDeadlineAt != null &&
+            now >= player.spectatorPromptDeadlineAt
+          ) {
+            return true;
+          }
+          const pausedSince =
+            player.pausedAt ?? player.lastActiveAt ?? player.joinedAt;
+          return (
+            player.spectatorPromptDeadlineAt == null &&
+            now - pausedSince >= promptDelayMs
+          );
+        }
+        if (candidate.status === 'playing') {
+          const lastActive =
+            player.lastActiveAt ?? candidate.game.startedAt ?? player.joinedAt;
+          return (
+            now - lastActive >= idleToSpectatorMs ||
+            (player.missedRoundsCount ?? 0) >= 2
+          );
+        }
+        return false;
+      });
+      if (!needsPlayerUpdate) continue;
+
+      const kickedInRoom: string[] = [];
+      const mutation = await this.mutateSafely(candidate.roomId, (draft) => {
+        let changed = false;
+        const previousAdminId = draft.adminPlayerId;
+
+        const remainingPlayers = draft.players.filter((player) => {
+          if (
+            player.connected &&
+            player.paused &&
+            player.spectatorPromptDeadlineAt != null &&
+            now >= player.spectatorPromptDeadlineAt
+          ) {
+            kickedInRoom.push(player.playerId);
+            return false;
+          }
+          return true;
+        });
+
+        if (remainingPlayers.length !== draft.players.length) {
+          draft.players = remainingPlayers;
+          changed = true;
+          if (
+            draft.players.length > 0 &&
+            !draft.players.some((player) => player.playerId === previousAdminId)
+          ) {
+            draft.adminPlayerId = getNextAdminPlayerId(draft.players);
+          }
+        }
+
+        for (const player of draft.players) {
+          if (!player.connected || !player.paused) continue;
+          const pausedSince =
+            player.pausedAt ?? player.lastActiveAt ?? player.joinedAt;
+          if (
+            player.spectatorPromptDeadlineAt == null &&
+            now - pausedSince >= promptDelayMs
+          ) {
+            player.spectatorPromptDeadlineAt = now + promptGraceMs;
+            changed = true;
+          }
+        }
+
+        if (draft.status === 'playing') {
+          for (const player of draft.players) {
+            if (!player.connected || player.paused) continue;
+            const lastActive =
+              player.lastActiveAt ?? draft.game.startedAt ?? player.joinedAt;
+            const idleTooLong = now - lastActive >= idleToSpectatorMs;
+            const missedTooManyRounds = (player.missedRoundsCount ?? 0) >= 2;
+            if (idleTooLong || missedTooManyRounds) {
+              player.paused = true;
+              player.pausedAt = now;
+              player.spectatorPromptDeadlineAt = null;
+              if (
+                draft.game.round &&
+                !draft.game.round.revealed &&
+                player.answeredMissionId !== draft.game.round.missionId
+              ) {
+                player.streak = 0;
+              }
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          syncRoomPauseState(draft, now);
+          if (
+            draft.status === 'playing' &&
+            !draft.game.paused &&
+            draft.game.advanceAt === null &&
+            areConnectedPlayersDone(draft)
+          ) {
+            revealRoomRound(
+              draft,
+              now,
+              this.config.getOrThrow('roundAdvanceDelayMs'),
+            );
+          }
+        }
+
+        return changed;
+      });
+
+      for (const playerId of kickedInRoom) {
+        kickedPlayers.push({
+          roomId: candidate.roomId,
+          playerId,
+          reason: 'inactivity',
+        });
+      }
+
+      if (!mutation) continue;
+      if (!mutation.room) {
+        removeSnapshotsForRoom(candidate.roomId);
+        if (!removedRoomIds.includes(candidate.roomId)) {
+          removedRoomIds.push(candidate.roomId);
+          closedRooms.push({ roomId: candidate.roomId, reason: 'inactivity' });
+        }
+        continue;
+      }
+
+      if (mutation.result) {
+        upsertSnapshot(toRoomSnapshot(mutation.room));
+      }
+    }
   }
 
   private async resumeExpiredPauses(
@@ -87,6 +294,9 @@ export class RoomRuntimeService implements OnModuleInit {
           if (player.paused) {
             player.paused = false;
             player.pausedAt = null;
+            player.lastActiveAt = now;
+            player.missedRoundsCount = 0;
+            player.spectatorPromptDeadlineAt = null;
           }
         }
         syncRoomPauseState(draft, now);

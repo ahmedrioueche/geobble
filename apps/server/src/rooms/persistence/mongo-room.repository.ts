@@ -60,6 +60,7 @@ export class MongoRoomRepository implements RoomRepository {
             pendingConfig: replacement.pendingConfig,
             players: replacement.players,
             game: replacement.game,
+            lastActivityAt: replacement.lastActivityAt,
             expiresAt: replacement.expiresAt,
             updatedAt: new Date(),
           },

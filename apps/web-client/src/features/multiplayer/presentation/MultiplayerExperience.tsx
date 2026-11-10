@@ -461,6 +461,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         )
       : null;
 
+  const spectatorPromptRemainingMs =
+    self?.paused && self.spectatorPromptDeadlineAt != null
+      ? Math.max(
+          0,
+          self.spectatorPromptDeadlineAt -
+            (now === 0
+              ? self.spectatorPromptDeadlineAt - 30_000
+              : now),
+        )
+      : null;
+
   const togglePause = (targetPaused = !isSelfPaused) => {
     if (snapshot?.status !== "playing") return;
     setPendingPauseTarget(targetPaused);
@@ -471,6 +482,13 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         setPendingPauseTarget(null);
         throw error;
       }
+    });
+  };
+
+  const confirmSpectating = () => {
+    if (snapshot?.status !== "playing") return;
+    void runAction(async () => {
+      client.setPaused(true);
     });
   };
 
@@ -1116,30 +1134,64 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     </button>
                   )}
                 </div>
-                {isSelfPaused && !isRoomPaused && snapshot.status === "playing" && (
-                  <button
-                    aria-busy={isUpdatingPause}
-                    className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
-                    disabled={isUpdatingPause}
-                    onClick={() => togglePause(false)}
-                    type="button"
-                  >
-                    {isUpdatingPause ? (
-                      <Loader2
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 animate-spin"
-                      />
-                    ) : (
-                      <Play
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 fill-current"
-                      />
-                    )}
-                    <span>
-                      {isUpdatingPause ? "Resuming…" : "Resume playing"}
-                    </span>
-                  </button>
-                )}
+                {isSelfPaused &&
+                  !isRoomPaused &&
+                  snapshot.status === "playing" &&
+                  (spectatorPromptRemainingMs !== null ? (
+                    <div
+                      aria-label="Spectator inactivity check"
+                      className="mt-2.5 rounded-xl border border-amber-300/35 bg-amber-400/10 p-2.5"
+                      role="alert"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-black uppercase text-amber-200">
+                        <span>Still spectating?</span>
+                        <span className="font-mono text-amber-300">
+                          {Math.ceil(spectatorPromptRemainingMs / 1000)}s
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          className="flex-1 rounded-lg border border-amber-300/40 bg-amber-300/20 px-2.5 py-1.5 text-[10px] font-black uppercase text-amber-100 transition hover:bg-amber-300/30"
+                          onClick={confirmSpectating}
+                          type="button"
+                        >
+                          Still watching
+                        </button>
+                        <button
+                          aria-busy={isUpdatingPause}
+                          className="flex-1 rounded-lg bg-emerald-400 px-2.5 py-1.5 text-[10px] font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
+                          disabled={isUpdatingPause}
+                          onClick={() => togglePause(false)}
+                          type="button"
+                        >
+                          {isUpdatingPause ? "Resuming…" : "Resume playing"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      aria-busy={isUpdatingPause}
+                      className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-black uppercase text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
+                      disabled={isUpdatingPause}
+                      onClick={() => togglePause(false)}
+                      type="button"
+                    >
+                      {isUpdatingPause ? (
+                        <Loader2
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 animate-spin"
+                        />
+                      ) : (
+                        <Play
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 fill-current"
+                        />
+                      )}
+                      <span>
+                        {isUpdatingPause ? "Resuming…" : "Resume playing"}
+                      </span>
+                    </button>
+                  ))}
                 {round &&
                   !round.revealed &&
                   round.startedAt != null &&

@@ -43,6 +43,7 @@ export interface RoomPlayer {
   ready: boolean;
   connected: boolean;
   paused?: boolean;
+  spectatorPromptDeadlineAt?: number | null;
   score: number;
   streak: number;
   maxStreak: number;
@@ -199,8 +200,8 @@ export type RoomServerEvent =
         revision: number;
       };
     }
-  | { type: "left"; payload: { roomId: string } }
-  | { type: "closed"; payload: { roomId: string } }
+  | { type: "left"; payload: { roomId: string; reason?: "inactivity" } }
+  | { type: "closed"; payload: { roomId: string; reason?: "inactivity" } }
   | { type: "reaction"; payload: RoomReactionEvent }
   | {
       type: "error";
@@ -283,6 +284,8 @@ const isPlayer = (value: unknown): value is RoomPlayer =>
   typeof value.ready === "boolean" &&
   typeof value.connected === "boolean" &&
   (value.paused === undefined || typeof value.paused === "boolean") &&
+  (value.spectatorPromptDeadlineAt === undefined ||
+    isNullableInteger(value.spectatorPromptDeadlineAt)) &&
   isInteger(value.score) &&
   isInteger(value.streak) &&
   isInteger(value.maxStreak) &&
@@ -402,7 +405,10 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
       );
     case "left":
     case "closed":
-      return isString(payload.roomId);
+      return (
+        isString(payload.roomId) &&
+        (payload.reason === undefined || payload.reason === "inactivity")
+      );
     case "reaction":
       return (
         isString(payload.roomId) &&

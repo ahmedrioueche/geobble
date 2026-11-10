@@ -89,7 +89,7 @@ export interface RoomServerEvents {
     queued: boolean;
     revision: number;
   }) => void;
-  'room:left': (payload: { roomId: string }) => void;
-  'room:closed': (payload: { roomId: string }) => void;
+  'room:left': (payload: { roomId: string; reason?: 'inactivity' }) => void;
+  'room:closed': (payload: { roomId: string; reason?: 'inactivity' }) => void;
   'room:error': (payload: RoomRequestError) => void;
 }

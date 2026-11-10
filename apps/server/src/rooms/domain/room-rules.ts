@@ -40,7 +40,7 @@ export const stampRoundTiming = (
   round.answers = [];
 };
 
-export const ROOM_PAUSE_LIMIT_MS = 90_000;
+export const ROOM_PAUSE_LIMIT_MS = 60_000;
 
 export const getActiveConnectedPlayers = (
   room: RoomRecord,
@@ -55,8 +55,13 @@ export const revealRoomRound = (
   const round = room.game.round;
   if (!round) throw new RoomDomainError('INVALID_COMMAND');
   for (const player of room.players) {
-    if (!player.paused && player.answeredMissionId !== round.missionId) {
-      player.streak = 0;
+    if (!player.paused) {
+      if (player.answeredMissionId !== round.missionId) {
+        player.streak = 0;
+        player.missedRoundsCount = (player.missedRoundsCount ?? 0) + 1;
+      } else {
+        player.missedRoundsCount = 0;
+      }
     }
   }
   round.revealed = true;

@@ -66,6 +66,9 @@ const createPlayer = (
   connected: true,
   paused: false,
   pausedAt: null,
+  lastActiveAt: now,
+  missedRoundsCount: 0,
+  spectatorPromptDeadlineAt: null,
   joinedAt: now,
   disconnectedAt: null,
   reconnectTokenHash: hashToken(reconnectToken),
@@ -135,6 +138,7 @@ export class RoomLifecycleService {
             round: null,
             usedCountryCodes: [],
           },
+          lastActivityAt: now,
           expiresAt: this.getExpiryDate(now),
           createdAt: new Date(now),
           updatedAt: new Date(now),
@@ -208,6 +212,7 @@ export class RoomLifecycleService {
         throw new RoomDomainError('ROOM_FULL');
       }
       draft.players.push(player);
+      draft.lastActivityAt = now;
       syncRoomPauseState(draft, now);
     });
 
@@ -247,7 +252,9 @@ export class RoomLifecycleService {
 
         player.connected = true;
         player.disconnectedAt = null;
+        player.lastActiveAt = now;
         player.reconnectTokenHash = hashToken(reconnectToken);
+        draft.lastActivityAt = now;
 
         const admin = draft.players.find(
           (item) => item.playerId === draft.adminPlayerId,
@@ -275,12 +282,15 @@ export class RoomLifecycleService {
   }
 
   async setReady(roomId: string, playerId: string, ready: boolean) {
+    const now = Date.now();
     const { room } = await this.mutations.update(roomId, (draft) => {
       if (draft.status !== 'waiting') {
         throw new RoomDomainError('ROOM_NOT_STARTABLE');
       }
       const player = this.requireConnectedPlayer(draft, playerId);
       player.ready = ready;
+      player.lastActiveAt = now;
+      draft.lastActivityAt = now;
     });
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
     return toRoomSnapshot(room);
@@ -326,10 +336,14 @@ export class RoomLifecycleService {
       );
       draft.status = 'playing';
       draft.pendingConfig = null;
+      draft.lastActivityAt = now;
       draft.players = draft.players.map((player) => ({
         ...player,
         paused: false,
         pausedAt: null,
+        lastActiveAt: now,
+        missedRoundsCount: 0,
+        spectatorPromptDeadlineAt: null,
         score: 0,
         streak: 0,
         maxStreak: 0,
@@ -371,8 +385,12 @@ export class RoomLifecycleService {
     configuration: unknown,
   ): Promise<RoomSettingsResult> {
     const nextConfig = this.validateConfiguration(configuration);
+    const now = Date.now();
     const { room, result } = await this.mutations.update(roomId, (draft) => {
       this.requireAdmin(draft, playerId);
+      const admin = this.requireConnectedPlayer(draft, playerId);
+      admin.lastActiveAt = now;
+      draft.lastActivityAt = now;
       if (draft.status === 'waiting') {
         draft.config = nextConfig;
         draft.pendingConfig = null;
@@ -396,11 +414,18 @@ export class RoomLifecycleService {
         throw new RoomDomainError('INVALID_COMMAND');
       }
       const player = this.requireConnectedPlayer(draft, playerId);
-      if (Boolean(player.paused) === paused) {
-        return;
-      }
+      player.lastActiveAt = now;
+      player.missedRoundsCount = 0;
+      player.spectatorPromptDeadlineAt = null;
+      draft.lastActivityAt = now;
+
+      const wasPaused = Boolean(player.paused);
       player.paused = paused;
       player.pausedAt = paused ? now : null;
+
+      if (wasPaused === paused) {
+        return;
+      }
 
       syncRoomPauseState(draft, now);
 

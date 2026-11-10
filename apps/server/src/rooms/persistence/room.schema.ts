@@ -63,6 +63,15 @@ class RoomPlayerEntity implements RoomPlayerRecord {
   @Prop({ type: Number, default: null })
   pausedAt?: number | null;
 
+  @Prop({ type: Number, default: null })
+  lastActiveAt?: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  missedRoundsCount?: number;
+
+  @Prop({ type: Number, default: null })
+  spectatorPromptDeadlineAt?: number | null;
+
   @Prop({ required: true })
   joinedAt!: number;
 
@@ -258,6 +267,9 @@ export class RoomEntity implements RoomRecord {
 
   @Prop({ type: RoomGameSchema, required: true })
   game!: RoomGameRecord;
+
+  @Prop({ type: Number, default: null })
+  lastActivityAt?: number;
 
   @Prop({ type: Date, required: true })
   expiresAt!: Date;

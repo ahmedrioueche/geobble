@@ -69,6 +69,11 @@ const createConfig = (
     maxChallengeValue: 500,
     reconnectGraceMs: 60_000,
     roomExpiryHours: 24,
+    roomPlayingInactivityMs: 90_000,
+    roomWaitingInactivityMs: 300_000,
+    playerIdleToSpectatorMs: 45_000,
+    spectatorPromptDelayMs: 180_000,
+    spectatorPromptGraceMs: 30_000,
     roundAdvanceDelayMs: 0,
     roundTimeLimitMs: 0,
     pointsPerCorrectAnswer: 10,
@@ -903,5 +908,140 @@ describe('room lifecycle and competitive gameplay', () => {
       accepted: true,
       answerResult: true,
     });
+  });
+
+  it('auto-moves idle active players to spectator, prompts them after 180s, kicks unresponsive spectators, and closes inactive rooms after 90s', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({
+      roundTimeLimitMs: 20_000,
+      playerIdleToSpectatorMs: 45_000,
+      spectatorPromptDelayMs: 180_000,
+      spectatorPromptGraceMs: 30_000,
+      roomPlayingInactivityMs: 90_000,
+    });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-inactivity',
+      playerName: 'Ada',
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'request-join-inactivity',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
+    await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
+
+    const t0 = Date.now();
+
+    // Host stays active at t0 + 40s, while guest has been idle for 46s -> guest becomes spectator
+    await lifecycle.changeSettings(host.snapshot.roomId, host.playerId, {
+      ...host.snapshot.config,
+    });
+    const storedBeforeIdle = await repository.findById(host.snapshot.roomId);
+    if (storedBeforeIdle) {
+      const guestRecord = storedBeforeIdle.players.find(
+        (p) => p.playerId === guest.playerId,
+      );
+      if (guestRecord) guestRecord.lastActiveAt = t0 - 46_000;
+      await repository.compareAndSwap(
+        host.snapshot.roomId,
+        storedBeforeIdle.revision,
+        storedBeforeIdle,
+      );
+    }
+
+    const idleTick = await runtime.tick(t0);
+    const afterAutoSpectator = idleTick.snapshots.find(
+      (s) => s.roomId === host.snapshot.roomId,
+    );
+    expect(
+      afterAutoSpectator?.players.find((p) => p.id === guest.playerId)?.paused,
+    ).toBe(true);
+
+    // 180s later while host keeps the room active, guest receives the spectator confirmation prompt
+    const storedBeforePrompt = await repository.findById(host.snapshot.roomId);
+    const tPrompt = t0 + 181_000;
+    if (storedBeforePrompt) {
+      storedBeforePrompt.lastActivityAt = tPrompt - 10_000;
+      const hostRecord = storedBeforePrompt.players.find(
+        (p) => p.playerId === host.playerId,
+      );
+      if (hostRecord) hostRecord.lastActiveAt = tPrompt - 10_000;
+      await repository.compareAndSwap(
+        host.snapshot.roomId,
+        storedBeforePrompt.revision,
+        storedBeforePrompt,
+      );
+    }
+
+    const promptTick = await runtime.tick(tPrompt);
+    const promptSnapshot = promptTick.snapshots.find(
+      (s) => s.roomId === host.snapshot.roomId,
+    );
+    const guestWithPrompt = promptSnapshot?.players.find(
+      (p) => p.id === guest.playerId,
+    );
+    expect(guestWithPrompt?.spectatorPromptDeadlineAt).toBe(tPrompt + 30_000);
+
+    // Guest does not click "Still watching" within 30s -> guest is kicked out
+    const tKick = tPrompt + 31_000;
+    const storedBeforeKick = await repository.findById(host.snapshot.roomId);
+    if (storedBeforeKick) {
+      storedBeforeKick.lastActivityAt = tKick - 5_000;
+      const hostRecord = storedBeforeKick.players.find(
+        (p) => p.playerId === host.playerId,
+      );
+      if (hostRecord) hostRecord.lastActiveAt = tKick - 5_000;
+      await repository.compareAndSwap(
+        host.snapshot.roomId,
+        storedBeforeKick.revision,
+        storedBeforeKick,
+      );
+    }
+
+    const kickTick = await runtime.tick(tKick);
+    expect(kickTick.kickedPlayers).toEqual([
+      {
+        roomId: host.snapshot.roomId,
+        playerId: guest.playerId,
+        reason: 'inactivity',
+      },
+    ]);
+    expect(
+      kickTick.snapshots[0]?.players.map((player) => player.id),
+    ).toEqual([host.playerId]);
+
+    // When no player in the room has any activity for 90s, the entire room is closed and deleted
+    const roomCloseTick = await runtime.tick(tKick + 95_000);
+    expect(roomCloseTick.removedRoomIds).toContain(host.snapshot.roomId);
+    expect(roomCloseTick.closedRooms).toContainEqual({
+      roomId: host.snapshot.roomId,
+      reason: 'inactivity',
+    });
+    expect(await repository.findById(host.snapshot.roomId)).toBeNull();
   });
 });
