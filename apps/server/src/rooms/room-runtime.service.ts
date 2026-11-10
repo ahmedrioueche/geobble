@@ -346,6 +346,7 @@ export class RoomRuntimeService implements OnModuleInit {
           draft,
           now,
           this.config.getOrThrow('roundAdvanceDelayMs'),
+          { timedOut: true },
         );
         return true;
       });

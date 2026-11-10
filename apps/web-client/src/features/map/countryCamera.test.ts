@@ -132,4 +132,24 @@ describe("getCountryCamera", () => {
       ).isAlreadyFramed,
     ).toBe(false);
   });
+
+  it("does not skip zooming in on large Stage 1 countries when at the default home overview", () => {
+    const largeCountryBounds: [[number, number], [number, number]] = [
+      [500, 250],
+      [780, 480],
+    ];
+    const homeOverview = d3.zoomIdentity
+      .translate(600, 400)
+      .scale(1.3)
+      .translate(-600, -400);
+
+    expect(
+      getCountryCamera(
+        largeCountryBounds,
+        homeOverview,
+        { width: 1200, height: 800 },
+        "identify",
+      ).isAlreadyFramed,
+    ).toBe(false);
+  });
 });

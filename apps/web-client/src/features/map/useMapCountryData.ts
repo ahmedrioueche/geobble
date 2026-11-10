@@ -31,7 +31,7 @@ export const useMapCountryData = ({
   const features = geoData?.features;
 
   const idToCodeLookup = useMemo(() => {
-    if (!features || countries.length === 0) return {};
+    if (!features) return {};
     return buildCountryCodeLookup(features, countries);
   }, [features, countries]);
 

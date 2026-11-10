@@ -28,6 +28,13 @@ const getSettings = (config: RoomConfiguration) => [
           : "Country name",
   },
   {
+    label: "Difficulty",
+    value:
+      !config.difficulty || config.difficulty === "progressive"
+        ? "Progressive"
+        : config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1),
+  },
+  {
     label: "Challenge",
     value:
       config.challengeType === "world"

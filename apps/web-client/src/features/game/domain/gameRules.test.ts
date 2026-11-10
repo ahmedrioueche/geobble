@@ -62,6 +62,13 @@ describe("resolveMapCountry", () => {
       ivoryCoast,
     );
   });
+
+  it("resolves map countries using the built-in fallback catalog when the runtime countries list is empty", () => {
+    expect(resolveMapCountry("France", "250", [])?.cca3).toBe("FRA");
+    expect(resolveMapCountry("United States of America", "840", [])?.cca3).toBe(
+      "USA",
+    );
+  });
 });
 
 describe("isCorrectAnswer", () => {
@@ -240,6 +247,31 @@ describe("getTargetPool", () => {
         sessionPlayedCodes: ["CAN"],
       }),
     ).toEqual([france]);
+  });
+
+  it("progresses stage by stage in world mode before advancing to harder unlocked stages", () => {
+    const sweden: CountryData = { ...canada, cca3: "SWE", name: "Sweden" }; // Stage 2
+    const poolWithStage1Remaining = getTargetPool({
+      countries: [canada, sweden],
+      challengeType: "world",
+      challengeValue: 0,
+      difficultyStage: 1,
+      unlockedStage: 3,
+      playedCountryCodes: [],
+      sessionPlayedCodes: [],
+    });
+    expect(poolWithStage1Remaining).toEqual([canada]);
+
+    const poolAfterStage1Exhausted = getTargetPool({
+      countries: [canada, sweden],
+      challengeType: "world",
+      challengeValue: 0,
+      difficultyStage: 1,
+      unlockedStage: 3,
+      playedCountryCodes: [],
+      sessionPlayedCodes: ["CAN"],
+    });
+    expect(poolAfterStage1Exhausted).toEqual([sweden]);
   });
 
   it("uses the selected tier and excludes countries played in the mission", () => {

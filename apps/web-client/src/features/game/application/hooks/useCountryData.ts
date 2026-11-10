@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchCountries, type CountryData } from "../../../../data/country-data";
+import { FALLBACK_COUNTRIES } from "../../../../data/fallback-countries";
 import { loadWorldMapData } from "../../../map/worldMapData";
 
 export const useCountryData = () => {
-  const [countries, setCountries] = useState<CountryData[]>([]);
+  const [countries, setCountries] = useState<CountryData[]>(FALLBACK_COUNTRIES);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,7 +15,9 @@ export const useCountryData = () => {
           loadWorldMapData(),
         ]);
 
-        const filtered = countryResponse.filter(
+        const sourceCountries =
+          countryResponse.length > 0 ? countryResponse : FALLBACK_COUNTRIES;
+        const filtered = sourceCountries.filter(
           (country) =>
             mapData.availableMapIds.has(country.cca3) ||
             mapData.availableMapIds.has(country.cca2) ||
@@ -24,11 +27,11 @@ export const useCountryData = () => {
             ),
         );
 
-        setCountries(filtered);
+        setCountries(filtered.length > 0 ? filtered : FALLBACK_COUNTRIES);
       } catch (error) {
         console.error("Error setting up tactical data:", error);
         const data = await fetchCountries();
-        setCountries(data);
+        setCountries(data.length > 0 ? data : FALLBACK_COUNTRIES);
       } finally {
         setLoading(false);
       }

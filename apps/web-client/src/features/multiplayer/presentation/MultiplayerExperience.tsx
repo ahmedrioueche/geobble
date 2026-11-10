@@ -1106,7 +1106,10 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
               <div className="absolute right-3 top-16 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3.5 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-4">
                 <div className="mb-1.5 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-sky-300">
-                  <span>{snapshot.config.mode} mission</span>
+                  <span>
+                    {snapshot.config.mode} mission
+                    {round?.difficultyTier ? ` · ${round.difficultyTier}` : ""}
+                  </span>
                   <span>
                     {remainingTime === null
                       ? `${round?.number ?? 0}${snapshot.config.challengeType === "count" ? ` / ${snapshot.config.challengeValue}` : ""}`

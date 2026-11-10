@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 const restCountriesProxy = (apiKey: string | undefined): Plugin => {
+  const responseCache = new Map<string, string>();
+
   const attach = (server: { middlewares: { use: (path: string, handler: (req: import('http').IncomingMessage, res: import('http').ServerResponse) => void) => void } }) => {
     server.middlewares.use('/api/countries', async (req, res) => {
       if (!apiKey) {
@@ -15,11 +17,22 @@ const restCountriesProxy = (apiKey: string | undefined): Plugin => {
       const query = req.url?.startsWith('?') ? req.url.slice(1) : (req.url ?? '').split('?')[1] ?? '';
       const url = `https://api.restcountries.com/countries/v5${query ? `?${query}` : ''}`;
 
+      const cached = responseCache.get(url);
+      if (cached) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(cached);
+        return;
+      }
+
       try {
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${apiKey}` },
         });
         const body = await response.text();
+        if (response.ok) {
+          responseCache.set(url, body);
+        }
         res.statusCode = response.status;
         res.setHeader('Content-Type', 'application/json');
         res.end(body);

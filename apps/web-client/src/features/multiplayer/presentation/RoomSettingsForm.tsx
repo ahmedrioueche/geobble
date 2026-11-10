@@ -74,6 +74,19 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         selectedOption={config.subMode}
       />
 
+      <CustomSelect<NonNullable<RoomConfiguration["difficulty"]>>
+        title="Difficulty"
+        onChange={(difficulty) => update({ difficulty })}
+        options={[
+          { value: "progressive", label: "Progressive (Easy → Expert)" },
+          { value: "easy", label: "Easy" },
+          { value: "medium", label: "Medium" },
+          { value: "hard", label: "Hard" },
+          { value: "expert", label: "Expert" },
+        ]}
+        selectedOption={config.difficulty ?? "progressive"}
+      />
+
       <CustomSelect<RoomConfiguration["challengeType"]>
         title="Challenge"
         onChange={(challengeType) => {

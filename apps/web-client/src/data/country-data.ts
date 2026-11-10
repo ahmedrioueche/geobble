@@ -89,7 +89,11 @@ export const fetchCountries = async (): Promise<CountryData[]> => {
 
       const responseData: RestCountriesV5Response = await response.json();
       const { objects, meta } = responseData.data;
-      countries.push(...objects.map(mapRestCountry));
+      countries.push(
+        ...objects
+          .map(mapRestCountry)
+          .filter((country) => Boolean(country.cca3)),
+      );
       more = meta.more;
       offset += PAGE_LIMIT;
     }

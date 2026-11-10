@@ -92,6 +92,9 @@ export const toRoomSnapshot = (
         ? {
             missionId: room.game.round.missionId,
             number: room.game.round.number,
+            ...(room.game.round.difficultyTier
+              ? { difficultyTier: room.game.round.difficultyTier }
+              : {}),
             prompt: {
               ...room.game.round.prompt,
               ...(room.game.round.prompt.mapAnchor

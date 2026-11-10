@@ -29,6 +29,13 @@ class RoomConfigurationEntity implements RoomConfiguration {
   @Prop({ required: true, min: 0 })
   challengeValue!: number;
 
+  @Prop({
+    type: String,
+    default: 'progressive',
+    enum: ['progressive', 'easy', 'medium', 'hard', 'expert'],
+  })
+  difficulty?: RoomConfiguration['difficulty'];
+
   @Prop({ type: Number, default: 20, min: 0 })
   roundTimeLimitSeconds?: number;
 
@@ -155,6 +162,13 @@ class RoomRoundEntity implements RoomRoundRecord {
 
   @Prop({ required: true, min: 1 })
   number!: number;
+
+  @Prop({
+    type: String,
+    default: undefined,
+    enum: ['easy', 'medium', 'hard', 'expert'],
+  })
+  difficultyTier?: RoomRoundRecord['difficultyTier'];
 
   @Prop({ required: true, minlength: 3, maxlength: 3, select: false })
   targetCountryCode!: string;

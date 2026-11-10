@@ -1,5 +1,6 @@
 import type {
   ChallengeType,
+  DifficultyMode,
   GameMode,
   PinDirection,
   PowerUpKind,
@@ -11,6 +12,7 @@ import type {
   RoomReconnectRequest,
   SubMode,
 } from './room.types.js';
+import { ALLOWED_DIFFICULTY_MODES } from '../../game/country-difficulty.js';
 import { RoomDomainError } from './room-errors.js';
 
 export const ALLOWED_REACTION_EMOJIS: readonly ReactionEmoji[] = [
@@ -111,6 +113,17 @@ export const parseRoomConfiguration = (
     wrongAnswerPenalty = value.wrongAnswerPenalty;
   }
 
+  let difficulty: DifficultyMode | undefined;
+  if (value.difficulty !== undefined) {
+    if (
+      typeof value.difficulty !== 'string' ||
+      !ALLOWED_DIFFICULTY_MODES.includes(value.difficulty as DifficultyMode)
+    ) {
+      throw new RoomDomainError('INVALID_REQUEST');
+    }
+    difficulty = value.difficulty as DifficultyMode;
+  }
+
   return {
     mode: mode as GameMode,
     pinDirection:
@@ -118,6 +131,7 @@ export const parseRoomConfiguration = (
     subMode: subMode as SubMode,
     challengeType: challengeType as ChallengeType,
     challengeValue,
+    ...(difficulty !== undefined ? { difficulty } : {}),
     ...(roundTimeLimitSeconds !== undefined
       ? { roundTimeLimitSeconds }
       : {}),

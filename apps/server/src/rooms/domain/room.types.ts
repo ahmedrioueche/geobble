@@ -2,6 +2,8 @@ export type GameMode = 'identify' | 'reverse' | 'pin';
 export type PinDirection = 'locate' | 'identify';
 export type SubMode = 'name' | 'flag' | 'capital';
 export type ChallengeType = 'world' | 'count' | 'timer';
+export type DifficultyTier = 'easy' | 'medium' | 'hard' | 'expert';
+export type DifficultyMode = 'progressive' | DifficultyTier;
 export type RoomStatus = 'waiting' | 'playing' | 'finished';
 export type RoomVisibility = 'public' | 'private';
 
@@ -29,6 +31,7 @@ export interface RoomConfiguration {
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  difficulty?: DifficultyMode;
   roundTimeLimitSeconds?: number;
   speedScoring?: boolean;
   wrongAnswerPenalty?: number;
@@ -40,6 +43,7 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
   subMode: 'name',
   challengeType: 'world',
   challengeValue: 0,
+  difficulty: 'progressive',
   roundTimeLimitSeconds: 20,
   speedScoring: true,
   wrongAnswerPenalty: 0,
@@ -115,6 +119,7 @@ export interface RoundResult {
 export interface RoomRoundRecord {
   missionId: string;
   number: number;
+  difficultyTier?: DifficultyTier;
   targetCountryCode: string;
   targetCountryName: string;
   targetRegion?: string;
@@ -199,6 +204,7 @@ export interface RoomSnapshot {
     round: {
       missionId: string;
       number: number;
+      difficultyTier?: DifficultyTier;
       prompt: PublicPrompt;
       choices: Array<Pick<RoomChoiceRecord, 'id' | 'label'>>;
       revealed: boolean;

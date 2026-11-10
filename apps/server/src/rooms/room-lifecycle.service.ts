@@ -277,7 +277,7 @@ export class RoomLifecycleService {
       playerId: request.playerId,
       reconnectToken,
       nextCommandId: result,
-      snapshot: toRoomSnapshot(room),
+      snapshot: toRoomSnapshot(room, request.playerId),
     };
   }
 

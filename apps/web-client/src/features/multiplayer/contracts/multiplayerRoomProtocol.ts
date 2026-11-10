@@ -7,6 +7,9 @@ import type {
 
 export type PowerUpKind = "fifty" | "hint" | "double" | "freeze";
 
+export type DifficultyTier = "easy" | "medium" | "hard" | "expert";
+export type DifficultyMode = "progressive" | DifficultyTier;
+
 export type ReactionEmoji = "🔥" | "👏" | "😱" | "😂" | "🎯" | "💀";
 
 export const REACTION_EMOJIS: readonly ReactionEmoji[] = [
@@ -31,6 +34,7 @@ export interface RoomConfiguration {
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  difficulty?: DifficultyMode;
   roundTimeLimitSeconds?: number;
   speedScoring?: boolean;
   wrongAnswerPenalty?: number;
@@ -76,6 +80,7 @@ export interface RoundResult {
 export interface RoomRound {
   missionId: string;
   number: number;
+  difficultyTier?: DifficultyTier;
   prompt: {
     type: "text" | "flag" | "instruction";
     value: string;
@@ -262,6 +267,10 @@ const isConfiguration = (value: unknown): value is RoomConfiguration =>
   ["name", "flag", "capital"].includes(String(value.subMode)) &&
   ["world", "count", "timer"].includes(String(value.challengeType)) &&
   isInteger(value.challengeValue) &&
+  (value.difficulty === undefined ||
+    ["progressive", "easy", "medium", "hard", "expert"].includes(
+      String(value.difficulty),
+    )) &&
   (value.roundTimeLimitSeconds === undefined ||
     isInteger(value.roundTimeLimitSeconds)) &&
   (value.speedScoring === undefined ||
@@ -325,6 +334,10 @@ const isRound = (value: unknown): value is RoomRound =>
   isRecord(value) &&
   isString(value.missionId) &&
   isInteger(value.number) &&
+  (value.difficultyTier === undefined ||
+    ["easy", "medium", "hard", "expert"].includes(
+      String(value.difficultyTier),
+    )) &&
   isRecord(value.prompt) &&
   ["text", "flag", "instruction"].includes(String(value.prompt.type)) &&
   isString(value.prompt.value) &&

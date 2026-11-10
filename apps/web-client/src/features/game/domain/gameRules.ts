@@ -1,4 +1,5 @@
 import type { CountryData } from "../../../data/country-data";
+import { FALLBACK_COUNTRIES } from "../../../data/fallback-countries";
 import {
   getDifficulty,
   getTierRanges,
@@ -161,14 +162,23 @@ export const resolveMapCountry = (
   code: string,
   countries: CountryData[],
 ): CountryData | null => {
-  const countryByCode =
-    countries.find((country) => country.cca3 === code) ||
-    countries.find((country) => country.ccn3 === code);
-  if (countryByCode) return countryByCode;
+  const pool = countries.length > 0 ? countries : FALLBACK_COUNTRIES;
+  if (code) {
+    const countryByCode =
+      pool.find((country) => country.cca3 && country.cca3 === code) ||
+      pool.find(
+        (country) =>
+          country.ccn3 &&
+          (country.ccn3 === code ||
+            parseInt(country.ccn3, 10).toString() === code),
+      );
+    if (countryByCode) return countryByCode;
+  }
 
   const normalizedName = normalizeCountryName(nameMapping[name] || name);
+  if (!normalizedName) return null;
   return (
-    countries.find(
+    pool.find(
       (country) => normalizeCountryName(country.name) === normalizedName,
     ) || null
   );
@@ -185,11 +195,20 @@ export const getTargetPool = ({
 }: TargetPoolOptions): CountryData[] => {
   if (challengeType === "world") {
     const playedCodes = new Set(sessionPlayedCodes);
-    return countries.filter(
+    const available = countries.filter(
       (country) =>
         getDifficulty(country.cca3) <= unlockedStage &&
         !playedCodes.has(country.cca3),
     );
+    for (let stage = 1; stage <= unlockedStage; stage += 1) {
+      const stagePool = available.filter(
+        (country) => getDifficulty(country.cca3) === stage,
+      );
+      if (stagePool.length > 0) {
+        return stagePool;
+      }
+    }
+    return available;
   }
 
   const sliceSize = challengeType === "count" ? challengeValue : 30;

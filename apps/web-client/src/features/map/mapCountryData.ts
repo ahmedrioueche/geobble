@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import type { CountryData } from "../../data/country-data";
+import { FALLBACK_COUNTRIES } from "../../data/fallback-countries";
 import { nameMapping } from "../../data/name-mapping";
 import { normalizeCountryName } from "../../utils/name-normalizer";
 import type { CountryFeature } from "./useWorldMap";
@@ -25,6 +26,8 @@ export const buildCountryCodeLookup = (
   countries: CountryData[],
 ): Record<string, string> => {
   const lookup: Record<string, string> = {};
+  const sourceCountries =
+    countries.length > 0 ? countries : FALLBACK_COUNTRIES;
 
   for (const feature of features) {
     const id = feature.id?.toString();
@@ -32,15 +35,17 @@ export const buildCountryCodeLookup = (
     const normalizedMappedName = normalizeCountryName(
       resolveMappedName(name),
     );
-    const country = countries.find(
+    const country = sourceCountries.find(
       (item) =>
-        (id &&
+        Boolean(item.cca3) &&
+        ((id &&
           (item.cca3 === id ||
             item.cca2 === id ||
-            item.ccn3 === id ||
-            parseInt(item.ccn3 || "0", 10).toString() === id)) ||
-        (normalizedMappedName &&
-          normalizeCountryName(item.name) === normalizedMappedName),
+            (item.ccn3 &&
+              (item.ccn3 === id ||
+                parseInt(item.ccn3, 10).toString() === id)))) ||
+          (normalizedMappedName &&
+            normalizeCountryName(item.name) === normalizedMappedName)),
     );
 
     if (!country) continue;

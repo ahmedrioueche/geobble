@@ -128,6 +128,7 @@ export const useMissionMapCamera = ({
       if (!transform) return;
 
       svg
+        .interrupt()
         .transition()
         .duration(1400)
         .ease(d3.easeCubicInOut)
@@ -149,6 +150,7 @@ export const useMissionMapCamera = ({
       if (isAlreadyFocused) return;
 
       svg
+        .interrupt()
         .transition()
         .duration(1200)
         .ease(d3.easeCubicInOut)
@@ -178,6 +180,7 @@ export const useMissionMapCamera = ({
     if (isAlreadyFramed) return;
 
     svg
+      .interrupt()
       .transition()
       .duration(1200)
       .ease(d3.easeCubicInOut)

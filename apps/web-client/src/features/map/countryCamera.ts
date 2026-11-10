@@ -46,17 +46,23 @@ export const getCountryCamera = (
     .translate(-centerX, -centerY);
   const point0 = currentTransform.apply([x0, y0]);
   const point1 = currentTransform.apply([x1, y1]);
+  const projectedCenter = currentTransform.apply([centerX, centerY]);
   const margin = 40;
   const isInView =
     point0[0] > margin &&
     point0[1] > margin &&
     point1[0] < dimensions.width - margin &&
     point1[1] < dimensions.height - margin;
-  const isGoodScale = Math.abs(Math.log2(currentTransform.k / scale)) < 1;
+  const isGoodScale = Math.abs(Math.log2(currentTransform.k / scale)) < 0.2;
+  const isCentered =
+    Math.hypot(
+      projectedCenter[0] - targetCenterX,
+      projectedCenter[1] - targetCenterY,
+    ) < 24;
 
   return {
     transform,
-    isAlreadyFramed: isInView && isGoodScale,
+    isAlreadyFramed: isInView && isGoodScale && isCentered,
   };
 };
 

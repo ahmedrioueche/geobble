@@ -51,6 +51,7 @@ export const revealRoomRound = (
   room: RoomRecord,
   now: number,
   advanceDelayMs: number,
+  options?: { timedOut?: boolean },
 ): void => {
   const round = room.game.round;
   if (!round) throw new RoomDomainError('INVALID_COMMAND');
@@ -58,7 +59,9 @@ export const revealRoomRound = (
     if (!player.paused) {
       if (player.answeredMissionId !== round.missionId) {
         player.streak = 0;
-        player.missedRoundsCount = (player.missedRoundsCount ?? 0) + 1;
+        if (options?.timedOut) {
+          player.missedRoundsCount = (player.missedRoundsCount ?? 0) + 1;
+        }
       } else {
         player.missedRoundsCount = 0;
       }
