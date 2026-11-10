@@ -388,6 +388,18 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     return () => window.clearTimeout(timeout);
   }, [settingsAccepted]);
 
+  const rawError = actionError ?? state.error;
+  const [visibleError, setVisibleError] = useState<string | null>(rawError);
+  useEffect(() => {
+    setVisibleError(rawError);
+    if (!rawError) return;
+    const timeout = window.setTimeout(() => {
+      setVisibleError(null);
+      setActionError(null);
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [rawError]);
+
   const gameState = useMemo<WorldMapGameState>(
     () => ({
       gameStatus:
@@ -619,8 +631,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   return (
     <>
       <Toaster
-        position="top-center"
+        containerStyle={{
+          bottom: visibleError ? 72 : 16,
+        }}
+        position="bottom-center"
         toastOptions={{
+          duration: 4000,
           style: {
             background: "#0f172a",
             color: "#fff",
@@ -667,12 +683,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               </button>
             </div>
           )}
-          {state.error && !showEntry && (
+          {visibleError && !showEntry && (
             <p
-              className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 rounded-lg border border-rose-300/30 bg-slate-950/95 px-4 py-2 text-center text-xs text-rose-200"
+              className="fixed bottom-20 left-1/2 z-[80] -translate-x-1/2 rounded-lg border border-rose-300/30 bg-slate-950/95 px-4 py-2 text-center text-xs text-rose-200 md:bottom-4"
               role="alert"
             >
-              {state.error}
+              {visibleError}
             </p>
           )}
         </>
@@ -683,7 +699,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           busy={
             state.status === "connecting" || state.status === "reconnecting"
           }
-          error={actionError ?? state.error}
+          error={visibleError}
           onClose={() => setShowEntry(false)}
           onConnectLatestRoom={() =>
             void runAction(async () => client.retryReconnect())
@@ -1339,12 +1355,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             </div>
           )}
 
-          {(actionError || state.error) && (
+          {visibleError && (
             <p
               className="absolute bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-lg border border-rose-300/30 bg-slate-950/95 px-4 py-2 text-center text-xs text-rose-200"
               role="alert"
             >
-              {actionError ?? state.error}
+              {visibleError}
             </p>
           )}
 

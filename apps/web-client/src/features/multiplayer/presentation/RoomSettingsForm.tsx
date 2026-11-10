@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
 import type { RoomConfiguration } from "../contracts/multiplayerRoomProtocol";
 import CustomSelect from "../../../components/atoms/CustomSelect";
@@ -19,6 +19,11 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
   const [config, setConfig] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!saveError) return;
+    const timeout = window.setTimeout(() => setSaveError(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [saveError]);
   const update = (changes: Partial<RoomConfiguration>) =>
     setConfig((current) => ({ ...current, ...changes }));
 

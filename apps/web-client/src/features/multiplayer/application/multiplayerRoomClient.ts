@@ -578,6 +578,9 @@ export const createRoomClient = (
 
   const emitRequest = (eventName: string, payload: object) => {
     const room = requireRoom();
+    if (state.error !== null) {
+      updateState({ error: null });
+    }
     transport.emit(eventName, {
       requestId: createId(),
       ...payload,

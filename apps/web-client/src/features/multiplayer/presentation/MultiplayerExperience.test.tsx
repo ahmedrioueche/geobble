@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -963,5 +964,28 @@ describe("MultiplayerExperience", () => {
     expect(
       screen.getByRole("heading", { name: /next round settings/i }),
     ).toBeTruthy();
+  });
+
+  it("auto-dismisses error messages after 5 seconds", () => {
+    vi.useFakeTimers();
+    try {
+      renderExperience({
+        ...createClientState(),
+        status: "error",
+        error: "This room was closed due to inactivity.",
+      });
+
+      expect(screen.getByRole("alert").textContent).toBe(
+        "This room was closed due to inactivity.",
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
