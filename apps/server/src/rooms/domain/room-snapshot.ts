@@ -41,7 +41,6 @@ export const toRoomSnapshot = (
         id: player.playerId,
         name: player.name,
         isAdmin: player.playerId === room.adminPlayerId,
-        ready: player.ready,
         connected: player.connected,
         ...(player.paused ? { paused: true } : {}),
         ...(player.paused && player.spectatorPromptDeadlineAt != null

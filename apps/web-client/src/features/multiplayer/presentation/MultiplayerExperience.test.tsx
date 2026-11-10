@@ -9,6 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import toast from "react-hot-toast";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
 import type { RoomClientState } from "../application/multiplayerRoomClient";
 import { MultiplayerExperience } from "./MultiplayerExperience";
@@ -16,7 +17,6 @@ import { MultiplayerExperience } from "./MultiplayerExperience";
 const mocks = vi.hoisted(() => ({
   useRoomClient: vi.fn(),
   playOffline: vi.fn(),
-  setReady: vi.fn(),
   setPaused: vi.fn(),
   startRoom: vi.fn(),
   submitCommand: vi.fn(),
@@ -54,7 +54,6 @@ const createSnapshot = (changes: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
       id: "player-1",
       name: "Ada",
       isAdmin: true,
-      ready: true,
       connected: true,
       score: 0,
       streak: 0,
@@ -66,7 +65,6 @@ const createSnapshot = (changes: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
       id: "player-2",
       name: "Grace",
       isAdmin: false,
-      ready: true,
       connected: true,
       score: 0,
       streak: 0,
@@ -113,7 +111,6 @@ beforeEach(() => {
       createRoom: mocks.createRoom.mockResolvedValue(undefined),
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
       joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
-      setReady: mocks.setReady,
       setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
@@ -128,6 +125,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  toast.remove();
   cleanup();
 });
 
@@ -138,7 +136,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom.mockResolvedValue(undefined),
         joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
         joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
-        setReady: mocks.setReady,
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
@@ -259,17 +256,20 @@ describe("MultiplayerExperience", () => {
     );
   });
 
-  it("sends lobby readiness and admin start actions with responsive loading states", () => {
+  it("allows the admin to start immediately when 2+ connected players are present without ready checks", () => {
     const snapshot = createSnapshot();
     renderExperience(createClientState(snapshot));
 
     expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
     expect(screen.getByText("Whole world")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "I'm not ready" }));
+    expect(screen.queryByRole("button", { name: /ready/i })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Updating…" }).getAttribute("aria-busy"),
-    ).toBe("true");
+      screen.queryByText(/Click Start game to begin immediately/i),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("progressbar", { name: /waiting for the host/i }),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
     expect(
@@ -282,38 +282,30 @@ describe("MultiplayerExperience", () => {
       screen.getByText("Preparing round 1 for 2 players…"),
     ).toBeTruthy();
 
-    expect(mocks.setReady).toHaveBeenCalledWith(false);
     expect(mocks.startRoom).toHaveBeenCalledOnce();
   });
 
-  it("makes the ready action explicit and changes its color with the player's state", () => {
-    const snapshot = createSnapshot({
-      players: createSnapshot().players.map((player) => ({
-        ...player,
-        ready: player.id !== "player-1",
-      })),
+  it("disables start game until at least 2 connected players are in the lobby", () => {
+    const singlePlayerSnapshot = createSnapshot({
+      players: [createSnapshot().players[0]!],
     });
-    const view = renderExperience(createClientState(snapshot));
-    const readyButton = screen.getByRole("button", { name: "I'm ready" });
+    const view = renderExperience(createClientState(singlePlayerSnapshot));
+    const startButton = screen.getByRole("button", {
+      name: "Start game",
+    }) as HTMLButtonElement;
 
-    expect(screen.getByText("Ready to play? Let the host know.")).toBeTruthy();
-    expect(readyButton.getAttribute("aria-pressed")).toBe("false");
-    expect(readyButton.className).toContain("bg-sky-500");
-    fireEvent.click(readyButton);
-    expect(mocks.setReady).toHaveBeenCalledWith(true);
+    expect(startButton.disabled).toBe(true);
+    expect(
+      screen.getByText("Waiting for another player to join."),
+    ).toBeTruthy();
 
-    const readySnapshot = createSnapshot({
-      players: createSnapshot().players.map((player) => ({
-        ...player,
-        ready: true,
-      })),
-    });
+    const twoPlayersSnapshot = createSnapshot();
     mocks.useRoomClient.mockReturnValue({
       client: {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
+        setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
         submitCommand: mocks.submitCommand,
@@ -322,7 +314,7 @@ describe("MultiplayerExperience", () => {
         forgetReconnect: mocks.forgetReconnect,
         retryReconnect: mocks.retryReconnect,
       },
-      state: createClientState(readySnapshot),
+      state: createClientState(twoPlayersSnapshot),
     });
     view.rerender(
       <MultiplayerExperience
@@ -332,12 +324,13 @@ describe("MultiplayerExperience", () => {
       />,
     );
 
-    const notReadyButton = screen.getByRole("button", {
-      name: "I'm not ready",
-    });
-    expect(screen.getByText("You're ready to play.")).toBeTruthy();
-    expect(notReadyButton.getAttribute("aria-pressed")).toBe("true");
-    expect(notReadyButton.className).toContain("bg-rose-600");
+    expect(
+      (screen.getByRole("button", { name: "Start game" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(
+      screen.getByText("Match can start whenever you want."),
+    ).toBeTruthy();
   });
 
   it("keeps lobby actions available with a large player list", () => {
@@ -355,7 +348,6 @@ describe("MultiplayerExperience", () => {
     expect(screen.getByText("50 players")).toBeTruthy();
     expect(screen.getByText("Player 50")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Room players" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "I'm not ready" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start game" })).toBeTruthy();
   });
 
@@ -371,6 +363,13 @@ describe("MultiplayerExperience", () => {
     expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
     expect(screen.getByText("Country name")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.getByText("Waiting for the host to start")).toBeTruthy();
+    expect(
+      screen.queryByText(/The match begins as soon as the host/i),
+    ).toBeNull();
+    expect(
+      screen.getByRole("progressbar", { name: "Waiting for the host to start" }),
+    ).toBeTruthy();
   });
 
   it("submits a choice answer through the room client", () => {
@@ -439,7 +438,6 @@ describe("MultiplayerExperience", () => {
       createRoom: mocks.createRoom.mockResolvedValue(undefined),
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
       joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
-      setReady: mocks.setReady,
       setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
@@ -638,7 +636,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
         submitCommand: mocks.submitCommand,
@@ -688,7 +685,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
@@ -800,7 +796,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
@@ -844,7 +839,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
@@ -886,7 +880,6 @@ describe("MultiplayerExperience", () => {
         createRoom: mocks.createRoom,
         joinRoom: mocks.joinRoom,
         joinPublicRoom: mocks.joinPublicRoom,
-        setReady: mocks.setReady,
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,

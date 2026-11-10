@@ -56,13 +56,11 @@ const isSameHash = (first: string, second: string): boolean => {
 
 const createPlayer = (
   name: string,
-  ready: boolean,
   now: number,
   reconnectToken: string,
 ): RoomPlayerRecord => ({
   playerId: randomUUID(),
   name,
-  ready,
   connected: true,
   paused: false,
   pausedAt: null,
@@ -114,7 +112,7 @@ export class RoomLifecycleService {
       for (let attempt = 0; attempt < 20; attempt += 1) {
         const reconnectToken = createReconnectToken();
         const now = Date.now();
-        const host = createPlayer(name, true, now, reconnectToken);
+        const host = createPlayer(name, now, reconnectToken);
         const roomId = createRoomId(length);
         const room: RoomRecord = {
           roomId,
@@ -204,7 +202,7 @@ export class RoomLifecycleService {
     const playerName = parsePlayerName(request.playerName);
     const reconnectToken = createReconnectToken();
     const now = Date.now();
-    const player = createPlayer(playerName, false, now, reconnectToken);
+    const player = createPlayer(playerName, now, reconnectToken);
     const { room } = await this.mutations.update(request.roomId, (draft) => {
       if (
         draft.players.length >= this.config.getOrThrow('roomMaxPlayers')
@@ -281,31 +279,15 @@ export class RoomLifecycleService {
     };
   }
 
-  async setReady(roomId: string, playerId: string, ready: boolean) {
-    const now = Date.now();
-    const { room } = await this.mutations.update(roomId, (draft) => {
-      if (draft.status !== 'waiting') {
-        throw new RoomDomainError('ROOM_NOT_STARTABLE');
-      }
-      const player = this.requireConnectedPlayer(draft, playerId);
-      player.ready = ready;
-      player.lastActiveAt = now;
-      draft.lastActivityAt = now;
-    });
-    if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
-    return toRoomSnapshot(room);
-  }
-
   async startRoom(roomId: string, playerId: string) {
     const countryList = await this.countries.getCountries();
     const now = Date.now();
     const { room } = await this.mutations.update(roomId, (draft) => {
       this.requireAdmin(draft, playerId);
-      if (
-        draft.status !== 'waiting' ||
-        draft.players.length < 2 ||
-        draft.players.some((player) => !player.connected || !player.ready)
-      ) {
+      const connectedCount = draft.players.filter(
+        (player) => player.connected,
+      ).length;
+      if (draft.status !== 'waiting' || connectedCount < 2) {
         throw new RoomDomainError('ROOM_NOT_STARTABLE');
       }
 

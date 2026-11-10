@@ -19,7 +19,6 @@ const room: RoomRecord = {
     {
       playerId: 'player-1',
       name: 'Ada',
-      ready: true,
       connected: true,
       joinedAt: 1,
       disconnectedAt: null,

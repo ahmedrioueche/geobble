@@ -90,9 +90,6 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     Array<RoomReactionEvent & { id: string; leftPercent: number }>
   >([]);
   const [now, setNow] = useState(0);
-  const [pendingReadyTarget, setPendingReadyTarget] = useState<boolean | null>(
-    null,
-  );
   const [pendingPauseTarget, setPendingPauseTarget] = useState<boolean | null>(
     null,
   );
@@ -105,12 +102,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const self = getPlayer(room, room?.playerId ?? null);
   const selfPlayerId = room?.playerId ?? null;
   const isAdmin = self?.isAdmin ?? false;
+  const connectedPlayersCount =
+    snapshot?.players.filter((player) => player.connected).length ?? 0;
   const hasAnswered = self?.answered ?? false;
   const isSelfPaused = Boolean(self?.paused);
   const isRoomPaused = Boolean(snapshot?.game.paused);
   const waitingForCommand = state.pendingCommandIds.length > 0;
-  const isUpdatingReady =
-    pendingReadyTarget !== null && self?.ready !== pendingReadyTarget;
   const isUpdatingPause =
     pendingPauseTarget !== null && Boolean(self?.paused) !== pendingPauseTarget;
   const isPinLocate =
@@ -120,26 +117,6 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     snapshot?.config.mode === "reverse" ||
     (snapshot?.config.mode === "pin" &&
       snapshot.config.pinDirection === "identify");
-
-  useEffect(() => {
-    if (
-      pendingReadyTarget !== null &&
-      (self?.ready === pendingReadyTarget ||
-        snapshot?.status !== "waiting" ||
-        state.status !== "connected" ||
-        state.error !== null ||
-        actionError !== null)
-    ) {
-      setPendingReadyTarget(null);
-    }
-  }, [
-    pendingReadyTarget,
-    self?.ready,
-    snapshot?.status,
-    state.status,
-    state.error,
-    actionError,
-  ]);
 
   useEffect(() => {
     if (
@@ -168,15 +145,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         state.status !== "connected" ||
         state.error !== null ||
         actionError !== null ||
-        snapshot.players.length < 2 ||
-        snapshot.players.some((player) => !player.connected || !player.ready))
+        connectedPlayersCount < 2)
     ) {
       setIsStartingGame(false);
     }
   }, [
     isStartingGame,
     snapshot?.status,
-    snapshot?.players,
+    connectedPlayersCount,
     state.status,
     state.error,
     actionError,
@@ -903,81 +879,26 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       <span
                         className={`text-xs font-bold ${player.connected ? "text-emerald-300" : "text-rose-300"}`}
                       >
-                        {!player.connected
-                          ? "Disconnected"
-                          : player.ready
-                            ? "Ready"
-                            : "Not ready"}
+                        {player.connected ? "Connected" : "Disconnected"}
                       </span>
                     </li>
                   ))}
                 </ul>
-                <div className="mt-5 rounded-xl border border-sky-300/20 bg-sky-300/5 p-4">
-                  <p className="text-sm font-bold text-white">
-                    {self?.ready
-                      ? "You're ready to play."
-                      : "Ready to play? Let the host know."}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-white/55">
-                    {self?.ready
-                      ? "Change your mind? You can mark yourself as not ready."
-                      : "Select “I'm ready” when you're ready. The host can start once everyone is ready."}
-                  </p>
-                  <div className="sticky bottom-0 mt-4 flex flex-wrap gap-2 bg-slate-950/95 py-1">
-                    <button
-                      aria-busy={isUpdatingReady}
-                      aria-pressed={self?.ready ?? false}
-                      className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        self?.ready
-                          ? "bg-rose-600 hover:bg-rose-500"
-                          : "bg-sky-500 text-slate-950 hover:bg-sky-400"
-                      }`}
-                      disabled={
-                        state.status !== "connected" ||
-                        isUpdatingReady ||
-                        isStartingGame
-                      }
-                      onClick={() => {
-                        const targetReady = !self?.ready;
-                        setPendingReadyTarget(targetReady);
-                        void runAction(async () => {
-                          try {
-                            client.setReady(targetReady);
-                          } catch (error) {
-                            setPendingReadyTarget(null);
-                            throw error;
-                          }
-                        });
-                      }}
-                      type="button"
-                    >
-                      {isUpdatingReady && (
-                        <Loader2
-                          aria-hidden="true"
-                          className="h-4 w-4 shrink-0 animate-spin"
-                        />
-                      )}
-                      <span>
-                        {isUpdatingReady
-                          ? pendingReadyTarget
-                            ? "Marking ready…"
-                            : "Updating…"
-                          : self?.ready
-                            ? "I'm not ready"
-                            : "I'm ready"}
-                      </span>
-                    </button>
-                    {isAdmin && (
+                {isAdmin ? (
+                  <div className="mt-5 rounded-xl border border-sky-300/20 bg-sky-300/5 p-4">
+                    <p className="text-sm font-bold text-white">
+                      {connectedPlayersCount >= 2
+                        ? "Match can start whenever you want."
+                        : "Waiting for another player to join."}
+                    </p>
+                    <div className="sticky bottom-0 mt-4 bg-slate-950/95 py-1">
                       <button
                         aria-busy={isStartingGame}
-                        className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-sky-400 px-4 py-3 text-sm font-black uppercase text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={
                           state.status !== "connected" ||
                           isStartingGame ||
-                          snapshot.players.length < 2 ||
-                          snapshot.players.some(
-                            (player) => !player.connected || !player.ready,
-                          )
+                          connectedPlayersCount < 2
                         }
                         onClick={() => {
                           setIsStartingGame(true);
@@ -1002,9 +923,22 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                           {isStartingGame ? "Starting game…" : "Start game"}
                         </span>
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-sm font-bold text-white">
+                      Waiting for the host to start
+                    </p>
+                    <div
+                      aria-label="Waiting for the host to start"
+                      className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                    >
+                      <div className="waiting-line-loader h-full w-1/3 rounded-full bg-gradient-to-r from-sky-400/40 via-sky-300 to-sky-400/40" />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-4">
                 <RoomSettingsPanel
@@ -1018,8 +952,8 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     Waiting for the match
                   </p>
                   <p className="mt-1 text-xs text-white/45">
-                    Share the room code with a friend. The admin can start when
-                    everyone is ready.
+                    Share the room code with a friend. The admin can start once
+                    at least 2 connected players are in the room.
                   </p>
                 </div>
               </div>

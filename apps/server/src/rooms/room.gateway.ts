@@ -242,25 +242,6 @@ export class RoomGateway
     });
   }
 
-  @SubscribeMessage(ROOM_EVENTS.ready)
-  async setReady(
-    @ConnectedSocket() client: RoomSocket,
-    @MessageBody() value: unknown,
-  ): Promise<void> {
-    const identity = client.data.roomIdentity;
-    await this.handleRequest(client, getRequestId(value), async () => {
-      if (!identity || !this.isReadyRequest(value)) {
-        throw new RoomDomainError('INVALID_REQUEST');
-      }
-      const snapshot = await this.lifecycle.setReady(
-        identity.roomId,
-        identity.playerId,
-        value.ready,
-      );
-      this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, snapshot);
-    });
-  }
-
   @SubscribeMessage(ROOM_EVENTS.pause)
   async setPaused(
     @ConnectedSocket() client: RoomSocket,
@@ -576,15 +557,6 @@ export class RoomGateway
       throw new RoomDomainError('RATE_LIMITED');
     }
     rateLimit.count += 1;
-  }
-
-  private isReadyRequest(value: unknown): value is { ready: boolean } {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      'ready' in value &&
-      typeof value.ready === 'boolean'
-    );
   }
 
   private isPauseRequest(value: unknown): value is { paused: boolean } {

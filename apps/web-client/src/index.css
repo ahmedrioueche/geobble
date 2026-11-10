@@ -101,3 +101,16 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* WebKit */
 }
+
+@keyframes waiting-line-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.waiting-line-loader {
+  animation: waiting-line-slide 1.4s ease-in-out infinite;
+}

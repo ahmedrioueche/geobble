@@ -32,7 +32,6 @@ const createSnapshot = (
       id: "player-1",
       name: "Ada",
       isAdmin: true,
-      ready: true,
       connected: true,
       score: 0,
       streak: 0,
@@ -44,7 +43,6 @@ const createSnapshot = (
       id: "player-2",
       name: "Grace",
       isAdmin: false,
-      ready: false,
       connected: true,
       score: 0,
       streak: 0,
@@ -550,7 +548,7 @@ describe("createRoomClient", () => {
     transport.receive(createJoinedEvent("request-1"));
     await joining;
 
-    client.setReady(true);
+    client.startRoom();
     transport.receive({
       type: "error",
       payload: {

@@ -52,7 +52,6 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
 export interface RoomPlayerRecord {
   playerId: string;
   name: string;
-  ready: boolean;
   connected: boolean;
   paused?: boolean;
   pausedAt?: number | null;
@@ -171,7 +170,6 @@ export interface RoomPlayerSnapshot {
   id: string;
   name: string;
   isAdmin: boolean;
-  ready: boolean;
   connected: boolean;
   paused?: boolean;
   spectatorPromptDeadlineAt?: number | null;

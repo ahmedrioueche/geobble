@@ -58,9 +58,6 @@ class RoomPlayerEntity implements RoomPlayerRecord {
   @Prop({ required: true, maxlength: 24 })
   name!: string;
 
-  @Prop({ required: true, default: false })
-  ready!: boolean;
-
   @Prop({ required: true, default: true })
   connected!: boolean;
 

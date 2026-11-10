@@ -20,7 +20,7 @@ const safeMessages: Record<RoomErrorCode, string> = {
   ROOM_NOT_FOUND: 'That room could not be found.',
   ROOM_FULL: 'That room is full.',
   ROOM_NOT_JOINABLE: 'That room is no longer accepting players.',
-  ROOM_NOT_STARTABLE: 'The room is not ready to start.',
+  ROOM_NOT_STARTABLE: 'At least 2 connected players are needed to start the game.',
   ROUND_UNAVAILABLE:
     'This game mode needs country map coordinates, but none were found in the country data. Check the server country data settings.',
   NOT_ADMIN: 'Only the room admin can do that.',

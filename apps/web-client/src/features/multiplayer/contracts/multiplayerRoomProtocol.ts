@@ -44,7 +44,6 @@ export interface RoomPlayer {
   id: string;
   name: string;
   isAdmin: boolean;
-  ready: boolean;
   connected: boolean;
   paused?: boolean;
   spectatorPromptDeadlineAt?: number | null;
@@ -290,7 +289,6 @@ const isPlayer = (value: unknown): value is RoomPlayer =>
   isString(value.id) &&
   isString(value.name) &&
   typeof value.isAdmin === "boolean" &&
-  typeof value.ready === "boolean" &&
   typeof value.connected === "boolean" &&
   (value.paused === undefined || typeof value.paused === "boolean") &&
   (value.spectatorPromptDeadlineAt === undefined ||

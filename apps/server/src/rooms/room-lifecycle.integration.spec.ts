@@ -90,7 +90,7 @@ describe('room lifecycle and competitive gameplay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a lobby, requires readiness, starts a match, and awards the first correct player', async () => {
+  it('creates a lobby, requires two connected players, starts a match, and awards the first correct player', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -124,16 +124,15 @@ describe('room lifecycle and competitive gameplay', () => {
       },
     });
     expect(host.snapshot.roomId).toMatch(/^\d{4}$/);
-    const guest = await lifecycle.joinRoom({
-      requestId: 'request-join',
-      roomId: host.snapshot.roomId,
-      playerName: 'Grace',
-    });
     await expect(
       lifecycle.startRoom(host.snapshot.roomId, host.playerId),
     ).rejects.toMatchObject({ code: 'ROOM_NOT_STARTABLE' });
 
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
+    await lifecycle.joinRoom({
+      requestId: 'request-join',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
       host.playerId,
@@ -217,12 +216,11 @@ describe('room lifecycle and competitive gameplay', () => {
         roundTimeLimitSeconds: 20,
       },
     });
-    const guest = await lifecycle.joinRoom({
+    await lifecycle.joinRoom({
       requestId: 'request-join-timed',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
       host.playerId,
@@ -310,12 +308,11 @@ describe('room lifecycle and competitive gameplay', () => {
     );
     expect(updatedSettings.queued).toBe(false);
     expect(updatedSettings.snapshot.config.mode).toBe('reverse');
-    const guest = await lifecycle.joinRoom({
+    await lifecycle.joinRoom({
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
       host.playerId,
@@ -407,7 +404,6 @@ describe('room lifecycle and competitive gameplay', () => {
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
       host.playerId,
@@ -677,12 +673,11 @@ describe('room lifecycle and competitive gameplay', () => {
         roundTimeLimitSeconds: 20,
       },
     });
-    const guest = await lifecycle.joinRoom({
+    await lifecycle.joinRoom({
       requestId: 'request-join-powerups',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
       host.playerId,
@@ -794,7 +789,6 @@ describe('room lifecycle and competitive gameplay', () => {
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest1.playerId, true);
     await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
 
     // 1 of 2 players goes AFK -> 1 active player remains, match continues!
@@ -868,7 +862,6 @@ describe('room lifecycle and competitive gameplay', () => {
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
 
     // Grace leaves during the active match and then re-joins using the room code
@@ -952,7 +945,6 @@ describe('room lifecycle and competitive gameplay', () => {
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
     });
-    await lifecycle.setReady(host.snapshot.roomId, guest.playerId, true);
     await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
 
     const t0 = Date.now();

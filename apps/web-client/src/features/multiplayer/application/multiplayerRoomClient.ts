@@ -86,7 +86,6 @@ export interface RoomClient {
   ) => Promise<void>;
   joinRoom: (roomId: string, playerName: string) => Promise<void>;
   joinPublicRoom: (playerName: string) => Promise<void>;
-  setReady: (ready: boolean) => void;
   setPaused: (paused: boolean) => void;
   startRoom: () => void;
   changeSettings: (config: RoomConfiguration) => Promise<void>;
@@ -679,9 +678,6 @@ export const createRoomClient = (
         });
         throw error;
       }
-    },
-    setReady: (ready) => {
-      emitRequest("room:ready", { ready });
     },
     setPaused: (paused) => {
       emitRequest("room:pause", { paused });
