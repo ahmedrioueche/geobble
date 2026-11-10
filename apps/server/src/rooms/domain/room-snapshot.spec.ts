@@ -6,6 +6,8 @@ const room: RoomRecord = {
   roomId: 'ROOM42',
   revision: 3,
   status: 'playing',
+  secret: 'TOPSEC',
+  secretHash: 'hashed-secret-value',
   adminPlayerId: 'player-1',
   config: {
     mode: 'reverse',
@@ -68,6 +70,8 @@ describe('room snapshots', () => {
     ]);
     expect(serialized).not.toContain('reconnectTokenHash');
     expect(serialized).not.toContain('secret-hash');
+    expect(serialized).not.toContain('TOPSEC');
+    expect(serialized).not.toContain('hashed-secret-value');
     expect(serialized).not.toContain('targetCountryCode');
     expect(serialized).not.toContain('targetCountryName');
     expect(serialized).not.toContain('"countryCode":"CAN"');

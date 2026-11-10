@@ -6,7 +6,7 @@ import type { RoomRecord } from '../domain/room.types.js';
 import { ROOM_MODEL, RoomEntity } from './room.schema.js';
 
 const ROOM_PRIVATE_SELECT =
-  '+players.reconnectTokenHash +players.hiddenChoiceIdsForMissionId +players.hiddenChoiceIds +players.hintForMissionId +players.hintText +game.round.targetCountryCode +game.round.targetCountryName +game.round.targetRegion +game.round.targetSubregion +game.round.targetCapital +game.round.targetFlag +game.round.targetMapAnchor +game.round.choices.countryCode';
+  '+secret +secretHash +players.reconnectTokenHash +players.hiddenChoiceIdsForMissionId +players.hiddenChoiceIds +players.hintForMissionId +players.hintText +game.round.targetCountryCode +game.round.targetCountryName +game.round.targetRegion +game.round.targetSubregion +game.round.targetCapital +game.round.targetFlag +game.round.targetMapAnchor +game.round.choices.countryCode';
 
 @Injectable()
 export class MongoRoomRepository implements RoomRepository {

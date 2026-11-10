@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { StrictMode } from "react";
 import {
   act,
   cleanup,
@@ -11,7 +12,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import toast from "react-hot-toast";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
-import type { RoomClientState } from "../application/multiplayerRoomClient";
+import {
+  RoomRequestFailure,
+  type RoomClientState,
+} from "../application/multiplayerRoomClient";
 import { MultiplayerExperience } from "./MultiplayerExperience";
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   startRoom: vi.fn(),
   submitCommand: vi.fn(),
   sendReaction: vi.fn(),
+  inspectRoom: vi.fn(),
   createRoom: vi.fn(),
   joinRoom: vi.fn(),
   joinPublicRoom: vi.fn(),
@@ -93,6 +98,7 @@ const createClientState = (snapshot?: RoomSnapshot): RoomClientState => ({
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockImplementation((media: string) => ({
@@ -108,6 +114,15 @@ beforeEach(() => {
   });
   mocks.useRoomClient.mockReturnValue({
     client: {
+      inspectRoom: mocks.inspectRoom.mockResolvedValue({
+        requestId: "inspect-1",
+        roomId: "ROOM2345",
+        visibility: "public",
+        status: "waiting",
+        playerCount: 1,
+        maxPlayers: 8,
+        requiresSecret: false,
+      }),
       createRoom: mocks.createRoom.mockResolvedValue(undefined),
       joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
       joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
@@ -133,6 +148,7 @@ describe("MultiplayerExperience", () => {
   const renderExperience = (state: RoomClientState = createClientState()) => {
     mocks.useRoomClient.mockReturnValue({
       client: {
+        inspectRoom: mocks.inspectRoom,
         createRoom: mocks.createRoom.mockResolvedValue(undefined),
         joinRoom: mocks.joinRoom.mockResolvedValue(undefined),
         joinPublicRoom: mocks.joinPublicRoom.mockResolvedValue(undefined),
@@ -981,5 +997,176 @@ describe("MultiplayerExperience", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("handles shareable links for public rooms without requiring a secret", async () => {
+    window.localStorage.setItem("geobble:multiplayer-player-name", "Ada");
+    window.history.replaceState(null, "", "/?room=4821");
+    mocks.inspectRoom.mockResolvedValueOnce({
+      requestId: "inspect-pub",
+      roomId: "4821",
+      visibility: "public",
+      status: "waiting",
+      playerCount: 2,
+      maxPlayers: 8,
+      requiresSecret: false,
+    });
+
+    renderExperience();
+
+    await waitFor(() => expect(mocks.inspectRoom).toHaveBeenCalledWith("4821"));
+    expect(await screen.findByText(/^public room$/i)).toBeTruthy();
+    expect(screen.queryByLabelText("Room secret")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Join public room" }));
+    await waitFor(() => expect(mocks.joinRoom).toHaveBeenCalledWith("4821", "Ada"));
+  });
+
+  it("requires the room secret when opening a shareable link for a private room", async () => {
+    window.localStorage.setItem("geobble:multiplayer-player-name", "Grace");
+    window.history.replaceState(null, "", "/?room=9012");
+    mocks.inspectRoom.mockResolvedValueOnce({
+      requestId: "inspect-priv",
+      roomId: "9012",
+      visibility: "private",
+      status: "waiting",
+      playerCount: 1,
+      maxPlayers: 8,
+      requiresSecret: true,
+    });
+
+    renderExperience();
+
+    await waitFor(() => expect(mocks.inspectRoom).toHaveBeenCalledWith("9012"));
+    expect(await screen.findByText(/^private room$/i)).toBeTruthy();
+
+    const submitButton = screen.getByRole("button", {
+      name: "Join private room",
+    }) as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Room secret"), {
+      target: { value: "K7M9P2" },
+    });
+    expect(submitButton.disabled).toBe(false);
+
+    fireEvent.click(submitButton);
+    await waitFor(() =>
+      expect(mocks.joinRoom).toHaveBeenCalledWith("9012", "Grace", "K7M9P2"),
+    );
+  });
+
+  it("shows an error when a linked room is missing and clears the URL on fallback", async () => {
+    window.history.replaceState(null, "", "/?room=9999");
+    mocks.inspectRoom.mockRejectedValueOnce(
+      new RoomRequestFailure("That room could not be found.", "ROOM_NOT_FOUND"),
+    );
+
+    renderExperience();
+
+    expect(
+      await screen.findByText("That room could not be found."),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open multiplayer menu" }),
+    );
+
+    expect(window.location.search).toBe("");
+    expect(
+      screen.getByRole("region", { name: "Multiplayer room options" }),
+    ).toBeTruthy();
+  });
+
+  it("renders shareable link and private secret controls in the header popover and waiting lobby", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const state = createClientState(createSnapshot({ visibility: "private" }));
+    state.room = {
+      ...state.room!,
+      roomSecret: "SECRET7",
+    };
+
+    renderExperience(state);
+
+    // Waiting lobby invite card copies link and secret
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining("/?room=ROOM2345"),
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy secret" }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith("SECRET7"),
+    );
+
+    // Header Share button opens popover
+    fireEvent.click(screen.getByRole("button", { name: "Share room" }));
+    expect(
+      screen.getByRole("dialog", { name: "Room share options" }),
+    ).toBeTruthy();
+  });
+
+  it("prompts for room secret inline when manually joining a private room by code", async () => {
+    mocks.joinRoom.mockRejectedValueOnce(
+      new RoomRequestFailure(
+        "This private room requires a room secret.",
+        "SECRET_REQUIRED",
+      ),
+    );
+
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.change(screen.getByLabelText("Room code"), {
+      target: { value: "4821" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Join room" }));
+
+    const secretInput = await screen.findByLabelText("Room secret");
+    expect(secretInput).toBeTruthy();
+
+    mocks.joinRoom.mockResolvedValueOnce(undefined);
+    fireEvent.change(secretInput, { target: { value: "PASS42" } });
+    fireEvent.click(screen.getByRole("button", { name: "Join room" }));
+
+    await waitFor(() =>
+      expect(mocks.joinRoom).toHaveBeenLastCalledWith("4821", "Ada", "PASS42"),
+    );
+  });
+
+  it("completes room inspection cleanly under React StrictMode", async () => {
+    window.history.replaceState(null, "", "/?room=4821");
+    mocks.inspectRoom.mockResolvedValue({
+      requestId: "inspect-strict",
+      roomId: "4821",
+      visibility: "public",
+      status: "waiting",
+      playerCount: 1,
+      maxPlayers: 8,
+      requiresSecret: false,
+    });
+
+    render(
+      <StrictMode>
+        <MultiplayerExperience
+          countries={[]}
+          onPlayOffline={mocks.playOffline}
+          showHomeActions
+        />
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText(/^public room$/i)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Join public room" }),
+    ).toBeTruthy();
   });
 });

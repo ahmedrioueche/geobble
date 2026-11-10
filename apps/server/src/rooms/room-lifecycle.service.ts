@@ -9,6 +9,7 @@ import {
   DEFAULT_ROOM_CONFIGURATION,
   type RoomConfiguration,
   type RoomCreateRequest,
+  type RoomInspectResult,
   type RoomJoinRequest,
   type RoomPlayerRecord,
   type RoomReconnectRequest,
@@ -35,14 +36,25 @@ import {
 } from './domain/room-rules.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
+const SECRET_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
 const createRoomId = (length: number): string =>
   Array.from({ length }, () => String(randomInt(10))).join('');
+
+const createRoomSecret = (length = 6): string =>
+  Array.from(
+    { length },
+    () => SECRET_ALPHABET[randomInt(SECRET_ALPHABET.length)]!,
+  ).join('');
 
 const createReconnectToken = (): string =>
   randomBytes(32).toString('base64url');
 
 const hashToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex');
+
+const hashSecret = (secret: string): string =>
+  createHash('sha256').update(secret.trim().toLowerCase()).digest('hex');
 
 const isSameHash = (first: string, second: string): boolean => {
   const firstBytes = Buffer.from(first, 'hex');
@@ -107,6 +119,10 @@ export class RoomLifecycleService {
     const roomConfig = this.validateConfiguration(
       request.config ?? DEFAULT_ROOM_CONFIGURATION,
     );
+    const visibility = request.visibility ?? 'private';
+    const roomSecret =
+      visibility === 'private' ? (request.secret ?? createRoomSecret()) : null;
+    const secretHash = roomSecret ? hashSecret(roomSecret) : null;
 
     for (let length = this.config.getOrThrow('roomIdLength'); length <= 12; length += 1) {
       for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -118,7 +134,9 @@ export class RoomLifecycleService {
           roomId,
           revision: 0,
           status: 'waiting',
-          visibility: request.visibility ?? 'private',
+          visibility,
+          secret: roomSecret,
+          secretHash,
           adminPlayerId: host.playerId,
           config: roomConfig,
           pendingConfig: null,
@@ -149,7 +167,8 @@ export class RoomLifecycleService {
             playerId: host.playerId,
             reconnectToken,
             nextCommandId: 1,
-            snapshot: toRoomSnapshot(room),
+            snapshot: toRoomSnapshot(room, host.playerId),
+            ...(roomSecret ? { roomSecret } : {}),
           };
         } catch (error) {
           if (!this.isDuplicateKeyError(error)) throw error;
@@ -158,6 +177,24 @@ export class RoomLifecycleService {
     }
 
     throw new Error('Could not allocate a unique room identifier.');
+  }
+
+  async inspectRoom(roomId: string): Promise<RoomInspectResult> {
+    const room = await this.repository.findById(roomId);
+    if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    if (room.expiresAt.getTime() <= Date.now()) {
+      throw new RoomDomainError('ROOM_EXPIRED');
+    }
+    const visibility = room.visibility ?? 'private';
+    this.logger.log(`Room ${room.roomId} inspected (${visibility})`);
+    return {
+      roomId: room.roomId,
+      visibility,
+      status: room.status,
+      playerCount: room.players.length,
+      maxPlayers: this.config.getOrThrow('roomMaxPlayers'),
+      requiresSecret: visibility === 'private' && Boolean(room.secretHash),
+    };
   }
 
   async joinPublicRoom(request: RoomCreateRequest) {
@@ -204,6 +241,14 @@ export class RoomLifecycleService {
     const now = Date.now();
     const player = createPlayer(playerName, now, reconnectToken);
     const { room } = await this.mutations.update(request.roomId, (draft) => {
+      if ((draft.visibility ?? 'private') === 'private' && draft.secretHash) {
+        if (!request.secret) {
+          throw new RoomDomainError('SECRET_REQUIRED');
+        }
+        if (!isSameHash(draft.secretHash, hashSecret(request.secret))) {
+          throw new RoomDomainError('INVALID_SECRET');
+        }
+      }
       if (
         draft.players.length >= this.config.getOrThrow('roomMaxPlayers')
       ) {
@@ -215,11 +260,15 @@ export class RoomLifecycleService {
     });
 
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    this.logger.log(`Player ${player.playerId} joined room ${room.roomId}`);
     return {
       playerId: player.playerId,
       reconnectToken,
       nextCommandId: 1,
       snapshot: toRoomSnapshot(room, player.playerId),
+      ...(room.visibility === 'private' && room.secret
+        ? { roomSecret: room.secret }
+        : {}),
     };
   }
 
@@ -271,11 +320,15 @@ export class RoomLifecycleService {
     );
 
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    this.logger.log(`Player ${request.playerId} reconnected to room ${room.roomId}`);
     return {
       playerId: request.playerId,
       reconnectToken,
       nextCommandId: result,
       snapshot: toRoomSnapshot(room, request.playerId),
+      ...(room.visibility === 'private' && room.secret
+        ? { roomSecret: room.secret }
+        : {}),
     };
   }
 

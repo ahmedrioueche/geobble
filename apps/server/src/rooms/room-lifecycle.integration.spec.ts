@@ -132,6 +132,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
@@ -220,6 +221,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join-timed',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
@@ -312,6 +314,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
@@ -403,6 +406,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
@@ -501,6 +505,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
 
     await lifecycle.markDisconnected(host.snapshot.roomId, host.playerId);
@@ -677,6 +682,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join-powerups',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     const started = await lifecycle.startRoom(
       host.snapshot.roomId,
@@ -788,6 +794,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join-pause-1',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
 
@@ -944,6 +951,7 @@ describe('room lifecycle and competitive gameplay', () => {
       requestId: 'request-join-inactivity',
       roomId: host.snapshot.roomId,
       playerName: 'Grace',
+      secret: host.roomSecret,
     });
     await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
 
@@ -1035,5 +1043,93 @@ describe('room lifecycle and competitive gameplay', () => {
       reason: 'inactivity',
     });
     expect(await repository.findById(host.snapshot.roomId)).toBeNull();
+  });
+
+  it('enforces room secrets on private rooms, supports inspection, and admits public rooms without a secret', async () => {
+    const config = createConfig();
+    const repository = new InMemoryRoomRepository();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      new RoomMutationService(repository, config),
+      new CountryCatalogService(config),
+      new GameEngineService(),
+      config,
+    );
+
+    const privateRoom = await lifecycle.createRoom({
+      requestId: 'request-create-private',
+      playerName: 'Ada',
+      visibility: 'private',
+      secret: 'GeoSecret',
+    });
+    expect(privateRoom.roomSecret).toBe('GeoSecret');
+    expect(JSON.stringify(privateRoom.snapshot)).not.toContain('GeoSecret');
+
+    await expect(
+      lifecycle.inspectRoom(privateRoom.snapshot.roomId),
+    ).resolves.toEqual({
+      roomId: privateRoom.snapshot.roomId,
+      visibility: 'private',
+      status: 'waiting',
+      playerCount: 1,
+      maxPlayers: 8,
+      requiresSecret: true,
+    });
+
+    await expect(
+      lifecycle.joinRoom({
+        requestId: 'request-join-missing-secret',
+        roomId: privateRoom.snapshot.roomId,
+        playerName: 'Grace',
+      }),
+    ).rejects.toMatchObject({ code: 'SECRET_REQUIRED' });
+
+    await expect(
+      lifecycle.joinRoom({
+        requestId: 'request-join-wrong-secret',
+        roomId: privateRoom.snapshot.roomId,
+        playerName: 'Grace',
+        secret: 'wrongpass',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SECRET' });
+
+    const joinedPrivate = await lifecycle.joinRoom({
+      requestId: 'request-join-valid-secret',
+      roomId: privateRoom.snapshot.roomId,
+      playerName: 'Grace',
+      secret: 'geosecret',
+    });
+    expect(joinedPrivate.roomSecret).toBe('GeoSecret');
+
+    const autoSecretRoom = await lifecycle.createRoom({
+      requestId: 'request-create-auto-secret',
+      playerName: 'Linus',
+      visibility: 'private',
+    });
+    expect(autoSecretRoom.roomSecret).toMatch(/^[A-Z2-9]{6}$/);
+
+    const publicRoom = await lifecycle.createRoom({
+      requestId: 'request-create-public',
+      playerName: 'Alan',
+      visibility: 'public',
+    });
+    expect(publicRoom.roomSecret).toBeUndefined();
+    await expect(
+      lifecycle.inspectRoom(publicRoom.snapshot.roomId),
+    ).resolves.toMatchObject({
+      visibility: 'public',
+      requiresSecret: false,
+    });
+
+    const joinedPublic = await lifecycle.joinRoom({
+      requestId: 'request-join-public',
+      roomId: publicRoom.snapshot.roomId,
+      playerName: 'Grace',
+    });
+    expect(joinedPublic.roomSecret).toBeUndefined();
+
+    await expect(lifecycle.inspectRoom('999999')).rejects.toMatchObject({
+      code: 'ROOM_NOT_FOUND',
+    });
   });
 });

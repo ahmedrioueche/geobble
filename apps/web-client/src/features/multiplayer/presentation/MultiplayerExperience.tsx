@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import {
-  Copy,
   Loader2,
   Pause,
   Play,
@@ -14,6 +13,11 @@ import {
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
 import { RoomEntryPage } from "./RoomEntryPage";
+import { RoomLinkJoinCard } from "./RoomLinkJoinCard";
+import {
+  RoomHeaderShareControls,
+  RoomInviteCard,
+} from "./RoomShareControls";
 import { resolveMapCountry } from "../../game/domain/gameRules";
 import { WorldMap } from "../../map/WorldMap";
 import type { WorldMapGameState } from "../../map/worldMapStoreSelectors";
@@ -22,9 +26,15 @@ import type {
   ReactionEmoji,
   RoomConfiguration,
   RoomConnectInput,
+  RoomInspectResult,
   RoomReactionEvent,
 } from "../contracts/multiplayerRoomProtocol";
 import type { RoomSnapshot } from "../contracts/multiplayerRoomProtocol";
+import { RoomRequestFailure } from "../application/multiplayerRoomClient";
+import {
+  clearRoomIdFromLocation,
+  readRoomIdFromLocation,
+} from "../application/roomShareLink";
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
 import { RoomSettingsPanel } from "./RoomSettingsPanel";
@@ -79,6 +89,20 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const [roomVisibility, setRoomVisibility] = useState<"public" | "private">(
     "private",
   );
+  const [createSecret, setCreateSecret] = useState("");
+  const [joinSecret, setJoinSecret] = useState("");
+  const [joinRequiresSecret, setJoinRequiresSecret] = useState(false);
+  const [inviteRoomId, setInviteRoomId] = useState<string | null>(() =>
+    readRoomIdFromLocation(),
+  );
+  const [inviteInspection, setInviteInspection] = useState<{
+    key: string;
+    result: RoomInspectResult | null;
+    error: string | null;
+  } | null>(null);
+  const [inviteSecret, setInviteSecret] = useState("");
+  const [inviteJoinError, setInviteJoinError] = useState<string | null>(null);
+  const [inviteRetryNonce, setInviteRetryNonce] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [localPinGuess, setLocalPinGuess] = useState<{
     missionId: string;
@@ -166,6 +190,53 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     writeSoundEnabled(soundEnabled);
     writeHapticsEnabled(hapticsEnabled);
   }, [soundEnabled, hapticsEnabled]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setInviteRoomId(readRoomIdFromLocation());
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const inviteKey =
+    inviteRoomId !== null ? `${inviteRoomId}:${inviteRetryNonce}` : null;
+  const activeInviteInspection =
+    inviteKey !== null && inviteInspection?.key === inviteKey
+      ? inviteInspection
+      : null;
+  const inviteInspectResult = activeInviteInspection?.result ?? null;
+  const inviteInspectError = activeInviteInspection?.error ?? null;
+  const inviteInspecting = Boolean(
+    inviteRoomId && !room && activeInviteInspection === null,
+  );
+
+  useEffect(() => {
+    if (!inviteRoomId || !inviteKey || room) return;
+
+    let cancelled = false;
+    void client
+      .inspectRoom(inviteRoomId)
+      .then((result) => {
+        if (cancelled) return;
+        setInviteInspection({ key: inviteKey, result, error: null });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setInviteInspection({
+          key: inviteKey,
+          result: null,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not load that room.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteRoomId, inviteKey, room, client]);
 
   useEffect(() => {
     if (state.lastAnswerResult === null) return;
@@ -536,20 +607,76 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
   const connect = (input: RoomConnectInput) =>
     runAction(async () => {
-      if (input.type === "create") {
-        await client.createRoom(
-          input.playerName,
-          input.config,
-          input.visibility,
-        );
-      } else if (input.type === "join") {
-        await client.joinRoom(input.roomId, input.playerName);
-      } else {
-        await client.joinPublicRoom(input.playerName);
+      try {
+        if (input.type === "create") {
+          await client.createRoom(
+            input.playerName,
+            input.config,
+            input.visibility,
+            ...(input.secret ? [input.secret] : []),
+          );
+        } else if (input.type === "join") {
+          await client.joinRoom(
+            input.roomId,
+            input.playerName,
+            ...(input.secret ? [input.secret] : []),
+          );
+        } else {
+          await client.joinPublicRoom(input.playerName);
+        }
+        setShowEntry(false);
+        setRoomCode("");
+        setCreateSecret("");
+        setJoinSecret("");
+        setJoinRequiresSecret(false);
+      } catch (error) {
+        if (
+          input.type === "join" &&
+          error instanceof RoomRequestFailure &&
+          (error.code === "SECRET_REQUIRED" || error.code === "INVALID_SECRET")
+        ) {
+          setJoinRequiresSecret(true);
+        }
+        throw error;
       }
-      setShowEntry(false);
-      setRoomCode("");
     });
+
+  const dismissInvite = useCallback(
+    (openEntryPage = false) => {
+      clearRoomIdFromLocation();
+      setInviteRoomId(null);
+      setInviteSecret("");
+      setInviteJoinError(null);
+      if (openEntryPage) setShowEntry(true);
+    },
+    [],
+  );
+
+  const joinInvitedRoom = () => {
+    if (!inviteRoomId) return;
+    setInviteJoinError(null);
+    const secret = inviteInspectResult?.requiresSecret
+      ? inviteSecret.trim()
+      : undefined;
+    void client
+      .joinRoom(
+        inviteRoomId,
+        playerName,
+        ...(secret ? [secret] : []),
+      )
+      .then(() => {
+        setInviteRoomId(null);
+        setInviteSecret("");
+        setInviteJoinError(null);
+      })
+      .catch((error: unknown) => {
+        setInviteJoinError(
+          error instanceof Error
+            ? error.message
+            : "Could not join the room.",
+        );
+      });
+  };
 
   const submitMapAnswer = (
     name: string,
@@ -600,6 +727,8 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const leave = () =>
     runAction(async () => {
       await client.leaveRoom();
+      clearRoomIdFromLocation();
+      setInviteRoomId(null);
       setShowSettings(false);
       setLocalPinGuess(null);
     });
@@ -670,12 +799,44 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
         </>
       )}
 
+      {inviteRoomId && !room && (
+        <RoomLinkJoinCard
+          busy={
+            state.status === "connecting" || state.status === "reconnecting"
+          }
+          inspectError={inviteInspectError}
+          inspected={inviteInspectResult}
+          inspecting={inviteInspecting}
+          joinError={inviteJoinError}
+          onClose={() => dismissInvite(false)}
+          onConnectLatestRoom={() =>
+            void runAction(async () => {
+              await client.retryReconnect();
+              clearRoomIdFromLocation();
+              setInviteRoomId(null);
+            })
+          }
+          onJoin={joinInvitedRoom}
+          onOpenEntryPage={() => dismissInvite(true)}
+          onPlayerNameChange={setPlayerName}
+          onRetryInspect={() => setInviteRetryNonce((value) => value + 1)}
+          onRoomSecretChange={setInviteSecret}
+          playerName={playerName}
+          reconnectAvailable={state.reconnectAvailable}
+          roomId={inviteRoomId}
+          roomSecret={inviteSecret}
+        />
+      )}
+
       {showEntry && !room && (
         <RoomEntryPage
           busy={
             state.status === "connecting" || state.status === "reconnecting"
           }
+          createSecret={createSecret}
           error={visibleError}
+          joinRequiresSecret={joinRequiresSecret}
+          joinSecret={joinSecret}
           onClose={() => setShowEntry(false)}
           onConnectLatestRoom={() =>
             void runAction(async () => client.retryReconnect())
@@ -685,14 +846,28 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               type: "create",
               playerName,
               visibility: roomVisibility,
+              ...(roomVisibility === "private" && createSecret.trim()
+                ? { secret: createSecret }
+                : {}),
             })
           }
+          onCreateSecretChange={setCreateSecret}
           onJoin={() =>
-            void connect({ type: "join", roomId: roomCode, playerName })
+            void connect({
+              type: "join",
+              roomId: roomCode,
+              playerName,
+              ...(joinSecret.trim() ? { secret: joinSecret } : {}),
+            })
           }
+          onJoinSecretChange={setJoinSecret}
           onMatchmake={() => void connect({ type: "matchmake", playerName })}
           onPlayerNameChange={setPlayerName}
-          onRoomCodeChange={setRoomCode}
+          onRoomCodeChange={(value) => {
+            setRoomCode(value);
+            setJoinRequiresSecret(false);
+            setJoinSecret("");
+          }}
           onVisibilityChange={setRoomVisibility}
           playerName={playerName}
           reconnectAvailable={state.reconnectAvailable}
@@ -721,25 +896,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           </div>
 
           <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b border-white/10 bg-slate-950/90 px-3 py-2 backdrop-blur-xl md:min-h-16 md:flex-wrap md:gap-3 md:px-7 md:py-3">
-            <div>
-              <p className="hidden text-[10px] font-black uppercase tracking-[0.2em] text-sky-300 md:block">
-                Geobble multiplayer
-              </p>
-              <div className="flex items-center gap-1 md:gap-2">
-                <p className="font-mono text-base font-black tracking-[0.15em] md:text-lg">
-                  {snapshot.roomId}
-                </p>
-                <button
-                  aria-label="Copy room code"
-                  className="rounded-md p-1.5 text-white/55 transition hover:bg-white/10 hover:text-sky-300"
-                  onClick={() => void copyRoomCode()}
-                  title="Copy room code"
-                  type="button"
-                >
-                  <Copy aria-hidden="true" size={16} />
-                </button>
-              </div>
-            </div>
+            <RoomHeaderShareControls
+              onCopyCode={() => void copyRoomCode()}
+              roomId={snapshot.roomId}
+              roomSecret={room.roomSecret}
+              visibility={snapshot.visibility}
+            />
             <div className="flex items-center gap-2 md:gap-3">
               {state.status !== "connected" && (
                 <span className="text-[10px] font-bold uppercase text-amber-300 md:text-xs">
@@ -947,15 +1109,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   onEdit={() => setShowSettings(true)}
                   pendingConfig={snapshot.pendingConfig}
                 />
-                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-5 text-center backdrop-blur-xl">
-                  <p className="text-sm font-bold text-white/75">
-                    Waiting for the match
-                  </p>
-                  <p className="mt-1 text-xs text-white/45">
-                    Share the room code with a friend. The admin can start once
-                    at least 2 connected players are in the room.
-                  </p>
-                </div>
+                <RoomInviteCard
+                  onCopyCode={() => void copyRoomCode()}
+                  roomId={snapshot.roomId}
+                  roomSecret={room.roomSecret}
+                  visibility={snapshot.visibility}
+                />
               </div>
               {isStartingGame && (
                 <StartingGameOverlay

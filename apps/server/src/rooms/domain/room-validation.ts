@@ -8,6 +8,7 @@ import type {
   RoomConfiguration,
   RoomCreateRequest,
   RoomCommand,
+  RoomInspectRequest,
   RoomJoinRequest,
   RoomReconnectRequest,
   SubMode,
@@ -153,10 +154,12 @@ export const parseCreateRequest = (value: unknown): RoomCreateRequest => {
         ? value.visibility
         : null;
   if (!visibility) throw new RoomDomainError('INVALID_REQUEST');
+  const secret = parseOptionalCreateSecret(value.secret);
   return {
     requestId: value.requestId,
     playerName,
     visibility,
+    ...(secret !== undefined ? { secret } : {}),
     ...(value.config === undefined
       ? {}
       : { config: parseRoomConfiguration(value.config) }),
@@ -172,14 +175,28 @@ export const parseJoinRequest = (value: unknown): RoomJoinRequest => {
     throw new RoomDomainError('INVALID_REQUEST');
   }
 
-  const roomId = value.roomId.trim().toUpperCase();
-  if (!/^(?:\d{4,12}|[A-Z0-9]{6,12})$/.test(roomId)) {
-    throw new RoomDomainError('INVALID_REQUEST');
-  }
+  const roomId = parseRoomId(value.roomId);
+  const secret = parseOptionalJoinSecret(value.secret);
   return {
     requestId: value.requestId,
     roomId,
     playerName: parsePlayerName(value.playerName),
+    ...(secret !== undefined ? { secret } : {}),
+  };
+};
+
+export const parseInspectRequest = (value: unknown): RoomInspectRequest => {
+  if (
+    !isRecord(value) ||
+    !isSafeIdentifier(value.requestId) ||
+    !isNonemptyString(value.roomId)
+  ) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+
+  return {
+    requestId: value.requestId,
+    roomId: parseRoomId(value.roomId),
   };
 };
 
@@ -197,13 +214,9 @@ export const parseReconnectRequest = (
     throw new RoomDomainError('INVALID_REQUEST');
   }
 
-  const roomId = value.roomId.trim().toUpperCase();
-  if (!/^(?:\d{4,12}|[A-Z0-9]{6,12})$/.test(roomId)) {
-    throw new RoomDomainError('INVALID_REQUEST');
-  }
   return {
     requestId: value.requestId,
-    roomId,
+    roomId: parseRoomId(value.roomId),
     playerId: value.playerId,
     reconnectToken: value.reconnectToken,
   };
@@ -270,6 +283,36 @@ export const parseRoomCommand = (value: unknown): RoomCommand => {
       ? { pinLocation: [value.pinLocation[0], value.pinLocation[1]] as [number, number] }
       : {}),
   };
+};
+
+export const parseRoomId = (value: string): string => {
+  const roomId = value.trim().toUpperCase();
+  if (!/^(?:\d{4,12}|[A-Z0-9]{6,12})$/.test(roomId)) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  return roomId;
+};
+
+const parseOptionalCreateSecret = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new RoomDomainError('INVALID_REQUEST');
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length < 4 || trimmed.length > 24) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  return trimmed;
+};
+
+const parseOptionalJoinSecret = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new RoomDomainError('INVALID_REQUEST');
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length > 24) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  return trimmed;
 };
 
 export const parsePlayerName = (value: unknown): string => {

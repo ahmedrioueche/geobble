@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RoomDomainError } from './room-errors.js';
 import {
+  parseInspectRequest,
   parseRoomCommand,
   parseRoomConfiguration,
   parseCreateRequest,
@@ -103,6 +104,45 @@ describe('room request validation', () => {
         reconnectToken: 'a'.repeat(43),
       }),
     ).toMatchObject({ roomId: 'AB23CD', playerId: 'player-id' });
+
+    expect(
+      parseCreateRequest({
+        requestId: 'request-4',
+        playerName: 'Ada',
+        visibility: 'private',
+        secret: '  alpha9  ',
+      }),
+    ).toMatchObject({ visibility: 'private', secret: 'alpha9' });
+    expect(
+      parseCreateRequest({
+        requestId: 'request-4',
+        playerName: 'Ada',
+        visibility: 'private',
+        secret: '   ',
+      }).secret,
+    ).toBeUndefined();
+    expect(() =>
+      parseCreateRequest({
+        requestId: 'request-4',
+        playerName: 'Ada',
+        visibility: 'private',
+        secret: 'ab',
+      }),
+    ).toThrow(RoomDomainError);
+    expect(
+      parseJoinRequest({
+        requestId: 'request-5',
+        roomId: '4821',
+        playerName: 'Grace',
+        secret: ' K7M9P2 ',
+      }),
+    ).toMatchObject({ roomId: '4821', playerName: 'Grace', secret: 'K7M9P2' });
+    expect(
+      parseInspectRequest({
+        requestId: 'request-6',
+        roomId: ' 4821 ',
+      }),
+    ).toEqual({ requestId: 'request-6', roomId: '4821' });
   });
 
   it('rejects malformed, oversized, and unsafe command payloads', () => {

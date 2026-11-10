@@ -17,6 +17,7 @@ export interface RoomTransportListener {
 
 const serverEventNames = [
   "room:joined",
+  "room:inspected",
   "room:updated",
   "room:command-accepted",
   "room:command-rejected",
@@ -31,6 +32,8 @@ const normalizeEvent = (eventName: string, payload: unknown): unknown => {
   switch (eventName) {
     case "room:joined":
       return { type: "joined", payload };
+    case "room:inspected":
+      return { type: "inspected", payload };
     case "room:updated":
       return { type: "updated", snapshot: payload };
     case "room:command-accepted":
@@ -63,6 +66,7 @@ export class SocketIoRoomTransport {
   private socket: Socket | null = null;
   private listener: RoomTransportListener | null = null;
   private reconnecting = false;
+  private pendingConnectAbort: (() => void) | null = null;
 
   async connect(listener: RoomTransportListener): Promise<void> {
     this.listener = listener;
@@ -96,8 +100,13 @@ export class SocketIoRoomTransport {
         reject(error);
       };
       const cleanup = () => {
+        this.pendingConnectAbort = null;
         socket.off("connect", handleConnect);
         socket.off("connect_error", handleConnectError);
+      };
+      this.pendingConnectAbort = () => {
+        cleanup();
+        reject(new Error("Room connection was closed."));
       };
       socket.once("connect", handleConnect);
       socket.once("connect_error", handleConnectError);
@@ -114,6 +123,8 @@ export class SocketIoRoomTransport {
 
   disconnect(): void {
     this.reconnecting = false;
+    this.pendingConnectAbort?.();
+    this.pendingConnectAbort = null;
     this.socket?.removeAllListeners();
     this.socket?.disconnect();
     this.socket = null;

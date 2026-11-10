@@ -155,6 +155,8 @@ export interface RoomRecord {
   revision: number;
   status: RoomStatus;
   visibility?: RoomVisibility;
+  secret?: string | null;
+  secretHash?: string | null;
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
@@ -218,6 +220,7 @@ export interface RoomCreateRequest {
   requestId: string;
   playerName: string;
   visibility?: RoomVisibility;
+  secret?: string;
   config?: RoomConfiguration;
 }
 
@@ -225,6 +228,21 @@ export interface RoomJoinRequest {
   requestId: string;
   roomId: string;
   playerName: string;
+  secret?: string;
+}
+
+export interface RoomInspectRequest {
+  requestId: string;
+  roomId: string;
+}
+
+export interface RoomInspectResult {
+  roomId: string;
+  visibility: RoomVisibility;
+  status: RoomStatus;
+  playerCount: number;
+  maxPlayers: number;
+  requiresSecret: boolean;
 }
 
 export interface RoomReconnectRequest {
@@ -267,6 +285,7 @@ export interface RoomJoinResult {
   reconnectToken: string;
   nextCommandId: number;
   snapshot: RoomSnapshot;
+  roomSecret?: string;
 }
 
 export interface RoomCommandResult {

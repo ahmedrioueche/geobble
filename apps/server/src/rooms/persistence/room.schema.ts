@@ -264,6 +264,12 @@ export class RoomEntity implements RoomRecord {
   @Prop({ type: String, required: true, enum: ['public', 'private'], default: 'private' })
   visibility!: NonNullable<RoomRecord['visibility']>;
 
+  @Prop({ type: String, default: null, select: false })
+  secret?: string | null;
+
+  @Prop({ type: String, default: null, select: false })
+  secretHash?: string | null;
+
   @Prop({ required: true })
   adminPlayerId!: string;
 

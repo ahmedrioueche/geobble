@@ -10,6 +10,9 @@ interface RoomEntryPageProps {
   playerName: string;
   roomCode: string;
   visibility: RoomVisibility;
+  createSecret: string;
+  joinSecret: string;
+  joinRequiresSecret: boolean;
   busy: boolean;
   status: string;
   error: string | null;
@@ -17,6 +20,8 @@ interface RoomEntryPageProps {
   onPlayerNameChange: (value: string) => void;
   onRoomCodeChange: (value: string) => void;
   onVisibilityChange: (value: RoomVisibility) => void;
+  onCreateSecretChange: (value: string) => void;
+  onJoinSecretChange: (value: string) => void;
   onCreate: () => void;
   onJoin: () => void;
   onMatchmake: () => void;
@@ -72,6 +77,9 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
   playerName,
   roomCode,
   visibility,
+  createSecret,
+  joinSecret,
+  joinRequiresSecret,
   busy,
   status,
   error,
@@ -79,6 +87,8 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
   onPlayerNameChange,
   onRoomCodeChange,
   onVisibilityChange,
+  onCreateSecretChange,
+  onJoinSecretChange,
   onCreate,
   onJoin,
   onMatchmake,
@@ -191,9 +201,24 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
                 onChange={onVisibilityChange}
                 value={visibility}
               />
+              {visibility === "private" && (
+                <RoomTextField
+                  autoComplete="off"
+                  label="Room secret (optional)"
+                  maxLength={24}
+                  onChange={onCreateSecretChange}
+                  placeholder="Auto-generated if blank"
+                  value={createSecret}
+                />
+              )}
               <ActionButton
                 className="w-full"
-                disabled={!canStart}
+                disabled={
+                  !canStart ||
+                  (visibility === "private" &&
+                    createSecret.trim().length > 0 &&
+                    createSecret.trim().length < 4)
+                }
                 highlighted={isActive("create")}
                 onClick={onCreate}
               >
@@ -225,9 +250,23 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
                 placeholder="Enter room code"
                 value={roomCode}
               />
+              {joinRequiresSecret && (
+                <RoomTextField
+                  autoComplete="off"
+                  label="Room secret"
+                  maxLength={24}
+                  onChange={onJoinSecretChange}
+                  placeholder="Enter room secret"
+                  value={joinSecret}
+                />
+              )}
               <ActionButton
                 className="w-full"
-                disabled={!canStart || !roomCode.trim()}
+                disabled={
+                  !canStart ||
+                  !roomCode.trim() ||
+                  (joinRequiresSecret && !joinSecret.trim())
+                }
                 highlighted={isActive("join")}
                 onClick={onJoin}
               >

@@ -8,6 +8,8 @@ export type RoomErrorCode =
   | 'NOT_ADMIN'
   | 'NOT_CONNECTED'
   | 'NOT_AUTHORIZED'
+  | 'SECRET_REQUIRED'
+  | 'INVALID_SECRET'
   | 'STALE_REVISION'
   | 'STALE_MISSION'
   | 'DUPLICATE_COMMAND'
@@ -26,6 +28,8 @@ const safeMessages: Record<RoomErrorCode, string> = {
   NOT_ADMIN: 'Only the room admin can do that.',
   NOT_CONNECTED: 'This player is not connected to the room.',
   NOT_AUTHORIZED: 'This player is not authorized to reconnect.',
+  SECRET_REQUIRED: 'This private room requires a room secret.',
+  INVALID_SECRET: 'That room secret is incorrect.',
   STALE_REVISION: 'The room changed; refresh the room and try again.',
   STALE_MISSION: 'That command belongs to an earlier round.',
   DUPLICATE_COMMAND: 'That command has already been processed.',

@@ -23,6 +23,7 @@ import { toRoomSnapshot } from './domain/room-snapshot.js';
 import type { RoomRecord, RoomSnapshot } from './domain/room.types.js';
 import {
   parseCreateRequest,
+  parseInspectRequest,
   parseJoinRequest,
   parseReactionEmoji,
   parseReconnectRequest,
@@ -190,6 +191,22 @@ export class RoomGateway
       },
       'Public matchmaking is temporarily unavailable. Please try again.',
     );
+  }
+
+  @SubscribeMessage(ROOM_EVENTS.inspect)
+  async inspect(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const requestId = getRequestId(value);
+    await this.handleRequest(client, requestId, async () => {
+      const request = parseInspectRequest(value);
+      const inspected = await this.lifecycle.inspectRoom(request.roomId);
+      client.emit(ROOM_EVENTS.inspected, {
+        requestId: request.requestId,
+        ...inspected,
+      });
+    });
   }
 
   @SubscribeMessage(ROOM_EVENTS.join)

@@ -177,6 +177,30 @@ describe("multiplayer room protocol", () => {
       }),
     ).toBe(true);
     expect(isRoomServerEvent({ type: "unknown", payload: {} })).toBe(false);
+    expect(
+      isRoomServerEvent({
+        type: "inspected",
+        payload: {
+          requestId: "inspect-1",
+          roomId: "4821",
+          visibility: "private",
+          status: "waiting",
+          playerCount: 1,
+          maxPlayers: 8,
+          requiresSecret: true,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isRoomServerEvent({
+        type: "error",
+        payload: {
+          requestId: "join-1",
+          message: "Wrong secret.",
+          code: "INVALID_SECRET",
+        },
+      }),
+    ).toBe(true);
   });
 });
 
@@ -624,5 +648,156 @@ describe("createRoomClient", () => {
       "offline",
     );
     expect(client.getState().error).toBe("offline");
+  });
+
+  it("inspects rooms, sends secrets on create/join, and retains roomSecret across updates", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    storage.value = {
+      roomId: "OLD1",
+      playerId: "p-old",
+      reconnectToken: "tok-old",
+    };
+    const client = createRoomClient(transport, storage, () => "req-1");
+
+    const inspecting = client.inspectRoom(" 4821 ");
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:inspect"),
+    );
+    expect(transport.events.at(-1)).toEqual({
+      eventName: "room:inspect",
+      payload: { requestId: "req-1", roomId: "4821" },
+    });
+    // Inspecting must not wipe saved reconnect credentials.
+    expect(storage.value).not.toBeNull();
+
+    transport.receive({
+      type: "inspected",
+      payload: {
+        requestId: "req-1",
+        roomId: "4821",
+        visibility: "private",
+        status: "waiting",
+        playerCount: 1,
+        maxPlayers: 8,
+        requiresSecret: true,
+      },
+    });
+    await expect(inspecting).resolves.toMatchObject({
+      roomId: "4821",
+      requiresSecret: true,
+    });
+
+    const creating = client.createRoom("Ada", undefined, "private", " Geo99 ");
+    await vi.waitFor(() =>
+      expect(transport.events.at(-1)?.eventName).toBe("room:create"),
+    );
+    expect(transport.events.at(-1)).toEqual({
+      eventName: "room:create",
+      payload: {
+        requestId: "req-1",
+        playerName: "Ada",
+        visibility: "private",
+        secret: "Geo99",
+      },
+    });
+    transport.receive({
+      type: "joined",
+      payload: {
+        requestId: "req-1",
+        playerId: "player-1",
+        reconnectToken: "token-1",
+        nextCommandId: 1,
+        snapshot: createSnapshot({ roomId: "4821" }),
+        roomSecret: "Geo99",
+      },
+    });
+    await creating;
+    expect(client.getState().room?.roomSecret).toBe("Geo99");
+
+    transport.receive({
+      type: "updated",
+      snapshot: createSnapshot({ roomId: "4821", revision: 2 }),
+    });
+    expect(client.getState().room?.roomSecret).toBe("Geo99");
+  });
+
+  it("recovers cleanly when disconnected mid-connect (e.g. React StrictMode) and does not auto-reconnect during room inspection", async () => {
+    let connectCalls = 0;
+    let listenerRef: RoomTransportListener | null = null;
+    let firstConnectPending = true;
+    const emitted: Array<{ eventName: string; payload: Record<string, unknown> }> = [];
+    const transport: RoomTransport = {
+      connect: async (listener) => {
+        connectCalls += 1;
+        listenerRef = listener;
+        if (connectCalls === 1) {
+          // Simulate an in-flight socket connection aborted by disconnect()
+          await new Promise<void>((_, reject) => {
+            const check = setInterval(() => {
+              if (!firstConnectPending) {
+                clearInterval(check);
+                reject(new Error("Room connection was closed."));
+              }
+            }, 5);
+          });
+          return;
+        }
+        listener.onStatusChange("connected");
+      },
+      emit: (eventName, payload) => {
+        emitted.push({
+          eventName,
+          payload: payload as Record<string, unknown>,
+        });
+      },
+      disconnect: () => {
+        firstConnectPending = false;
+      },
+    };
+    const storage = new FakeStorage();
+    storage.value = {
+      roomId: "OLD1",
+      playerId: "p-old",
+      reconnectToken: "tok-old",
+    };
+
+    const client = createRoomClient(transport, storage, () => "req-strict");
+    const firstInspect = client.inspectRoom("4821");
+    await vi.waitFor(() => expect(connectCalls).toBe(1));
+
+    // Simulate StrictMode cleanup disconnecting while connect() is still in flight
+    client.disconnect();
+    await expect(firstInspect).rejects.toThrow("Room connection was closed.");
+
+    // Second mount must initiate a fresh transport connection and emit room:inspect
+    const secondInspect = client.inspectRoom("4821");
+    await vi.waitFor(() => expect(connectCalls).toBe(2));
+    await vi.waitFor(() =>
+      expect(emitted.some((item) => item.eventName === "room:inspect")).toBe(
+        true,
+      ),
+    );
+    // Must not auto-emit room:reconnect for OLD1 while inspecting 4821
+    expect(emitted.some((item) => item.eventName === "room:reconnect")).toBe(
+      false,
+    );
+
+    listenerRef!.onEvent({
+      type: "inspected",
+      payload: {
+        requestId: "req-strict",
+        roomId: "4821",
+        visibility: "public",
+        status: "waiting",
+        playerCount: 1,
+        maxPlayers: 8,
+        requiresSecret: false,
+      },
+    });
+    await expect(secondInspect).resolves.toMatchObject({
+      roomId: "4821",
+      visibility: "public",
+    });
   });
 });

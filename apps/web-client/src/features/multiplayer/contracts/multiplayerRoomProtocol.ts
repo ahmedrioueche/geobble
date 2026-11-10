@@ -113,25 +113,36 @@ export interface RoomSnapshot {
 
 export type RoomConnectInput =
   | {
-      type: "create";
-      playerName: string;
-      visibility: "public" | "private";
-      config?: RoomConfiguration;
-    }
+    type: "create";
+    playerName: string;
+    visibility: "public" | "private";
+    secret?: string;
+    config?: RoomConfiguration;
+  }
   | { type: "matchmake"; playerName: string }
-  | { type: "join"; roomId: string; playerName: string };
+  | { type: "join"; roomId: string; playerName: string; secret?: string };
+
+export interface RoomInspectResult {
+  requestId: string;
+  roomId: string;
+  visibility: "public" | "private";
+  status: "waiting" | "playing" | "finished";
+  playerCount: number;
+  maxPlayers: number;
+  requiresSecret: boolean;
+}
 
 export type RoomCommandInput =
   | {
-      type: "answer";
-      answerCountryCode: string | null;
-      choiceId?: string;
-      pinLocation?: [number, number];
-    }
+    type: "answer";
+    answerCountryCode: string | null;
+    choiceId?: string;
+    pinLocation?: [number, number];
+  }
   | {
-      type: "powerup";
-      kind: PowerUpKind;
-    }
+    type: "powerup";
+    kind: PowerUpKind;
+  }
   | { type: "reveal" }
   | { type: "skip" };
 
@@ -155,6 +166,7 @@ export interface RoomJoinedEvent {
   reconnectToken: string;
   nextCommandId: number;
   snapshot: RoomSnapshot;
+  roomSecret?: string;
 }
 
 export type RoomErrorCode =
@@ -167,6 +179,8 @@ export type RoomErrorCode =
   | "NOT_ADMIN"
   | "NOT_CONNECTED"
   | "NOT_AUTHORIZED"
+  | "SECRET_REQUIRED"
+  | "INVALID_SECRET"
   | "STALE_REVISION"
   | "STALE_MISSION"
   | "DUPLICATE_COMMAND"
@@ -176,45 +190,46 @@ export type RoomErrorCode =
 
 export type RoomServerEvent =
   | { type: "joined"; payload: RoomJoinedEvent }
+  | { type: "inspected"; payload: RoomInspectResult }
   | { type: "updated"; snapshot: RoomSnapshot }
   | {
-      type: "command-accepted";
-      payload: {
-        roomId: string;
-        commandId: number;
-        revision: number;
-        answerResult: boolean | null;
-      };
-    }
+    type: "command-accepted";
+    payload: {
+      roomId: string;
+      commandId: number;
+      revision: number;
+      answerResult: boolean | null;
+    };
+  }
   | {
-      type: "command-rejected";
-      payload: {
-        roomId: string;
-        commandId: number | null;
-        reason: string;
-        revision?: number;
-      };
-    }
+    type: "command-rejected";
+    payload: {
+      roomId: string;
+      commandId: number | null;
+      reason: string;
+      revision?: number;
+    };
+  }
   | {
-      type: "settings-accepted";
-      payload: {
-        requestId: string;
-        roomId: string;
-        queued: boolean;
-        revision: number;
-      };
-    }
+    type: "settings-accepted";
+    payload: {
+      requestId: string;
+      roomId: string;
+      queued: boolean;
+      revision: number;
+    };
+  }
   | { type: "left"; payload: { roomId: string; reason?: "inactivity" } }
   | { type: "closed"; payload: { roomId: string; reason?: "inactivity" } }
   | { type: "reaction"; payload: RoomReactionEvent }
   | {
-      type: "error";
-      payload: {
-        requestId: string | null;
-        message: string;
-        code?: RoomErrorCode;
-      };
+    type: "error";
+    payload: {
+      requestId: string | null;
+      message: string;
+      code?: RoomErrorCode;
     };
+  };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -236,6 +251,8 @@ const isRoomErrorCode = (value: unknown): value is RoomErrorCode =>
     "NOT_ADMIN",
     "NOT_CONNECTED",
     "NOT_AUTHORIZED",
+    "SECRET_REQUIRED",
+    "INVALID_SECRET",
     "STALE_REVISION",
     "STALE_MISSION",
     "DUPLICATE_COMMAND",
@@ -390,7 +407,18 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
         isString(payload.playerId) &&
         isString(payload.reconnectToken) &&
         isInteger(payload.nextCommandId) &&
-        isRoomSnapshot(payload.snapshot)
+        isRoomSnapshot(payload.snapshot) &&
+        (payload.roomSecret === undefined || isString(payload.roomSecret))
+      );
+    case "inspected":
+      return (
+        isString(payload.requestId) &&
+        isString(payload.roomId) &&
+        ["public", "private"].includes(String(payload.visibility)) &&
+        ["waiting", "playing", "finished"].includes(String(payload.status)) &&
+        isInteger(payload.playerCount) &&
+        isInteger(payload.maxPlayers) &&
+        typeof payload.requiresSecret === "boolean"
       );
     case "command-accepted":
       return (

@@ -3,6 +3,8 @@ import type {
   RoomCommand,
   RoomConfiguration,
   RoomCreateRequest,
+  RoomInspectRequest,
+  RoomInspectResult,
   RoomJoinRequest,
   RoomReactionEvent,
   RoomReconnectRequest,
@@ -12,6 +14,7 @@ import type { RoomErrorCode } from './domain/room-errors.js';
 
 export const ROOM_EVENTS = {
   create: 'room:create',
+  inspect: 'room:inspect',
   join: 'room:join',
   matchmake: 'room:matchmake',
   reconnect: 'room:reconnect',
@@ -22,6 +25,7 @@ export const ROOM_EVENTS = {
   reaction: 'room:reaction',
   leave: 'room:leave',
   joined: 'room:joined',
+  inspected: 'room:inspected',
   updated: 'room:updated',
   commandAccepted: 'room:command-accepted',
   commandRejected: 'room:command-rejected',
@@ -45,6 +49,7 @@ export interface RoomRequestError {
 
 export interface RoomClientEvents {
   'room:create': (payload: RoomCreateRequest) => void;
+  'room:inspect': (payload: RoomInspectRequest) => void;
   'room:join': (payload: RoomJoinRequest) => void;
   'room:matchmake': (payload: RoomCreateRequest) => void;
   'room:reconnect': (payload: RoomReconnectRequest) => void;
@@ -66,7 +71,11 @@ export interface RoomServerEvents {
     reconnectToken: string;
     nextCommandId: number;
     snapshot: RoomSnapshot;
+    roomSecret?: string;
   }) => void;
+  'room:inspected': (
+    payload: RoomInspectResult & { requestId: string },
+  ) => void;
   'room:updated': (snapshot: RoomSnapshot) => void;
   'room:reaction': (payload: RoomReactionEvent) => void;
   'room:command-accepted': (payload: {
