@@ -1132,4 +1132,144 @@ describe('room lifecycle and competitive gameplay', () => {
       code: 'ROOM_NOT_FOUND',
     });
   });
+
+  it('supports finishing a match, updating settings, excluding finished rooms from matchmaking, and starting a rematch', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({ roundAdvanceDelayMs: 0, roundTimeLimitMs: 0 });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-rematch',
+      playerName: 'Ada',
+      visibility: 'public',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'count',
+        challengeValue: 1,
+        roundTimeLimitSeconds: 0,
+      },
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'request-join-rematch',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+    });
+
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    const stored = await repository.findById(host.snapshot.roomId);
+    const targetCode = stored?.game.round?.targetCountryCode ?? 'CAN';
+    await gameplay.submitCommand(host.snapshot.roomId, host.playerId, {
+      type: 'answer',
+      answerCountryCode: targetCode,
+      commandId: 1,
+      expectedRevision: started.revision,
+      missionId: started.game.round?.missionId ?? '',
+    });
+
+    const finishedTick = await runtime.tick(Date.now() + 1);
+    const finishedSnapshot = finishedTick.snapshots.find(
+      (item) => item.roomId === host.snapshot.roomId,
+    );
+    expect(finishedSnapshot?.status).toBe('finished');
+    expect(
+      finishedSnapshot?.players.find((player) => player.id === host.playerId)
+        ?.score,
+    ).toBe(10);
+
+    // Public matchmaking does not drop new players into an ended match
+    const matchmade = await lifecycle.joinPublicRoom({
+      requestId: 'request-public-after-finish',
+      playerName: 'Linus',
+    });
+    expect(matchmade.snapshot.roomId).not.toBe(host.snapshot.roomId);
+
+    // Host can change settings immediately while finished
+    const updatedSettings = await lifecycle.changeSettings(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        mode: 'reverse',
+        pinDirection: 'locate',
+        subMode: 'capital',
+        challengeType: 'count',
+        challengeValue: 3,
+        roundTimeLimitSeconds: 15,
+      },
+    );
+    expect(updatedSettings.queued).toBe(false);
+    expect(updatedSettings.snapshot.config).toMatchObject({
+      mode: 'reverse',
+      subMode: 'capital',
+      challengeValue: 3,
+    });
+
+    // Requires >= 2 connected players to start rematch
+    await lifecycle.markDisconnected(host.snapshot.roomId, guest.playerId);
+    await expect(
+      lifecycle.startRoom(host.snapshot.roomId, host.playerId),
+    ).rejects.toMatchObject({ code: 'ROOM_NOT_STARTABLE' });
+
+    await lifecycle.reconnect({
+      requestId: 'request-reconnect-rematch',
+      roomId: host.snapshot.roomId,
+      playerId: guest.playerId,
+      reconnectToken: guest.reconnectToken,
+    });
+
+    const rematch = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    expect(rematch.status).toBe('playing');
+    expect(rematch.config.mode).toBe('reverse');
+    expect(rematch.game.round?.number).toBe(1);
+    expect(rematch.players).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: host.playerId,
+          score: 0,
+          streak: 0,
+          maxStreak: 0,
+          answered: false,
+          powerUps: { fifty: true, hint: true, double: true, freeze: true },
+        }),
+        expect.objectContaining({
+          id: guest.playerId,
+          score: 0,
+          streak: 0,
+          maxStreak: 0,
+          answered: false,
+          powerUps: { fifty: true, hint: true, double: true, freeze: true },
+        }),
+      ]),
+    );
+  });
 });

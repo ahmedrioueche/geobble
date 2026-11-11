@@ -340,8 +340,16 @@ export class RoomLifecycleService {
       const connectedCount = draft.players.filter(
         (player) => player.connected,
       ).length;
-      if (draft.status !== 'waiting' || connectedCount < 2) {
+      if (
+        (draft.status !== 'waiting' && draft.status !== 'finished') ||
+        connectedCount < 2
+      ) {
         throw new RoomDomainError('ROOM_NOT_STARTABLE');
+      }
+
+      if (draft.pendingConfig) {
+        draft.config = draft.pendingConfig;
+        draft.pendingConfig = null;
       }
 
       const created = this.gameEngine.createRound(
@@ -372,6 +380,7 @@ export class RoomLifecycleService {
       draft.status = 'playing';
       draft.pendingConfig = null;
       draft.lastActivityAt = now;
+      draft.expiresAt = this.getExpiryDate(now);
       draft.players = draft.players.map((player) => ({
         ...player,
         paused: false,
@@ -426,7 +435,7 @@ export class RoomLifecycleService {
       const admin = this.requireConnectedPlayer(draft, playerId);
       admin.lastActiveAt = now;
       draft.lastActivityAt = now;
-      if (draft.status === 'waiting') {
+      if (draft.status === 'waiting' || draft.status === 'finished') {
         draft.config = nextConfig;
         draft.pendingConfig = null;
         return false;

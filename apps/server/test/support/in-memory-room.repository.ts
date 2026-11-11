@@ -18,6 +18,7 @@ export class InMemoryRoomRepository implements RoomRepository {
       .filter(
         (room) =>
           room.visibility === 'public' &&
+          (room.status === 'waiting' || room.status === 'playing') &&
           room.expiresAt > new Date() &&
           room.players.some((player) => player.connected) &&
           room.players.length < maxPlayers,

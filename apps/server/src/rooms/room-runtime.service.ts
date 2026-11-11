@@ -129,7 +129,7 @@ export class RoomRuntimeService implements OnModuleInit {
       const roomLastActive =
         candidate.lastActivityAt ?? candidate.updatedAt.getTime();
       const roomInactivityLimitMs =
-        candidate.status === 'waiting' ? waitingLimitMs : playingLimitMs;
+        candidate.status === 'playing' ? playingLimitMs : waitingLimitMs;
 
       if (now - roomLastActive >= roomInactivityLimitMs) {
         await this.mutations.delete(candidate.roomId);

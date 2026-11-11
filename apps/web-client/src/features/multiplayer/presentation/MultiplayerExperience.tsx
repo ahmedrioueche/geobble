@@ -43,6 +43,7 @@ import { RoundRecapCard } from "./RoundRecapCard";
 import { PowerUpBar } from "./PowerUpBar";
 import { StartingGameOverlay } from "./StartingGameOverlay";
 import { MatchPausedOverlay } from "./MatchPausedOverlay";
+import { MatchFinishedOverlay } from "./MatchFinishedOverlay";
 import {
   readHapticsEnabled,
   readSoundEnabled,
@@ -115,12 +116,16 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     Array<RoomReactionEvent & { id: string; leftPercent: number }>
   >([]);
   const [now, setNow] = useState(0);
-  const [pendingPauseTarget, setPendingPauseTarget] = useState<boolean | null>(
-    null,
-  );
-  const [isStartingGame, setIsStartingGame] = useState(false);
+  const [pendingPause, setPendingPause] = useState<{
+    target: boolean;
+    revision: number;
+  } | null>(null);
+  const [startingFromRevision, setStartingFromRevision] = useState<
+    number | null
+  >(null);
   const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
+  const reactionTimersRef = useRef<Set<number>>(new Set());
   const room = state.room;
   const snapshot = room?.snapshot;
   const round = snapshot?.game.round ?? null;
@@ -134,7 +139,21 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const isRoomPaused = Boolean(snapshot?.game.paused);
   const waitingForCommand = state.pendingCommandIds.length > 0;
   const isUpdatingPause =
-    pendingPauseTarget !== null && Boolean(self?.paused) !== pendingPauseTarget;
+    pendingPause !== null &&
+    snapshot?.revision === pendingPause.revision &&
+    Boolean(self?.paused) !== pendingPause.target &&
+    snapshot?.status === "playing" &&
+    state.status === "connected" &&
+    state.error === null &&
+    actionError === null;
+  const isStartingGame =
+    startingFromRevision !== null &&
+    snapshot?.revision === startingFromRevision &&
+    (snapshot.status === "waiting" || snapshot.status === "finished") &&
+    state.status === "connected" &&
+    state.error === null &&
+    actionError === null &&
+    connectedPlayersCount >= 2;
   const isPinLocate =
     snapshot?.config.mode === "pin" &&
     snapshot.config.pinDirection === "locate";
@@ -142,46 +161,6 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     snapshot?.config.mode === "reverse" ||
     (snapshot?.config.mode === "pin" &&
       snapshot.config.pinDirection === "identify");
-
-  useEffect(() => {
-    if (
-      pendingPauseTarget !== null &&
-      (Boolean(self?.paused) === pendingPauseTarget ||
-        snapshot?.status !== "playing" ||
-        state.status !== "connected" ||
-        state.error !== null ||
-        actionError !== null)
-    ) {
-      setPendingPauseTarget(null);
-    }
-  }, [
-    pendingPauseTarget,
-    self?.paused,
-    snapshot?.status,
-    state.status,
-    state.error,
-    actionError,
-  ]);
-
-  useEffect(() => {
-    if (
-      isStartingGame &&
-      (snapshot?.status !== "waiting" ||
-        state.status !== "connected" ||
-        state.error !== null ||
-        actionError !== null ||
-        connectedPlayersCount < 2)
-    ) {
-      setIsStartingGame(false);
-    }
-  }, [
-    isStartingGame,
-    snapshot?.status,
-    connectedPlayersCount,
-    state.status,
-    state.error,
-    actionError,
-  ]);
 
   useEffect(() => {
     writeBrowserStorageItem(PLAYER_NAME_STORAGE_KEY, playerName);
@@ -248,20 +227,33 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [state.lastAnswerResult, soundEnabled, hapticsEnabled]);
 
   useEffect(() => {
+    const timers = reactionTimersRef.current;
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     const reaction = state.lastReaction;
     if (!reaction) return;
     const id = `${reaction.playerId}-${reaction.timestamp}`;
     const leftPercent = 25 + ((reaction.timestamp % 50) + 50) % 50;
-    setFloatingReactions((current) => [
-      ...current.slice(-11),
-      { ...reaction, id, leftPercent },
-    ]);
-    const timeout = window.setTimeout(() => {
-      setFloatingReactions((current) =>
-        current.filter((item) => item.id !== id),
-      );
-    }, 2400);
-    return () => window.clearTimeout(timeout);
+    const addTimer = window.setTimeout(() => {
+      reactionTimersRef.current.delete(addTimer);
+      setFloatingReactions((current) => [
+        ...current.slice(-11),
+        { ...reaction, id, leftPercent },
+      ]);
+      const removeTimer = window.setTimeout(() => {
+        reactionTimersRef.current.delete(removeTimer);
+        setFloatingReactions((current) =>
+          current.filter((item) => item.id !== id),
+        );
+      }, 2400);
+      reactionTimersRef.current.add(removeTimer);
+    }, 0);
+    reactionTimersRef.current.add(addTimer);
   }, [state.lastReaction]);
 
   useEffect(() => {
@@ -421,32 +413,43 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [snapshot, selfPlayerId, soundEnabled, hapticsEnabled]);
 
   const settingsAccepted = state.settingsAccepted;
-  const [visibleSettingsNotice, setVisibleSettingsNotice] =
+  const [dismissedSettingsNotice, setDismissedSettingsNotice] =
     useState<typeof settingsAccepted>(null);
+  const visibleSettingsNotice =
+    settingsAccepted && settingsAccepted !== dismissedSettingsNotice
+      ? settingsAccepted
+      : null;
   useEffect(() => {
-    if (!settingsAccepted) {
-      setVisibleSettingsNotice(null);
-      return;
-    }
-    setVisibleSettingsNotice(settingsAccepted);
+    if (!settingsAccepted) return;
     const timeout = window.setTimeout(
-      () => setVisibleSettingsNotice(null),
+      () => setDismissedSettingsNotice(settingsAccepted),
       4000,
     );
     return () => window.clearTimeout(timeout);
   }, [settingsAccepted]);
 
-  const rawError = actionError ?? state.error;
-  const [visibleError, setVisibleError] = useState<string | null>(rawError);
+  const [dismissedStateError, setDismissedStateError] = useState<string | null>(
+    null,
+  );
+  const visibleError =
+    actionError ??
+    (state.error && state.error !== dismissedStateError ? state.error : null);
   useEffect(() => {
-    setVisibleError(rawError);
-    if (!rawError) return;
+    if (state.error !== null) return;
+    const resetTimeout = window.setTimeout(
+      () => setDismissedStateError(null),
+      0,
+    );
+    return () => window.clearTimeout(resetTimeout);
+  }, [state.error]);
+  useEffect(() => {
+    if (!visibleError) return;
     const timeout = window.setTimeout(() => {
-      setVisibleError(null);
       setActionError(null);
+      if (state.error) setDismissedStateError(state.error);
     }, 5000);
     return () => window.clearTimeout(timeout);
-  }, [rawError]);
+  }, [visibleError, state.error]);
 
   const gameState = useMemo<WorldMapGameState>(
     () => ({
@@ -534,12 +537,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
   const togglePause = (targetPaused = !isSelfPaused) => {
     if (snapshot?.status !== "playing") return;
-    setPendingPauseTarget(targetPaused);
+    setPendingPause({ target: targetPaused, revision: snapshot.revision });
     void runAction(async () => {
       try {
         client.setPaused(targetPaused);
       } catch (error) {
-        setPendingPauseTarget(null);
+        setPendingPause(null);
         throw error;
       }
     });
@@ -920,7 +923,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   Retry
                 </button>
               )}
-              {snapshot.status !== "waiting" && (
+              {snapshot.status === "playing" && (
                 <button
                   aria-expanded={showStandings}
                   aria-label="Toggle players"
@@ -1064,12 +1067,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                           connectedPlayersCount < 2
                         }
                         onClick={() => {
-                          setIsStartingGame(true);
+                          setStartingFromRevision(snapshot.revision);
                           void runAction(async () => {
                             try {
                               client.startRoom();
                             } catch (error) {
-                              setIsStartingGame(false);
+                              setStartingFromRevision(null);
                               throw error;
                             }
                           });
@@ -1124,6 +1127,37 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 />
               )}
             </div>
+          ) : snapshot.status === "finished" ? (
+            <>
+              <MatchFinishedOverlay
+                connected={state.status === "connected"}
+                connectedPlayersCount={connectedPlayersCount}
+                isAdmin={isAdmin}
+                isStartingRematch={isStartingGame}
+                onLeave={() => void leave()}
+                onOpenSettings={() => setShowSettings(true)}
+                onPlayAgain={() => {
+                  setStartingFromRevision(snapshot.revision);
+                  void runAction(async () => {
+                    try {
+                      client.startRoom();
+                    } catch (error) {
+                      setStartingFromRevision(null);
+                      throw error;
+                    }
+                  });
+                }}
+                onSendReaction={sendReaction}
+                selfPlayerId={selfPlayerId}
+                snapshot={snapshot}
+              />
+              {isStartingGame && (
+                <StartingGameOverlay
+                  modeLabel={snapshot.config.mode}
+                  playerCount={snapshot.players.length}
+                />
+              )}
+            </>
           ) : (
             <>
               <aside

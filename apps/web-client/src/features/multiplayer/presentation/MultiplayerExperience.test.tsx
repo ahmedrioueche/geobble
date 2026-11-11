@@ -156,6 +156,7 @@ describe("MultiplayerExperience", () => {
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
         submitCommand: mocks.submitCommand.mockResolvedValue(1),
+        sendReaction: mocks.sendReaction,
         leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
         forgetReconnect: mocks.forgetReconnect,
         retryReconnect: mocks.retryReconnect.mockResolvedValue(undefined),
@@ -1253,5 +1254,138 @@ describe("MultiplayerExperience", () => {
         choiceId: "choice-fr",
       }),
     );
+  });
+
+  it("renders final standings on match end and lets the host edit settings or start a rematch", async () => {
+    const finishedSnapshot = createSnapshot({
+      status: "finished",
+      config: {
+        mode: "identify",
+        pinDirection: "locate",
+        subMode: "name",
+        challengeType: "count",
+        challengeValue: 5,
+      },
+      players: [
+        {
+          id: "player-1",
+          name: "Ada",
+          isAdmin: true,
+          connected: true,
+          score: 30,
+          streak: 0,
+          maxStreak: 2,
+          pinLocation: null,
+          answered: true,
+        },
+        {
+          id: "player-2",
+          name: "Grace",
+          isAdmin: false,
+          connected: true,
+          score: 55,
+          streak: 3,
+          maxStreak: 3,
+          pinLocation: null,
+          answered: true,
+        },
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-final",
+          number: 5,
+          prompt: { type: "text", value: "France" },
+          choices: [],
+          revealed: true,
+          answerReveal: { countryCode: "FRA", countryName: "France" },
+        },
+      },
+    });
+
+    renderExperience(createClientState(finishedSnapshot));
+
+    expect(screen.getByRole("heading", { name: "Grace wins!" })).toBeTruthy();
+    const standings = screen.getByRole("list", { name: "Final standings" });
+    const items = standings.querySelectorAll("li");
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toContain("Grace");
+    expect(items[0]?.textContent).toContain("55 pts");
+    expect(items[0]?.textContent).toContain("Best streak: 3");
+    expect(items[1]?.textContent).toContain("Ada");
+
+    fireEvent.click(screen.getByRole("button", { name: "React with 🔥" }));
+    expect(mocks.sendReaction).toHaveBeenCalledWith("🔥");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(
+      screen.getByRole("heading", { name: "Room settings" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const playAgainBtn = screen.getByRole("button", { name: "Play again" });
+    expect((playAgainBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(playAgainBtn);
+
+    expect(mocks.startRoom).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Starting rematch…")).toBeTruthy();
+  });
+
+  it("disables Play again when fewer than 2 connected players remain and shows waiting UI to guests", () => {
+    const soloFinishedSnapshot = createSnapshot({
+      status: "finished",
+      players: [
+        {
+          id: "player-1",
+          name: "Ada",
+          isAdmin: true,
+          connected: true,
+          score: 20,
+          streak: 1,
+          maxStreak: 1,
+          pinLocation: null,
+          answered: true,
+        },
+        {
+          id: "player-2",
+          name: "Grace",
+          isAdmin: false,
+          connected: false,
+          score: 10,
+          streak: 0,
+          maxStreak: 1,
+          pinLocation: null,
+          answered: false,
+        },
+      ],
+    });
+
+    renderExperience(createClientState(soloFinishedSnapshot));
+    const playAgainBtn = screen.getByRole("button", {
+      name: "Play again",
+    }) as HTMLButtonElement;
+    expect(playAgainBtn.disabled).toBe(true);
+    expect(
+      screen.getByText(
+        "Waiting for another player to join to start a rematch.",
+      ),
+    ).toBeTruthy();
+
+    cleanup();
+
+    const guestViewSnapshot = createSnapshot({
+      status: "finished",
+    });
+    const guestState = createClientState(guestViewSnapshot);
+    guestState.room = { playerId: "player-2", snapshot: guestViewSnapshot };
+
+    renderExperience(guestState);
+    expect(
+      screen.queryByRole("button", { name: "Play again" }),
+    ).toBeNull();
+    expect(
+      screen.getByText("Waiting for Ada to start a rematch…"),
+    ).toBeTruthy();
   });
 });
