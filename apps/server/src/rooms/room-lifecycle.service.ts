@@ -27,6 +27,7 @@ import {
   parsePlayerName,
 } from './domain/room-validation.js';
 import {
+  applyNextLegRound,
   areConnectedPlayersDone,
   getNextAdminPlayerId,
   resolveRoundTimeLimitMs,
@@ -34,6 +35,10 @@ import {
   stampRoundTiming,
   syncRoomPauseState,
 } from './domain/room-rules.js';
+import {
+  getLegDifficultyTier,
+  getLegScoreMultiplier,
+} from '../game/country-difficulty.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
 const SECRET_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -83,6 +88,8 @@ const createPlayer = (
   disconnectedAt: null,
   reconnectTokenHash: hashToken(reconnectToken),
   score: 0,
+  legScore: 0,
+  checkpointsWon: 0,
   streak: 0,
   maxStreak: 0,
   pinLocation: null,
@@ -145,6 +152,15 @@ export class RoomLifecycleService {
             startedAt: null,
             timerDeadlineAt: null,
             advanceAt: null,
+            legNumber: 1,
+            legRoundNumber: 1,
+            lapNumber: 1,
+            legMultiplier: 1,
+            legTier: getLegDifficultyTier(roomConfig, 1),
+            checkpointResumeAt: null,
+            checkpointPaused: false,
+            pausedCheckpointRemainingMs: null,
+            checkpointSummary: null,
             paused: false,
             pausedAt: null,
             pauseDeadlineAt: null,
@@ -337,6 +353,38 @@ export class RoomLifecycleService {
     const now = Date.now();
     const { room } = await this.mutations.update(roomId, (draft) => {
       this.requireAdmin(draft, playerId);
+
+      if (draft.status === 'checkpoint') {
+        if (draft.pendingConfig) {
+          draft.config = draft.pendingConfig;
+          draft.pendingConfig = null;
+        }
+        const nextLegNumber = (draft.game.legNumber ?? 1) + 1;
+        const nextRoundNumber = (draft.game.round?.number ?? 0) + 1;
+        const created = this.gameEngine.createRound(
+          draft.config,
+          countryList,
+          draft.game.usedCountryCodes,
+          nextRoundNumber,
+          this.config.getOrThrow('choicesPerRound'),
+          nextLegNumber,
+        );
+        if (!created) {
+          throw new RoomDomainError('ROUND_UNAVAILABLE');
+        }
+        applyNextLegRound(
+          draft,
+          created,
+          now,
+          resolveRoundTimeLimitMs(
+            draft.config,
+            this.config.getOrThrow('roundTimeLimitMs'),
+          ),
+        );
+        draft.expiresAt = this.getExpiryDate(now);
+        return;
+      }
+
       const connectedCount = draft.players.filter(
         (player) => player.connected,
       ).length;
@@ -358,6 +406,7 @@ export class RoomLifecycleService {
         [],
         1,
         this.config.getOrThrow('choicesPerRound'),
+        1,
       );
       if (!created) {
         const mapAnchorCount = countryList.filter(
@@ -389,6 +438,8 @@ export class RoomLifecycleService {
         missedRoundsCount: 0,
         spectatorPromptDeadlineAt: null,
         score: 0,
+        legScore: 0,
+        checkpointsWon: 0,
         streak: 0,
         maxStreak: 0,
         pinLocation: null,
@@ -408,6 +459,15 @@ export class RoomLifecycleService {
             ? now + draft.config.challengeValue * 1000
             : null,
         advanceAt: null,
+        legNumber: 1,
+        legRoundNumber: 1,
+        lapNumber: 1,
+        legMultiplier: getLegScoreMultiplier(1),
+        legTier: getLegDifficultyTier(draft.config, 1),
+        checkpointResumeAt: null,
+        checkpointPaused: false,
+        pausedCheckpointRemainingMs: null,
+        checkpointSummary: null,
         paused: false,
         pausedAt: null,
         pauseDeadlineAt: null,
@@ -435,9 +495,19 @@ export class RoomLifecycleService {
       const admin = this.requireConnectedPlayer(draft, playerId);
       admin.lastActiveAt = now;
       draft.lastActivityAt = now;
-      if (draft.status === 'waiting' || draft.status === 'finished') {
+      if (
+        draft.status === 'waiting' ||
+        draft.status === 'finished' ||
+        draft.status === 'checkpoint'
+      ) {
         draft.config = nextConfig;
         draft.pendingConfig = null;
+        if (draft.status === 'checkpoint' && draft.game.checkpointSummary) {
+          draft.game.checkpointSummary.nextLegTier = getLegDifficultyTier(
+            nextConfig,
+            draft.game.checkpointSummary.nextLegNumber,
+          );
+        }
         return false;
       }
       if (draft.status !== 'playing') {
@@ -454,6 +524,32 @@ export class RoomLifecycleService {
   async setPaused(roomId: string, playerId: string, paused: boolean) {
     const now = Date.now();
     const { room } = await this.mutations.update(roomId, (draft) => {
+      if (draft.status === 'checkpoint') {
+        this.requireAdmin(draft, playerId);
+        const admin = this.requireConnectedPlayer(draft, playerId);
+        admin.lastActiveAt = now;
+        draft.lastActivityAt = now;
+        if (paused && !draft.game.checkpointPaused) {
+          draft.game.pausedCheckpointRemainingMs = Math.max(
+            1_000,
+            (draft.game.checkpointResumeAt ?? now) - now,
+          );
+          draft.game.checkpointPaused = true;
+          draft.game.checkpointResumeAt = null;
+        } else if (!paused && draft.game.checkpointPaused) {
+          const defaultDuration: number =
+            this.config.getOrThrow('checkpointDurationMs');
+          const remaining =
+            typeof draft.game.pausedCheckpointRemainingMs === 'number'
+              ? draft.game.pausedCheckpointRemainingMs
+              : defaultDuration;
+          draft.game.checkpointPaused = false;
+          draft.game.pausedCheckpointRemainingMs = null;
+          draft.game.checkpointResumeAt = now + remaining;
+        }
+        return;
+      }
+
       if (draft.status !== 'playing') {
         throw new RoomDomainError('INVALID_COMMAND');
       }

@@ -21,6 +21,8 @@ const createConfig = (
     reconnectGraceMs: 60_000,
     roomExpiryHours: 24,
     roundAdvanceDelayMs: 1_500,
+    checkpointDurationMs: 10_000,
+    roundTimeLimitMs: 20_000,
     pointsPerCorrectAnswer: 10,
     streakBonusPoints: 5,
     choicesPerRound: 4,

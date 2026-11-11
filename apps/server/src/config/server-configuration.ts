@@ -16,6 +16,7 @@ export interface ServerConfiguration {
   spectatorPromptDelayMs: number;
   spectatorPromptGraceMs: number;
   roundAdvanceDelayMs: number;
+  checkpointDurationMs: number;
   /** Per-round answer window in milliseconds. 0 disables the round timer. */
   roundTimeLimitMs: number;
   pointsPerCorrectAnswer: number;
@@ -138,6 +139,12 @@ export const validateEnvironment = (
     1_500,
     0,
   );
+  const checkpointDurationMs = readInteger(
+    env,
+    'CHECKPOINT_DURATION_MS',
+    10_000,
+    0,
+  );
   const roundTimeLimitMs = readInteger(
     env,
     'ROUND_TIME_LIMIT_MS',
@@ -193,6 +200,7 @@ export const validateEnvironment = (
     spectatorPromptDelayMs,
     spectatorPromptGraceMs,
     roundAdvanceDelayMs,
+    checkpointDurationMs,
     roundTimeLimitMs,
     pointsPerCorrectAnswer,
     streakBonusPoints,

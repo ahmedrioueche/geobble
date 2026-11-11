@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Schema as MongooseSchema } from 'mongoose';
 import type {
+  CheckpointSummary,
   PlayerPowerUps,
   PublicPrompt,
   RoomChoiceRecord,
@@ -28,6 +29,9 @@ class RoomConfigurationEntity implements RoomConfiguration {
 
   @Prop({ required: true, min: 0 })
   challengeValue!: number;
+
+  @Prop({ type: Boolean, default: true })
+  endless?: boolean;
 
   @Prop({
     type: String,
@@ -87,6 +91,12 @@ class RoomPlayerEntity implements RoomPlayerRecord {
 
   @Prop({ required: true, default: 0, min: 0 })
   score!: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  legScore?: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  checkpointsWon?: number;
 
   @Prop({ required: true, default: 0, min: 0 })
   streak!: number;
@@ -229,6 +239,37 @@ class RoomGameEntity implements RoomGameRecord {
   @Prop({ type: Number, default: null })
   advanceAt!: number | null;
 
+  @Prop({ type: Number, default: 1, min: 1 })
+  legNumber?: number;
+
+  @Prop({ type: Number, default: 1, min: 1 })
+  legRoundNumber?: number;
+
+  @Prop({ type: Number, default: 1, min: 1 })
+  lapNumber?: number;
+
+  @Prop({ type: Number, default: 1, min: 1 })
+  legMultiplier?: number;
+
+  @Prop({
+    type: String,
+    default: 'easy',
+    enum: ['easy', 'medium', 'hard', 'expert'],
+  })
+  legTier?: RoomGameRecord['legTier'];
+
+  @Prop({ type: Number, default: null })
+  checkpointResumeAt?: number | null;
+
+  @Prop({ type: Boolean, default: false })
+  checkpointPaused?: boolean;
+
+  @Prop({ type: Number, default: null })
+  pausedCheckpointRemainingMs?: number | null;
+
+  @Prop({ type: MongooseSchema.Types.Mixed, default: null })
+  checkpointSummary?: CheckpointSummary | null;
+
   @Prop({ type: Boolean, default: false })
   paused?: boolean;
 
@@ -264,7 +305,11 @@ export class RoomEntity implements RoomRecord {
   @Prop({ required: true, min: 0, default: 0 })
   revision!: number;
 
-  @Prop({ type: String, required: true, enum: ['waiting', 'playing', 'finished'] })
+  @Prop({
+    type: String,
+    required: true,
+    enum: ['waiting', 'playing', 'checkpoint', 'finished'],
+  })
   status!: RoomRecord['status'];
 
   @Prop({ type: String, required: true, enum: ['public', 'private'], default: 'private' })

@@ -114,6 +114,14 @@ export const parseRoomConfiguration = (
     wrongAnswerPenalty = value.wrongAnswerPenalty;
   }
 
+  let endless: boolean | undefined;
+  if (value.endless !== undefined) {
+    if (typeof value.endless !== 'boolean') {
+      throw new RoomDomainError('INVALID_REQUEST');
+    }
+    endless = value.endless;
+  }
+
   let difficulty: DifficultyMode | undefined;
   if (value.difficulty !== undefined) {
     if (
@@ -132,6 +140,7 @@ export const parseRoomConfiguration = (
     subMode: subMode as SubMode,
     challengeType: challengeType as ChallengeType,
     challengeValue,
+    ...(endless !== undefined ? { endless } : {}),
     ...(difficulty !== undefined ? { difficulty } : {}),
     ...(roundTimeLimitSeconds !== undefined
       ? { roundTimeLimitSeconds }

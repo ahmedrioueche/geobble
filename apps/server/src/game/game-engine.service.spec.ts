@@ -4,6 +4,8 @@ import type { CountryRecord } from './country-catalog.service.js';
 import {
   getCountryStage,
   getCountryTier,
+  getLegDifficultyTier,
+  getLegScoreMultiplier,
   resolveTargetDifficultyTier,
 } from './country-difficulty.js';
 import { DEFAULT_ROOM_CONFIGURATION } from '../rooms/domain/room.types.js';
@@ -59,6 +61,7 @@ describe('GameEngineService country difficulty & progression', () => {
       ...DEFAULT_ROOM_CONFIGURATION,
       challengeType: 'count' as const,
       challengeValue: 10,
+      endless: false,
       difficulty: 'progressive' as const,
     };
 
@@ -221,6 +224,27 @@ describe('GameEngineService country difficulty & progression', () => {
     for (const choice of reverseName?.round.choices ?? []) {
       expect(choice.flagCode).toBeUndefined();
     }
+  });
+
+  it('escalates difficulty tier and score multiplier across endless legs', () => {
+    const endlessConfig = {
+      ...DEFAULT_ROOM_CONFIGURATION,
+      endless: true,
+      difficulty: 'progressive' as const,
+    };
+
+    expect(getLegDifficultyTier(endlessConfig, 1)).toBe('easy');
+    expect(getLegDifficultyTier(endlessConfig, 2)).toBe('medium');
+    expect(getLegDifficultyTier(endlessConfig, 3)).toBe('hard');
+    expect(getLegDifficultyTier(endlessConfig, 4)).toBe('expert');
+    expect(getLegDifficultyTier(endlessConfig, 5)).toBe('expert');
+
+    expect(getLegScoreMultiplier(1)).toBe(1);
+    expect(getLegScoreMultiplier(2)).toBe(1.25);
+    expect(getLegScoreMultiplier(3)).toBe(1.5);
+    expect(getLegScoreMultiplier(4)).toBe(1.75);
+    expect(getLegScoreMultiplier(5)).toBe(2);
+    expect(getLegScoreMultiplier(6)).toBe(2);
   });
 });
 

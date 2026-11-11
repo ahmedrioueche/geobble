@@ -11,7 +11,9 @@ import {
 import type { RoomRecord, RoomSnapshot } from './domain/room.types.js';
 import type { RoomMutationResult } from './room-mutation.service.js';
 import {
+  applyNextLegRound,
   areConnectedPlayersDone,
+  enterRoomCheckpoint,
   getNextAdminPlayerId,
   resolveRoundTimeLimitMs,
   revealRoomRound,
@@ -76,6 +78,7 @@ export class RoomRuntimeService implements OnModuleInit {
     await this.removeExpiredRooms(now, removedRoomIds);
     await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds);
     await this.resumeExpiredPauses(now, snapshots);
+    await this.advanceDueCheckpoints(now, snapshots);
     await this.finishExpiredMatches(now, snapshots);
     await this.revealTimedOutRounds(now, snapshots);
     await this.advanceCompletedRounds(now, snapshots);
@@ -422,6 +425,58 @@ export class RoomRuntimeService implements OnModuleInit {
     }
   }
 
+  private async advanceDueCheckpoints(
+    now: number,
+    snapshots: RoomSnapshot[],
+  ): Promise<void> {
+    const due = await this.repository.findDueCheckpoints(now);
+    if (due.length === 0) return;
+    const countries = await this.countries.getCountries();
+
+    for (const candidate of due) {
+      const mutation = await this.mutateSafely(candidate.roomId, (draft) => {
+        if (
+          draft.status !== 'checkpoint' ||
+          draft.game.checkpointPaused ||
+          draft.game.checkpointResumeAt == null ||
+          draft.game.checkpointResumeAt > now
+        ) {
+          return false;
+        }
+        if (draft.pendingConfig) {
+          draft.config = draft.pendingConfig;
+          draft.pendingConfig = null;
+        }
+        const nextLegNumber = (draft.game.legNumber ?? 1) + 1;
+        const nextRoundNumber = (draft.game.round?.number ?? 0) + 1;
+        const created = this.gameEngine.createRound(
+          draft.config,
+          countries,
+          draft.game.usedCountryCodes,
+          nextRoundNumber,
+          this.config.getOrThrow('choicesPerRound'),
+          nextLegNumber,
+        );
+        if (!created) {
+          this.finishMatch(draft, now);
+          return true;
+        }
+        applyNextLegRound(
+          draft,
+          created,
+          now,
+          resolveRoundTimeLimitMs(
+            draft.config,
+            this.config.getOrThrow('roundTimeLimitMs'),
+          ),
+        );
+        return true;
+      });
+      if (!mutation?.room) continue;
+      snapshots.push(toRoomSnapshot(mutation.room));
+    }
+  }
+
   private async finishExpiredMatches(
     now: number,
     snapshots: RoomSnapshot[],
@@ -438,7 +493,15 @@ export class RoomRuntimeService implements OnModuleInit {
         ) {
           return false;
         }
-        this.finishMatch(draft, now);
+        if (draft.config.endless === false) {
+          this.finishMatch(draft, now);
+        } else {
+          enterRoomCheckpoint(
+            draft,
+            now,
+            this.config.getOrThrow('checkpointDurationMs'),
+          );
+        }
         return true;
       });
       if (!mutation) continue;
@@ -504,25 +567,51 @@ export class RoomRuntimeService implements OnModuleInit {
       }
     }
 
+    const currentLegRound = room.game.legRoundNumber ?? currentRound.number;
     if (
       room.config.challengeType === 'count' &&
-      currentRound.number >= room.config.challengeValue
+      currentLegRound >= room.config.challengeValue
     ) {
-      this.finishMatch(room, now);
+      if (room.config.endless === false) {
+        this.finishMatch(room, now);
+      } else {
+        enterRoomCheckpoint(
+          room,
+          now,
+          this.config.getOrThrow('checkpointDurationMs'),
+        );
+      }
       return;
     }
 
+    const legNumber = room.game.legNumber ?? 1;
     const nextRound = this.gameEngine.createRound(
       room.config,
       countries,
       room.game.usedCountryCodes,
       currentRound.number + 1,
       this.config.getOrThrow('choicesPerRound'),
+      legNumber,
     );
     if (!nextRound) {
-      this.finishMatch(room, now);
+      if (room.config.endless === false) {
+        this.finishMatch(room, now);
+        return;
+      }
+      room.game.usedCountryCodes = [];
+      room.game.lapNumber = (room.game.lapNumber ?? 1) + 1;
+      enterRoomCheckpoint(
+        room,
+        now,
+        this.config.getOrThrow('checkpointDurationMs'),
+      );
       return;
     }
+
+    if (nextRound.lapWrapped) {
+      room.game.lapNumber = (room.game.lapNumber ?? 1) + 1;
+    }
+    room.game.legRoundNumber = currentLegRound + 1;
 
     stampRoundTiming(
       nextRound.round,
@@ -552,6 +641,10 @@ export class RoomRuntimeService implements OnModuleInit {
     room.status = 'finished';
     room.game.timerDeadlineAt = null;
     room.game.advanceAt = null;
+    room.game.checkpointResumeAt = null;
+    room.game.checkpointPaused = false;
+    room.game.pausedCheckpointRemainingMs = null;
+    room.game.checkpointSummary = null;
     for (const player of room.players) {
       player.paused = false;
       player.pausedAt = null;

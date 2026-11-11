@@ -17,6 +17,7 @@ import {
 export interface RoundCreation {
   round: RoomRoundRecord;
   usedCountryCodes: string[];
+  lapWrapped: boolean;
 }
 
 @Injectable()
@@ -27,6 +28,7 @@ export class GameEngineService {
     usedCountryCodes: string[],
     roundNumber: number,
     choicesPerRound: number,
+    legNumber = 1,
   ): RoundCreation | null {
     const usedCodes = new Set(usedCountryCodes);
     const needsMapAnchor =
@@ -37,16 +39,20 @@ export class GameEngineService {
         !usedCodes.has(country.cca3) &&
         (!needsMapAnchor || country.mapAnchor !== null),
     );
+    let lapWrapped = false;
 
     if (candidates.length === 0 && config.challengeType !== 'world') {
       candidates = countries.filter(
         (country) => !needsMapAnchor || country.mapAnchor !== null,
       );
+      if (usedCodes.size > 0 && candidates.length > 0) {
+        lapWrapped = true;
+      }
       usedCodes.clear();
     }
     if (candidates.length === 0) return null;
 
-    const targetTier = resolveTargetDifficultyTier(config, roundNumber);
+    const targetTier = resolveTargetDifficultyTier(config, roundNumber, legNumber);
     const tieredCandidates = selectCandidatesForTier(
       candidates,
       targetTier,
@@ -83,6 +89,7 @@ export class GameEngineService {
         answerReveal: null,
       },
       usedCountryCodes: [...usedCodes, target.cca3],
+      lapWrapped,
     };
   }
 

@@ -47,6 +47,8 @@ export const toRoomSnapshot = (
           ? { spectatorPromptDeadlineAt: player.spectatorPromptDeadlineAt }
           : {}),
         score: player.score,
+        legScore: player.legScore ?? 0,
+        checkpointsWon: player.checkpointsWon ?? 0,
         streak: player.streak,
         maxStreak: player.maxStreak,
         pinLocation: revealed
@@ -81,6 +83,28 @@ export const toRoomSnapshot = (
     game: {
       startedAt: room.game.startedAt,
       timerDeadlineAt: room.game.timerDeadlineAt,
+      ...(room.game.legNumber !== undefined
+        ? { legNumber: room.game.legNumber }
+        : {}),
+      ...(room.game.legRoundNumber !== undefined
+        ? { legRoundNumber: room.game.legRoundNumber }
+        : {}),
+      ...(room.game.lapNumber !== undefined
+        ? { lapNumber: room.game.lapNumber }
+        : {}),
+      ...(room.game.legMultiplier !== undefined
+        ? { legMultiplier: room.game.legMultiplier }
+        : {}),
+      ...(room.game.legTier !== undefined
+        ? { legTier: room.game.legTier }
+        : {}),
+      ...(room.game.checkpointResumeAt !== undefined
+        ? { checkpointResumeAt: room.game.checkpointResumeAt }
+        : {}),
+      ...(room.game.checkpointPaused ? { checkpointPaused: true } : {}),
+      ...(room.game.checkpointSummary
+        ? { checkpointSummary: { ...room.game.checkpointSummary, winnerIds: [...room.game.checkpointSummary.winnerIds] } }
+        : {}),
       ...(room.game.paused
         ? {
             paused: true,

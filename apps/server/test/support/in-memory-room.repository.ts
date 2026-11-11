@@ -18,7 +18,9 @@ export class InMemoryRoomRepository implements RoomRepository {
       .filter(
         (room) =>
           room.visibility === 'public' &&
-          (room.status === 'waiting' || room.status === 'playing') &&
+          (room.status === 'waiting' ||
+            room.status === 'playing' ||
+            room.status === 'checkpoint') &&
           room.expiresAt > new Date() &&
           room.players.some((player) => player.connected) &&
           room.players.length < maxPlayers,
@@ -94,6 +96,18 @@ export class InMemoryRoomRepository implements RoomRepository {
           room.game.paused === true &&
           typeof room.game.pauseDeadlineAt === 'number' &&
           room.game.pauseDeadlineAt <= now,
+      )
+      .map((room) => structuredClone(room));
+  }
+
+  async findDueCheckpoints(now: number): Promise<RoomRecord[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.status === 'checkpoint' &&
+          room.game.checkpointPaused !== true &&
+          typeof room.game.checkpointResumeAt === 'number' &&
+          room.game.checkpointResumeAt <= now,
       )
       .map((room) => structuredClone(room));
   }

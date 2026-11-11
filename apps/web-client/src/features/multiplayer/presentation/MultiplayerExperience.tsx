@@ -44,6 +44,7 @@ import { PowerUpBar } from "./PowerUpBar";
 import { StartingGameOverlay } from "./StartingGameOverlay";
 import { MatchPausedOverlay } from "./MatchPausedOverlay";
 import { MatchFinishedOverlay } from "./MatchFinishedOverlay";
+import { CheckpointOverlay } from "./CheckpointOverlay";
 import {
   readHapticsEnabled,
   readSoundEnabled,
@@ -84,6 +85,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const [showEntry, setShowEntry] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showStandings, setShowStandings] = useState(false);
+  const [standingsScope, setStandingsScope] = useState<"tour" | "leg">("tour");
   const [playerName, setPlayerName] = useState(
     () => readBrowserStorageItem(PLAYER_NAME_STORAGE_KEY) ?? "",
   );
@@ -149,11 +151,13 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const isStartingGame =
     startingFromRevision !== null &&
     snapshot?.revision === startingFromRevision &&
-    (snapshot.status === "waiting" || snapshot.status === "finished") &&
+    (snapshot.status === "waiting" ||
+      snapshot.status === "checkpoint" ||
+      snapshot.status === "finished") &&
     state.status === "connected" &&
     state.error === null &&
     actionError === null &&
-    connectedPlayersCount >= 2;
+    (snapshot.status === "checkpoint" || connectedPlayersCount >= 2);
   const isPinLocate =
     snapshot?.config.mode === "pin" &&
     snapshot.config.pinDirection === "locate";
@@ -257,10 +261,16 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [state.lastReaction]);
 
   useEffect(() => {
-    if (snapshot?.status !== "playing") return;
+    if (snapshot?.status !== "playing" && snapshot?.status !== "checkpoint") {
+      return;
+    }
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, [snapshot?.status, snapshot?.game.timerDeadlineAt]);
+  }, [
+    snapshot?.status,
+    snapshot?.game.timerDeadlineAt,
+    snapshot?.game.checkpointResumeAt,
+  ]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -523,6 +533,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             (now === 0 ? snapshot.game.pauseDeadlineAt : now),
         )
       : null;
+
+  const checkpointRemainingMs =
+    snapshot?.game.checkpointResumeAt != null
+      ? Math.max(
+          0,
+          snapshot.game.checkpointResumeAt -
+            (now === 0 ? snapshot.game.checkpointResumeAt - 10_000 : now),
+        )
+      : 0;
 
   const spectatorPromptRemainingMs =
     self?.paused && self.spectatorPromptDeadlineAt != null
@@ -1127,6 +1146,34 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 />
               )}
             </div>
+          ) : snapshot.status === "checkpoint" ? (
+            <CheckpointOverlay
+              connected={state.status === "connected"}
+              isAdmin={isAdmin}
+              isAdvancingLeg={isStartingGame}
+              onLeave={() => void leave()}
+              onOpenSettings={() => setShowSettings(true)}
+              onSendReaction={sendReaction}
+              onStartNextLegNow={() => {
+                setStartingFromRevision(snapshot.revision);
+                void runAction(async () => {
+                  try {
+                    client.startRoom();
+                  } catch (error) {
+                    setStartingFromRevision(null);
+                    throw error;
+                  }
+                });
+              }}
+              onToggleCountdownPause={() =>
+                void runAction(async () => {
+                  client.setPaused(!snapshot.game.checkpointPaused);
+                })
+              }
+              remainingMs={checkpointRemainingMs}
+              selfPlayerId={selfPlayerId}
+              snapshot={snapshot}
+            />
           ) : snapshot.status === "finished" ? (
             <>
               <MatchFinishedOverlay
@@ -1168,18 +1215,51 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   <p className="text-[10px] font-black uppercase tracking-widest text-sky-300">
                     Standings · Round {round?.number ?? 0}
                   </p>
-                  <button
-                    aria-label="Close players"
-                    className="-mr-1 -mt-1 rounded-md p-1 text-white/55 transition hover:bg-white/10 hover:text-white md:hidden"
-                    onClick={() => setShowStandings(false)}
-                    type="button"
-                  >
-                    <X aria-hidden="true" size={14} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {snapshot.game.legNumber !== undefined && (
+                      <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5 text-[9px] font-black uppercase">
+                        <button
+                          className={`rounded-md px-1.5 py-0.5 transition ${
+                            standingsScope === "tour"
+                              ? "bg-sky-400 text-slate-950"
+                              : "text-white/60 hover:text-white"
+                          }`}
+                          onClick={() => setStandingsScope("tour")}
+                          type="button"
+                        >
+                          Tour
+                        </button>
+                        <button
+                          className={`rounded-md px-1.5 py-0.5 transition ${
+                            standingsScope === "leg"
+                              ? "bg-sky-400 text-slate-950"
+                              : "text-white/60 hover:text-white"
+                          }`}
+                          onClick={() => setStandingsScope("leg")}
+                          type="button"
+                        >
+                          Leg
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      aria-label="Close players"
+                      className="-mr-1 -mt-1 rounded-md p-1 text-white/55 transition hover:bg-white/10 hover:text-white md:hidden"
+                      onClick={() => setShowStandings(false)}
+                      type="button"
+                    >
+                      <X aria-hidden="true" size={14} />
+                    </button>
+                  </div>
                 </div>
                 <ul className="space-y-2">
                   {[...snapshot.players]
-                    .sort((first, second) => second.score - first.score)
+                    .sort((first, second) =>
+                      standingsScope === "leg"
+                        ? (second.legScore ?? 0) - (first.legScore ?? 0) ||
+                          second.score - first.score
+                        : second.score - first.score,
+                    )
                     .map((player) => (
                       <li
                         className="flex items-center justify-between gap-2 text-xs"
@@ -1231,6 +1311,14 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                               AFK
                             </span>
                           )}
+                          {(player.checkpointsWon ?? 0) > 0 && (
+                            <span
+                              className="shrink-0 rounded bg-amber-300/15 px-1 py-0.5 text-[9px] font-black text-amber-200"
+                              title={`${player.checkpointsWon} leg wins`}
+                            >
+                              👑{player.checkpointsWon}
+                            </span>
+                          )}
                           {player.streak >= 2 && (
                             <span
                               className="shrink-0 rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-black text-amber-300"
@@ -1241,7 +1329,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                           )}
                         </span>
                         <span className="font-mono font-black text-sky-200">
-                          {player.score}
+                          {standingsScope === "leg"
+                            ? (player.legScore ?? 0)
+                            : player.score}
                         </span>
                       </li>
                     ))}
@@ -1249,14 +1339,24 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               </aside>
 
               <div className="absolute right-3 top-16 z-20 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3.5 shadow-2xl backdrop-blur-xl md:right-6 md:top-24 md:p-4">
-                <div className="mb-1.5 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-sky-300">
-                  <span>
-                    {snapshot.config.mode} mission
-                    {round?.difficultyTier ? ` · ${round.difficultyTier}` : ""}
+                <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest text-sky-300">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span>
+                      {snapshot.game.legNumber !== undefined
+                        ? `Leg ${snapshot.game.legNumber} · `
+                        : ""}
+                      {snapshot.config.mode}
+                      {round?.difficultyTier ? ` · ${round.difficultyTier}` : ""}
+                    </span>
+                    {(snapshot.game.legMultiplier ?? 1) > 1 && (
+                      <span className="rounded bg-emerald-400/20 px-1.5 py-0.5 text-[9px] font-black text-emerald-300">
+                        {snapshot.game.legMultiplier}x
+                      </span>
+                    )}
                   </span>
                   <span>
                     {remainingTime === null
-                      ? `${round?.number ?? 0}${snapshot.config.challengeType === "count" ? ` / ${snapshot.config.challengeValue}` : ""}`
+                      ? `${snapshot.game.legRoundNumber ?? round?.number ?? 0}${snapshot.config.challengeType === "count" ? ` / ${snapshot.config.challengeValue}` : ""}`
                       : formatTime(remainingTime)}
                   </span>
                 </div>

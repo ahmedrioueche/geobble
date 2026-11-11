@@ -114,7 +114,13 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
 
       {config.challengeType !== "world" && (
         <label className="block text-xs font-bold uppercase tracking-wider text-white/70">
-          {config.challengeType === "timer" ? "Duration (seconds)" : "Rounds"}
+          {config.challengeType === "timer"
+            ? config.endless === false
+              ? "Duration (seconds)"
+              : "Leg duration (seconds)"
+            : config.endless === false
+              ? "Rounds"
+              : "Rounds per leg"}
           <input
             className="mt-2 h-12 w-full rounded-xl border border-white/15 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition-colors hover:border-sky-300/50 hover:bg-slate-900 focus:border-sky-300 focus:ring-2 focus:ring-sky-300/20"
             type="number"
@@ -129,6 +135,16 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
           />
         </label>
       )}
+
+      <label className="flex items-center justify-between rounded-xl border border-white/15 bg-slate-950 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white/80">
+        <span>Endless tour (checkpoints)</span>
+        <input
+          checked={config.endless !== false}
+          className="h-4 w-4 accent-sky-400"
+          onChange={(event) => update({ endless: event.target.checked })}
+          type="checkbox"
+        />
+      </label>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-xs font-bold uppercase tracking-wider text-white/70">

@@ -1,9 +1,15 @@
-import type {
-  RoomConfiguration,
-  RoomRecord,
-  RoomPlayerRecord,
-  RoomRoundRecord,
+import {
+  DEFAULT_PLAYER_POWER_UPS,
+  type RoomConfiguration,
+  type RoomRecord,
+  type RoomPlayerRecord,
+  type RoomRoundRecord,
 } from './room.types.js';
+import type { RoundCreation } from '../../game/game-engine.service.js';
+import {
+  getLegDifficultyTier,
+  getLegScoreMultiplier,
+} from '../../game/country-difficulty.js';
 import { RoomDomainError } from './room-errors.js';
 
 export const resolveRoundTimeLimitMs = (
@@ -176,4 +182,115 @@ export const syncRoomPauseState = (
     room.game.pausedTimerRemainingMs = null;
     room.game.pausedAdvanceRemainingMs = null;
   }
+};
+
+export const enterRoomCheckpoint = (
+  room: RoomRecord,
+  now: number,
+  checkpointDurationMs: number,
+): void => {
+  if (room.game.round && !room.game.round.revealed) {
+    revealRoomRound(room, now, 0);
+  }
+  if (room.pendingConfig) {
+    room.config = room.pendingConfig;
+    room.pendingConfig = null;
+  }
+
+  const legNumber = room.game.legNumber ?? 1;
+  const legRoundNumber =
+    room.game.legRoundNumber ?? room.game.round?.number ?? 1;
+  const lapNumber = room.game.lapNumber ?? 1;
+  const topLegScore = Math.max(
+    0,
+    ...room.players.map((player) => player.legScore ?? 0),
+  );
+  const winnerIds =
+    topLegScore > 0
+      ? room.players
+          .filter((player) => (player.legScore ?? 0) === topLegScore)
+          .map((player) => player.playerId)
+      : [];
+
+  for (const player of room.players) {
+    if (winnerIds.includes(player.playerId)) {
+      player.checkpointsWon = (player.checkpointsWon ?? 0) + 1;
+    }
+    player.paused = false;
+    player.pausedAt = null;
+    player.spectatorPromptDeadlineAt = null;
+  }
+
+  const nextLegNumber = legNumber + 1;
+  room.status = 'checkpoint';
+  room.game.timerDeadlineAt = null;
+  room.game.advanceAt = null;
+  room.game.checkpointPaused = false;
+  room.game.pausedCheckpointRemainingMs = null;
+  room.game.checkpointResumeAt = now + Math.max(0, checkpointDurationMs);
+  room.game.checkpointSummary = {
+    legNumber,
+    roundsInLeg: legRoundNumber,
+    winnerIds,
+    topLegScore,
+    nextLegNumber,
+    nextLegTier: getLegDifficultyTier(room.config, nextLegNumber),
+    nextLegMultiplier: getLegScoreMultiplier(nextLegNumber),
+    lapNumber,
+  };
+  syncRoomPauseState(room, now);
+};
+
+export const applyNextLegRound = (
+  room: RoomRecord,
+  created: RoundCreation,
+  now: number,
+  roundTimeLimitMs: number,
+): void => {
+  const nextLegNumber = (room.game.legNumber ?? 1) + 1;
+  stampRoundTiming(created.round, now, roundTimeLimitMs);
+  room.status = 'playing';
+  room.lastActivityAt = now;
+  room.players = room.players.map((player) => ({
+    ...player,
+    paused: false,
+    pausedAt: null,
+    lastActiveAt: now,
+    missedRoundsCount: 0,
+    spectatorPromptDeadlineAt: null,
+    legScore: 0,
+    pinLocation: null,
+    answeredMissionId: null,
+    powerUps: { ...DEFAULT_PLAYER_POWER_UPS },
+    doubleActiveForMissionId: null,
+    hiddenChoiceIdsForMissionId: null,
+    hiddenChoiceIds: [],
+    hintForMissionId: null,
+    hintText: null,
+  }));
+  room.game = {
+    startedAt: room.game.startedAt ?? now,
+    timerDeadlineAt:
+      room.config.challengeType === 'timer'
+        ? now + room.config.challengeValue * 1000
+        : null,
+    advanceAt: null,
+    legNumber: nextLegNumber,
+    legRoundNumber: 1,
+    lapNumber: (room.game.lapNumber ?? 1) + (created.lapWrapped ? 1 : 0),
+    legMultiplier: getLegScoreMultiplier(nextLegNumber),
+    legTier: getLegDifficultyTier(room.config, nextLegNumber),
+    checkpointResumeAt: null,
+    checkpointPaused: false,
+    pausedCheckpointRemainingMs: null,
+    checkpointSummary: null,
+    paused: false,
+    pausedAt: null,
+    pauseDeadlineAt: null,
+    pausedRoundRemainingMs: null,
+    pausedTimerRemainingMs: null,
+    pausedAdvanceRemainingMs: null,
+    round: created.round,
+    usedCountryCodes: created.usedCountryCodes,
+  };
 };

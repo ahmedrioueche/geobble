@@ -160,6 +160,41 @@ describe("multiplayer room protocol", () => {
     expect(
       isRoomServerEvent({
         type: "updated",
+        snapshot: {
+          ...snapshot,
+          status: "checkpoint",
+          config: { ...snapshot.config, endless: true },
+          players: snapshot.players.map((player) => ({
+            ...player,
+            legScore: 20,
+            checkpointsWon: 1,
+          })),
+          game: {
+            ...snapshot.game,
+            legNumber: 1,
+            legRoundNumber: 10,
+            lapNumber: 1,
+            legMultiplier: 1,
+            legTier: "easy",
+            checkpointResumeAt: 11_000,
+            checkpointPaused: false,
+            checkpointSummary: {
+              legNumber: 1,
+              roundsInLeg: 10,
+              winnerIds: ["player-1"],
+              topLegScore: 20,
+              nextLegNumber: 2,
+              nextLegTier: "medium",
+              nextLegMultiplier: 1.25,
+              lapNumber: 1,
+            },
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isRoomServerEvent({
+        type: "updated",
         snapshot: { ...snapshot, revision: -1 },
       }),
     ).toBe(false);

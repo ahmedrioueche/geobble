@@ -34,10 +34,22 @@ export interface RoomConfiguration {
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  endless?: boolean;
   difficulty?: DifficultyMode;
   roundTimeLimitSeconds?: number;
   speedScoring?: boolean;
   wrongAnswerPenalty?: number;
+}
+
+export interface CheckpointSummary {
+  legNumber: number;
+  roundsInLeg: number;
+  winnerIds: string[];
+  topLegScore: number;
+  nextLegNumber: number;
+  nextLegTier: DifficultyTier;
+  nextLegMultiplier: number;
+  lapNumber: number;
 }
 
 export interface RoomPlayer {
@@ -48,6 +60,8 @@ export interface RoomPlayer {
   paused?: boolean;
   spectatorPromptDeadlineAt?: number | null;
   score: number;
+  legScore?: number;
+  checkpointsWon?: number;
   streak: number;
   maxStreak: number;
   pinLocation: [number, number] | null;
@@ -97,7 +111,7 @@ export interface RoomRound {
 export interface RoomSnapshot {
   roomId: string;
   revision: number;
-  status: "waiting" | "playing" | "finished";
+  status: "waiting" | "playing" | "checkpoint" | "finished";
   visibility: "public" | "private";
   adminPlayerId: string;
   config: RoomConfiguration;
@@ -106,6 +120,14 @@ export interface RoomSnapshot {
   game: {
     startedAt: number | null;
     timerDeadlineAt: number | null;
+    legNumber?: number;
+    legRoundNumber?: number;
+    lapNumber?: number;
+    legMultiplier?: number;
+    legTier?: DifficultyTier;
+    checkpointResumeAt?: number | null;
+    checkpointPaused?: boolean;
+    checkpointSummary?: CheckpointSummary | null;
     paused?: boolean;
     pauseDeadlineAt?: number | null;
     round: RoomRound | null;
@@ -127,7 +149,7 @@ export interface RoomInspectResult {
   requestId: string;
   roomId: string;
   visibility: "public" | "private";
-  status: "waiting" | "playing" | "finished";
+  status: "waiting" | "playing" | "checkpoint" | "finished";
   playerCount: number;
   maxPlayers: number;
   requiresSecret: boolean;
@@ -284,6 +306,7 @@ const isConfiguration = (value: unknown): value is RoomConfiguration =>
   ["name", "flag", "capital"].includes(String(value.subMode)) &&
   ["world", "count", "timer"].includes(String(value.challengeType)) &&
   isInteger(value.challengeValue) &&
+  (value.endless === undefined || typeof value.endless === "boolean") &&
   (value.difficulty === undefined ||
     ["progressive", "easy", "medium", "hard", "expert"].includes(
       String(value.difficulty),
@@ -312,6 +335,8 @@ const isPlayer = (value: unknown): value is RoomPlayer =>
   (value.spectatorPromptDeadlineAt === undefined ||
     isNullableInteger(value.spectatorPromptDeadlineAt)) &&
   isInteger(value.score) &&
+  (value.legScore === undefined || isInteger(value.legScore)) &&
+  (value.checkpointsWon === undefined || isInteger(value.checkpointsWon)) &&
   isInteger(value.streak) &&
   isInteger(value.maxStreak) &&
   (value.pinLocation === null || isCoordinate(value.pinLocation)) &&
@@ -378,11 +403,29 @@ const isRound = (value: unknown): value is RoomRound =>
     value.result === null ||
     isRoundResult(value.result));
 
+const isDifficultyTier = (value: unknown): value is DifficultyTier =>
+  ["easy", "medium", "hard", "expert"].includes(String(value));
+
+const isNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isCheckpointSummary = (value: unknown): value is CheckpointSummary =>
+  isRecord(value) &&
+  isInteger(value.legNumber) &&
+  isInteger(value.roundsInLeg) &&
+  Array.isArray(value.winnerIds) &&
+  value.winnerIds.every(isString) &&
+  isInteger(value.topLegScore) &&
+  isInteger(value.nextLegNumber) &&
+  isDifficultyTier(value.nextLegTier) &&
+  isNumber(value.nextLegMultiplier) &&
+  isInteger(value.lapNumber);
+
 export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value) &&
   isString(value.roomId) &&
   isInteger(value.revision) &&
-  ["waiting", "playing", "finished"].includes(String(value.status)) &&
+  ["waiting", "playing", "checkpoint", "finished"].includes(String(value.status)) &&
   ["public", "private"].includes(String(value.visibility)) &&
   isString(value.adminPlayerId) &&
   isConfiguration(value.config) &&
@@ -392,6 +435,20 @@ export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value.game) &&
   isNullableInteger(value.game.startedAt) &&
   isNullableInteger(value.game.timerDeadlineAt) &&
+  (value.game.legNumber === undefined || isInteger(value.game.legNumber)) &&
+  (value.game.legRoundNumber === undefined ||
+    isInteger(value.game.legRoundNumber)) &&
+  (value.game.lapNumber === undefined || isInteger(value.game.lapNumber)) &&
+  (value.game.legMultiplier === undefined ||
+    isNumber(value.game.legMultiplier)) &&
+  (value.game.legTier === undefined || isDifficultyTier(value.game.legTier)) &&
+  (value.game.checkpointResumeAt === undefined ||
+    isNullableInteger(value.game.checkpointResumeAt)) &&
+  (value.game.checkpointPaused === undefined ||
+    typeof value.game.checkpointPaused === "boolean") &&
+  (value.game.checkpointSummary === undefined ||
+    value.game.checkpointSummary === null ||
+    isCheckpointSummary(value.game.checkpointSummary)) &&
   (value.game.paused === undefined || typeof value.game.paused === "boolean") &&
   (value.game.pauseDeadlineAt === undefined ||
     isNullableInteger(value.game.pauseDeadlineAt)) &&
@@ -418,7 +475,9 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
         isString(payload.requestId) &&
         isString(payload.roomId) &&
         ["public", "private"].includes(String(payload.visibility)) &&
-        ["waiting", "playing", "finished"].includes(String(payload.status)) &&
+        ["waiting", "playing", "checkpoint", "finished"].includes(
+          String(payload.status),
+        ) &&
         isInteger(payload.playerCount) &&
         isInteger(payload.maxPlayers) &&
         typeof payload.requiresSecret === "boolean"

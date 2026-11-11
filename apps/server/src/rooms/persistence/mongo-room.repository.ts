@@ -13,7 +13,7 @@ export class MongoRoomRepository implements RoomRepository {
   constructor(
     @InjectModel(ROOM_MODEL)
     private readonly roomModel: Model<RoomEntity>,
-  ) {}
+  ) { }
 
   async create(room: RoomRecord): Promise<void> {
     await this.roomModel.create(room);
@@ -31,7 +31,7 @@ export class MongoRoomRepository implements RoomRepository {
     return this.roomModel
       .find({
         visibility: 'public',
-        status: { $in: ['waiting', 'playing'] },
+        status: { $in: ['waiting', 'playing', 'checkpoint'] },
         expiresAt: { $gt: new Date() },
         'players.connected': true,
         $expr: { $lt: [{ $size: '$players' }, maxPlayers] },
@@ -126,6 +126,18 @@ export class MongoRoomRepository implements RoomRepository {
         status: 'playing',
         'game.paused': true,
         'game.pauseDeadlineAt': { $ne: null, $lte: now },
+      })
+      .select(ROOM_PRIVATE_SELECT)
+      .lean<RoomRecord[]>()
+      .exec();
+  }
+
+  findDueCheckpoints(now: number): Promise<RoomRecord[]> {
+    return this.roomModel
+      .find({
+        status: 'checkpoint',
+        'game.checkpointPaused': { $ne: true },
+        'game.checkpointResumeAt': { $ne: null, $lte: now },
       })
       .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()

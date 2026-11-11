@@ -128,13 +128,37 @@ export const getTierNumber = (tier: DifficultyTier): 1 | 2 | 3 | 4 => {
   }
 };
 
-export const resolveTargetDifficultyTier = (
+export const getLegDifficultyTier = (
   config: RoomConfiguration,
-  roundNumber: number,
+  legNumber = 1,
 ): DifficultyTier => {
   const mode = config.difficulty ?? 'progressive';
   if (mode !== 'progressive') {
     return mode;
+  }
+  if (legNumber <= 1) return 'easy';
+  if (legNumber === 2) return 'medium';
+  if (legNumber === 3) return 'hard';
+  return 'expert';
+};
+
+export const getLegScoreMultiplier = (legNumber = 1): number => {
+  const safeLeg = Math.max(1, legNumber);
+  return Math.min(2, 1 + (safeLeg - 1) * 0.25);
+};
+
+export const resolveTargetDifficultyTier = (
+  config: RoomConfiguration,
+  roundNumber: number,
+  legNumber = 1,
+): DifficultyTier => {
+  const mode = config.difficulty ?? 'progressive';
+  if (mode !== 'progressive') {
+    return mode;
+  }
+
+  if (config.endless !== false) {
+    return getLegDifficultyTier(config, legNumber);
   }
 
   if (config.challengeType === 'count' && config.challengeValue > 0) {

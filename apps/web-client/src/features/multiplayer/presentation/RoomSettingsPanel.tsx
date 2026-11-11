@@ -38,10 +38,16 @@ const getSettings = (config: RoomConfiguration) => [
     label: "Challenge",
     value:
       config.challengeType === "world"
-        ? "Whole world"
+        ? config.endless === false
+          ? "Whole world"
+          : "Whole world (endless)"
         : config.challengeType === "count"
-          ? `${config.challengeValue} rounds`
-          : `${config.challengeValue} seconds`,
+          ? config.endless === false
+            ? `${config.challengeValue} rounds`
+            : `Checkpoint every ${config.challengeValue} rounds`
+          : config.endless === false
+            ? `${config.challengeValue} seconds`
+            : `Checkpoint every ${config.challengeValue}s`,
   },
   {
     label: "Round timer",

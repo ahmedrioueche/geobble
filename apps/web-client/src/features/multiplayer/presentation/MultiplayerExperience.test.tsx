@@ -278,7 +278,7 @@ describe("MultiplayerExperience", () => {
     renderExperience(createClientState(snapshot));
 
     expect(screen.getByRole("region", { name: "Room settings" })).toBeTruthy();
-    expect(screen.getByText("Whole world")).toBeTruthy();
+    expect(screen.getByText("Whole world (endless)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /ready/i })).toBeNull();
     expect(
@@ -1387,5 +1387,171 @@ describe("MultiplayerExperience", () => {
     expect(
       screen.getByText("Waiting for Ada to start a rematch…"),
     ).toBeTruthy();
+  });
+
+  it("renders endless checkpoint leaderboards, countdown, and host controls to pause or start next leg", async () => {
+    const checkpointSnapshot = createSnapshot({
+      status: "checkpoint",
+      config: {
+        mode: "identify",
+        pinDirection: "locate",
+        subMode: "name",
+        challengeType: "count",
+        challengeValue: 10,
+        endless: true,
+      },
+      players: [
+        {
+          id: "player-1",
+          name: "Ada",
+          isAdmin: true,
+          connected: true,
+          score: 85,
+          legScore: 30,
+          checkpointsWon: 1,
+          streak: 2,
+          maxStreak: 4,
+          pinLocation: null,
+          answered: true,
+        },
+        {
+          id: "player-2",
+          name: "Grace",
+          isAdmin: false,
+          connected: true,
+          score: 70,
+          legScore: 45,
+          checkpointsWon: 1,
+          streak: 3,
+          maxStreak: 3,
+          pinLocation: null,
+          answered: true,
+        },
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        legNumber: 2,
+        legRoundNumber: 10,
+        lapNumber: 1,
+        legMultiplier: 1.25,
+        legTier: "medium",
+        checkpointResumeAt: Date.now() + 8_000,
+        checkpointPaused: false,
+        checkpointSummary: {
+          legNumber: 2,
+          roundsInLeg: 10,
+          winnerIds: ["player-2"],
+          topLegScore: 45,
+          nextLegNumber: 3,
+          nextLegTier: "hard",
+          nextLegMultiplier: 1.5,
+          lapNumber: 1,
+        },
+        round: null,
+      },
+    });
+
+    renderExperience(createClientState(checkpointSnapshot));
+
+    expect(
+      screen.getByRole("heading", { name: "Grace takes Leg 2!" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Up next: Leg 3")).toBeTruthy();
+    expect(screen.getByText("1.5x pts")).toBeTruthy();
+
+    // Leg standings show Grace first (45 pts)
+    const legList = screen.getByRole("list", { name: "Leg standings" });
+    expect(legList.querySelectorAll("li")[0]?.textContent).toContain("Grace");
+    expect(legList.querySelectorAll("li")[0]?.textContent).toContain("45 pts");
+
+    // Switch to Tour total standings -> Ada first (85 pts) with crown
+    fireEvent.click(screen.getByRole("tab", { name: /Tour total/i }));
+    const tourList = screen.getByRole("list", { name: "Tour standings" });
+    expect(tourList.querySelectorAll("li")[0]?.textContent).toContain("Ada");
+    expect(tourList.querySelectorAll("li")[0]?.textContent).toContain("85 pts");
+    expect(tourList.querySelectorAll("li")[0]?.textContent).toContain("👑1");
+
+    // Host can pause countdown and start next leg immediately
+    fireEvent.click(screen.getByRole("button", { name: "Pause countdown" }));
+    expect(mocks.setPaused).toHaveBeenCalledWith(true);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start next leg now" }),
+    );
+    expect(mocks.startRoom).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Starting next leg…")).toBeTruthy();
+  });
+
+  it("shows leg multiplier and Leg/Tour standings toggle during active endless play", () => {
+    const leg2PlayingSnapshot = createSnapshot({
+      status: "playing",
+      config: {
+        mode: "identify",
+        pinDirection: "locate",
+        subMode: "name",
+        challengeType: "count",
+        challengeValue: 10,
+        endless: true,
+      },
+      players: [
+        {
+          id: "player-1",
+          name: "Ada",
+          isAdmin: true,
+          connected: true,
+          score: 100,
+          legScore: 15,
+          checkpointsWon: 1,
+          streak: 1,
+          maxStreak: 3,
+          pinLocation: null,
+          answered: false,
+        },
+        {
+          id: "player-2",
+          name: "Grace",
+          isAdmin: false,
+          connected: true,
+          score: 75,
+          legScore: 30,
+          checkpointsWon: 0,
+          streak: 2,
+          maxStreak: 2,
+          pinLocation: null,
+          answered: false,
+        },
+      ],
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        legNumber: 2,
+        legRoundNumber: 3,
+        lapNumber: 1,
+        legMultiplier: 1.25,
+        legTier: "medium",
+        round: {
+          missionId: "mission-leg2-3",
+          number: 13,
+          difficultyTier: "medium",
+          prompt: { type: "text", value: "Austria" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+
+    renderExperience(createClientState(leg2PlayingSnapshot));
+
+    expect(screen.getByText(/Leg 2 · identify · medium/i)).toBeTruthy();
+    expect(screen.getByText("1.25x")).toBeTruthy();
+    expect(screen.getByText("3 / 10")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Leg" }));
+    const standingsAside = screen.getByLabelText("Player standings");
+    const items = standingsAside.querySelectorAll("li");
+    expect(items[0]?.textContent).toContain("Grace");
+    expect(items[0]?.textContent).toContain("30");
   });
 });

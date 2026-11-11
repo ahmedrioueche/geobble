@@ -79,6 +79,7 @@ export interface SpeedScoringOptions {
   speedScoringEnabled?: boolean;
   minSpeedMultiplier?: number;
   doublePointsActive?: boolean;
+  legMultiplier?: number;
 }
 
 export interface CalculatedRoundPoints {
@@ -96,6 +97,7 @@ export const calculateRoundPoints = ({
   speedScoringEnabled = true,
   minSpeedMultiplier = 0.5,
   doublePointsActive = false,
+  legMultiplier = 1,
 }: SpeedScoringOptions): CalculatedRoundPoints => {
   const clampedMin = Math.max(0, Math.min(1, minSpeedMultiplier));
   let speedMultiplier = 1;
@@ -113,7 +115,8 @@ export const calculateRoundPoints = ({
   );
   const streakBonus = Math.max(0, streak * streakBonusPoints);
   const rawTotal = basePointsEarned + streakBonus;
-  const totalPoints = doublePointsActive ? rawTotal * 2 : rawTotal;
+  const multipliedTotal = Math.max(1, Math.round(rawTotal * Math.max(1, legMultiplier)));
+  const totalPoints = doublePointsActive ? multipliedTotal * 2 : multipliedTotal;
 
   return {
     basePointsEarned,

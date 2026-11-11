@@ -75,6 +75,7 @@ const createConfig = (
     spectatorPromptDelayMs: 180_000,
     spectatorPromptGraceMs: 30_000,
     roundAdvanceDelayMs: 0,
+    checkpointDurationMs: 10_000,
     roundTimeLimitMs: 0,
     pointsPerCorrectAnswer: 10,
     streakBonusPoints: 5,
@@ -1171,6 +1172,7 @@ describe('room lifecycle and competitive gameplay', () => {
         subMode: 'name',
         challengeType: 'count',
         challengeValue: 1,
+        endless: false,
         roundTimeLimitSeconds: 0,
       },
     });
@@ -1271,5 +1273,253 @@ describe('room lifecycle and competitive gameplay', () => {
         }),
       ]),
     );
+  });
+
+  it('runs count-based endless checkpoints with crowns, power-up refills, 10s auto-advance, and escalating multipliers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({
+      roundAdvanceDelayMs: 0,
+      checkpointDurationMs: 10_000,
+      roundTimeLimitMs: 0,
+    });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-endless-count',
+      playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'count',
+        challengeValue: 1,
+        endless: true,
+        difficulty: 'progressive',
+        roundTimeLimitSeconds: 0,
+      },
+    });
+    await lifecycle.joinRoom({
+      requestId: 'request-join-endless-count',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+      secret: host.roomSecret,
+    });
+
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    expect(started.game.legNumber).toBe(1);
+    expect(started.game.legMultiplier).toBe(1);
+
+    // Spend a power-up and answer correctly in Leg 1
+    await gameplay.submitCommand(host.snapshot.roomId, host.playerId, {
+      type: 'powerup',
+      kind: 'hint',
+      commandId: 1,
+      expectedRevision: started.revision,
+      missionId: started.game.round?.missionId ?? '',
+    });
+    const stored1 = await repository.findById(host.snapshot.roomId);
+    const answer1 = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'answer',
+        answerCountryCode: stored1?.game.round?.targetCountryCode ?? 'CAN',
+        commandId: 2,
+        expectedRevision: (stored1?.revision ?? started.revision),
+        missionId: started.game.round?.missionId ?? '',
+      },
+    );
+    expect(answer1.accepted).toBe(true);
+
+    // Trigger checkpoint after 1-round leg
+    const tCheckpoint = Date.now() + 1;
+    const checkpointTick = await runtime.tick(tCheckpoint);
+    const cpSnapshot = checkpointTick.snapshots.find(
+      (item) => item.roomId === host.snapshot.roomId,
+    );
+    expect(cpSnapshot?.status).toBe('checkpoint');
+    expect(cpSnapshot?.game.checkpointSummary).toMatchObject({
+      legNumber: 1,
+      winnerIds: [host.playerId],
+      topLegScore: 10,
+      nextLegNumber: 2,
+      nextLegTier: 'medium',
+      nextLegMultiplier: 1.25,
+    });
+    expect(
+      cpSnapshot?.players.find((player) => player.id === host.playerId),
+    ).toMatchObject({
+      score: 10,
+      legScore: 10,
+      checkpointsWon: 1,
+    });
+
+    // Before 10s elapses, room stays in checkpoint
+    const midTick = await runtime.tick((cpSnapshot?.game.checkpointResumeAt ?? tCheckpoint) - 100);
+    expect(midTick.snapshots).toHaveLength(0);
+
+    // At 10s, Leg 2 auto-starts with legScore reset, total score kept, 1.25x multiplier, and power-ups refilled
+    const leg2Tick = await runtime.tick(
+      (cpSnapshot?.game.checkpointResumeAt ?? tCheckpoint) + 1,
+    );
+    const leg2Snapshot = leg2Tick.snapshots.find(
+      (item) => item.roomId === host.snapshot.roomId,
+    );
+    expect(leg2Snapshot?.status).toBe('playing');
+    expect(leg2Snapshot?.game.legNumber).toBe(2);
+    expect(leg2Snapshot?.game.legMultiplier).toBe(1.25);
+    expect(leg2Snapshot?.game.legTier).toBe('medium');
+    expect(leg2Snapshot?.game.round?.number).toBe(2);
+    const hostLeg2 = leg2Snapshot?.players.find(
+      (player) => player.id === host.playerId,
+    );
+    expect(hostLeg2).toMatchObject({
+      score: 10,
+      legScore: 0,
+      checkpointsWon: 1,
+      powerUps: { fifty: true, hint: true, double: true, freeze: true },
+    });
+
+    // Answering in Leg 2 earns 1.25x (Math.round(10 * 1.25) = 13, wait streak=1 -> 10 + 5 = 15 * 1.25 = 19)
+    const stored2 = await repository.findById(host.snapshot.roomId);
+    const answer2 = await gameplay.submitCommand(
+      host.snapshot.roomId,
+      host.playerId,
+      {
+        type: 'answer',
+        answerCountryCode: stored2?.game.round?.targetCountryCode ?? 'FRA',
+        commandId: 3,
+        expectedRevision: leg2Snapshot?.revision ?? 0,
+        missionId: leg2Snapshot?.game.round?.missionId ?? '',
+      },
+    );
+    expect(answer2.accepted).toBe(true);
+    const hostAfterLeg2 = answer2.snapshot.players.find(
+      (player) => player.id === host.playerId,
+    );
+    expect(hostAfterLeg2?.legScore).toBe(19);
+    expect(hostAfterLeg2?.score).toBe(29);
+  });
+
+  it('supports timer-based endless checkpoints, pausing/resuming the countdown, and starting the next leg immediately', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({
+      roundAdvanceDelayMs: 0,
+      checkpointDurationMs: 10_000,
+      roundTimeLimitMs: 0,
+    });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'request-create-endless-timer',
+      playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'timer',
+        challengeValue: 30,
+        endless: true,
+        roundTimeLimitSeconds: 0,
+      },
+    });
+    await lifecycle.joinRoom({
+      requestId: 'request-join-endless-timer',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+      secret: host.roomSecret,
+    });
+
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    const timerDeadline = started.game.timerDeadlineAt ?? Date.now() + 30_000;
+
+    // Timer expires -> enters checkpoint instead of finished
+    const checkpointTick = await runtime.tick(timerDeadline + 1);
+    const cpSnapshot = checkpointTick.snapshots.find(
+      (item) => item.roomId === host.snapshot.roomId,
+    );
+    expect(cpSnapshot?.status).toBe('checkpoint');
+    expect(cpSnapshot?.game.checkpointResumeAt).toEqual(expect.any(Number));
+
+    // Host pauses countdown
+    const paused = await lifecycle.setPaused(
+      host.snapshot.roomId,
+      host.playerId,
+      true,
+    );
+    expect(paused.game.checkpointPaused).toBe(true);
+    expect(paused.game.checkpointResumeAt).toBeNull();
+
+    // Runtime tick does not auto-advance while countdown is paused
+    const whilePaused = await runtime.tick(Date.now() + 60_000);
+    expect(whilePaused.snapshots).toHaveLength(0);
+
+    // Host resumes countdown, then skips straight to Leg 2
+    const resumed = await lifecycle.setPaused(
+      host.snapshot.roomId,
+      host.playerId,
+      false,
+    );
+    expect(resumed.game.checkpointPaused).toBeUndefined();
+    expect(resumed.game.checkpointResumeAt).toEqual(expect.any(Number));
+
+    const leg2 = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    expect(leg2.status).toBe('playing');
+    expect(leg2.game.legNumber).toBe(2);
+    expect(leg2.game.timerDeadlineAt).toEqual(expect.any(Number));
   });
 });

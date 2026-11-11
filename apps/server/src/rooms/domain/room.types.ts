@@ -4,7 +4,7 @@ export type SubMode = 'name' | 'flag' | 'capital';
 export type ChallengeType = 'world' | 'count' | 'timer';
 export type DifficultyTier = 'easy' | 'medium' | 'hard' | 'expert';
 export type DifficultyMode = 'progressive' | DifficultyTier;
-export type RoomStatus = 'waiting' | 'playing' | 'finished';
+export type RoomStatus = 'waiting' | 'playing' | 'checkpoint' | 'finished';
 export type RoomVisibility = 'public' | 'private';
 
 export type PowerUpKind = 'fifty' | 'hint' | 'double' | 'freeze';
@@ -31,6 +31,7 @@ export interface RoomConfiguration {
   subMode: SubMode;
   challengeType: ChallengeType;
   challengeValue: number;
+  endless?: boolean;
   difficulty?: DifficultyMode;
   roundTimeLimitSeconds?: number;
   speedScoring?: boolean;
@@ -41,8 +42,9 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
   mode: 'identify',
   pinDirection: 'locate',
   subMode: 'name',
-  challengeType: 'world',
-  challengeValue: 0,
+  challengeType: 'count',
+  challengeValue: 10,
+  endless: true,
   difficulty: 'progressive',
   roundTimeLimitSeconds: 20,
   speedScoring: true,
@@ -62,6 +64,8 @@ export interface RoomPlayerRecord {
   disconnectedAt: number | null;
   reconnectTokenHash: string;
   score: number;
+  legScore?: number;
+  checkpointsWon?: number;
   streak: number;
   maxStreak: number;
   pinLocation: [number, number] | null;
@@ -138,10 +142,30 @@ export interface RoomRoundRecord {
   answers?: RoundAnswerRecord[];
 }
 
+export interface CheckpointSummary {
+  legNumber: number;
+  roundsInLeg: number;
+  winnerIds: string[];
+  topLegScore: number;
+  nextLegNumber: number;
+  nextLegTier: DifficultyTier;
+  nextLegMultiplier: number;
+  lapNumber: number;
+}
+
 export interface RoomGameRecord {
   startedAt: number | null;
   timerDeadlineAt: number | null;
   advanceAt: number | null;
+  legNumber?: number;
+  legRoundNumber?: number;
+  lapNumber?: number;
+  legMultiplier?: number;
+  legTier?: DifficultyTier;
+  checkpointResumeAt?: number | null;
+  checkpointPaused?: boolean;
+  pausedCheckpointRemainingMs?: number | null;
+  checkpointSummary?: CheckpointSummary | null;
   paused?: boolean;
   pausedAt?: number | null;
   pauseDeadlineAt?: number | null;
@@ -178,6 +202,8 @@ export interface RoomPlayerSnapshot {
   paused?: boolean;
   spectatorPromptDeadlineAt?: number | null;
   score: number;
+  legScore?: number;
+  checkpointsWon?: number;
   streak: number;
   maxStreak: number;
   pinLocation: [number, number] | null;
@@ -201,6 +227,14 @@ export interface RoomSnapshot {
   game: {
     startedAt: number | null;
     timerDeadlineAt: number | null;
+    legNumber?: number;
+    legRoundNumber?: number;
+    lapNumber?: number;
+    legMultiplier?: number;
+    legTier?: DifficultyTier;
+    checkpointResumeAt?: number | null;
+    checkpointPaused?: boolean;
+    checkpointSummary?: CheckpointSummary | null;
     paused?: boolean;
     pauseDeadlineAt?: number | null;
     round: {

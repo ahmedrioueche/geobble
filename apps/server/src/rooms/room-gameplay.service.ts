@@ -196,9 +196,11 @@ export class RoomGameplayService {
         roundTimeLimitMs,
         speedScoringEnabled,
         doublePointsActive,
+        legMultiplier: room.game.legMultiplier ?? 1,
       });
 
       player.score += totalPoints;
+      player.legScore = (player.legScore ?? 0) + totalPoints;
       player.streak += 1;
       player.maxStreak = Math.max(player.maxStreak, player.streak);
       round.answers.push({
@@ -223,6 +225,7 @@ export class RoomGameplayService {
     const penalty = Math.max(0, room.config.wrongAnswerPenalty ?? 0);
     const netDelta = partialBonus - penalty;
     player.score = Math.max(0, player.score + netDelta);
+    player.legScore = Math.max(0, (player.legScore ?? 0) + netDelta);
 
     round.answers.push({
       playerId,

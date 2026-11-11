@@ -29,6 +29,8 @@ const formatRoomStatus = (status: RoomInspectResult["status"]): string => {
       return "Waiting in lobby";
     case "playing":
       return "Match in progress";
+    case "checkpoint":
+      return "At checkpoint break";
     case "finished":
       return "Match finished";
   }
