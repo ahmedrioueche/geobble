@@ -508,6 +508,9 @@ export class RoomRuntimeService implements OnModuleInit {
         ) {
           return false;
         }
+        if (draft.settingsVote && draft.settingsVote.expiresAt > now) {
+          return false;
+        }
         if (draft.pendingConfig) {
           draft.config = draft.pendingConfig;
           draft.pendingConfig = null;

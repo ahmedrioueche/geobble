@@ -43,7 +43,7 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
   pinDirection: 'locate',
   subMode: 'name',
   challengeType: 'count',
-  challengeValue: 2,
+  challengeValue: 10,
   endless: true,
   difficulty: 'progressive',
   roundTimeLimitSeconds: 20,
@@ -326,15 +326,15 @@ export interface RoomReconnectRequest {
 
 export type RoomCommandInput =
   | {
-      type: 'answer';
-      answerCountryCode: string | null;
-      choiceId?: string;
-      pinLocation?: [number, number];
-    }
+    type: 'answer';
+    answerCountryCode: string | null;
+    choiceId?: string;
+    pinLocation?: [number, number];
+  }
   | {
-      type: 'powerup';
-      kind: PowerUpKind;
-    }
+    type: 'powerup';
+    kind: PowerUpKind;
+  }
   | { type: 'reveal' }
   | { type: 'skip' };
 

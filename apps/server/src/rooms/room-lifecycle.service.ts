@@ -378,6 +378,7 @@ export class RoomLifecycleService {
       this.requireAdmin(draft, playerId);
 
       if (draft.status === 'checkpoint') {
+        draft.settingsVote = null;
         if (draft.pendingConfig) {
           draft.config = draft.pendingConfig;
           draft.pendingConfig = null;
@@ -648,6 +649,15 @@ export class RoomLifecycleService {
       }
 
       const voteResolved = this.reconcileVoteEvent(draft, now);
+      if (
+        voteResolved &&
+        draft.status === 'checkpoint' &&
+        !draft.game.checkpointPaused &&
+        draft.game.checkpointResumeAt != null &&
+        draft.game.checkpointResumeAt < now + 3_000
+      ) {
+        draft.game.checkpointResumeAt = now + 3_000;
+      }
       return { voteResolved, staleError: false };
     });
 

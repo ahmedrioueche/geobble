@@ -1,6 +1,10 @@
 import type React from "react";
+import { SlidersHorizontal } from "lucide-react";
 import type { RoomConfiguration } from "../contracts/multiplayerRoomProtocol";
-import { getRoomSettingsEntries } from "./roomSettingsDiff";
+import {
+  getRoomSettingsEntries,
+  getRoomSettingsSummary,
+} from "./roomSettingsDiff";
 
 interface RoomSettingsPanelProps {
   config: RoomConfiguration;
@@ -11,6 +15,58 @@ interface RoomSettingsPanelProps {
   onEdit: () => void;
   onPropose?: () => void;
 }
+
+interface RoomQuickSettingsBarProps {
+  config: RoomConfiguration;
+  pendingConfig: RoomConfiguration | null;
+  isAdmin: boolean;
+  canPropose: boolean;
+  hasActiveVote: boolean;
+  onOpenSettings: () => void;
+}
+
+export const RoomQuickSettingsBar: React.FC<RoomQuickSettingsBarProps> = ({
+  config,
+  pendingConfig,
+  isAdmin,
+  canPropose,
+  hasActiveVote,
+  onOpenSettings,
+}) => (
+  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2.5 md:hidden">
+    <div className="flex min-w-0 items-center gap-2">
+      <SlidersHorizontal aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-300" />
+      <p className="truncate text-xs font-bold text-white/85">
+        {getRoomSettingsSummary(pendingConfig ?? config)}
+      </p>
+    </div>
+    {isAdmin ? (
+      <button
+        className="shrink-0 rounded-lg border border-sky-300/35 bg-sky-400/15 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-sky-200 transition hover:bg-sky-400/25"
+        onClick={onOpenSettings}
+        type="button"
+      >
+        Edit settings
+      </button>
+    ) : (
+      <button
+        className="shrink-0 rounded-lg border border-sky-300/35 bg-sky-400/15 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-sky-200 transition hover:bg-sky-400/25 disabled:cursor-not-allowed disabled:opacity-45"
+        disabled={!canPropose || hasActiveVote}
+        onClick={onOpenSettings}
+        title={
+          hasActiveVote
+            ? "A settings vote is already active"
+            : !canPropose
+              ? "At least 2 active players are needed to propose changes"
+              : "Propose a settings change"
+        }
+        type="button"
+      >
+        {hasActiveVote ? "Vote active" : canPropose ? "Propose change" : "Need 2+"}
+      </button>
+    )}
+  </div>
+);
 
 const SettingsList: React.FC<{ config: RoomConfiguration }> = ({ config }) => (
   <dl className="mt-5 space-y-4">
@@ -61,15 +117,21 @@ export const RoomSettingsPanel: React.FC<RoomSettingsPanelProps> = ({
           Edit
         </button>
       ) : (
-        canPropose &&
         onPropose && (
           <button
             className="rounded-lg border border-sky-300/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-200 transition hover:border-sky-300/60 hover:bg-sky-300/10 disabled:cursor-not-allowed disabled:opacity-45"
-            disabled={hasActiveVote}
+            disabled={!canPropose || hasActiveVote}
             onClick={onPropose}
+            title={
+              hasActiveVote
+                ? "A settings vote is already active"
+                : !canPropose
+                  ? "At least 2 active players are needed to propose changes"
+                  : "Propose a settings change"
+            }
             type="button"
           >
-            {hasActiveVote ? "Vote active" : "Propose"}
+            {hasActiveVote ? "Vote active" : canPropose ? "Propose" : "Need 2+"}
           </button>
         )
       )}

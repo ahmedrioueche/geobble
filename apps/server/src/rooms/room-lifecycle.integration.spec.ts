@@ -1689,4 +1689,108 @@ describe('room lifecycle and competitive gameplay', () => {
     expect(resolvedByActive.voteResolved?.queued).toBe(true);
     expect(resolvedByActive.snapshot.pendingConfig?.subMode).toBe('capital');
   });
+
+  it('holds checkpoint auto-advance while a settings vote initiated by the host is pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({
+      checkpointDurationMs: 10_000,
+      settingsVoteDurationMs: 25_000,
+    });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const gameplay = new RoomGameplayService(repository, mutations, config);
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'cp-vote-create',
+      playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'count',
+        challengeValue: 1,
+        endless: true,
+      },
+    });
+    const guest = await lifecycle.joinRoom({
+      requestId: 'cp-vote-join',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+      secret: host.roomSecret,
+    });
+
+    const started = await lifecycle.startRoom(
+      host.snapshot.roomId,
+      host.playerId,
+    );
+    const missionId = started.game.round!.missionId;
+    await gameplay.submitCommand(host.snapshot.roomId, host.playerId, {
+      commandId: 1,
+      expectedRevision: started.revision,
+      missionId,
+      type: 'answer',
+      answerCountryCode: null,
+    });
+    await gameplay.submitCommand(host.snapshot.roomId, guest.playerId, {
+      commandId: 1,
+      expectedRevision: started.revision + 1,
+      missionId,
+      type: 'answer',
+      answerCountryCode: null,
+    });
+
+    const cpTick = await runtime.tick(Date.now() + 1_000);
+    const cpSnapshot = cpTick.snapshots.find(
+      (item) => item.roomId === host.snapshot.roomId,
+    );
+    expect(cpSnapshot?.status).toBe('checkpoint');
+
+    // Host puts a settings change up for vote during checkpoint
+    const hostVote = await lifecycle.proposeSettingsVote(
+      host.snapshot.roomId,
+      host.playerId,
+      { ...cpSnapshot!.config, subMode: 'flag' },
+    );
+
+    // Even after checkpointResumeAt passes, runtime holds auto-advance while vote is active
+    const resumeAt = cpSnapshot!.game.checkpointResumeAt!;
+    const holdTick = await runtime.tick(resumeAt + 1_000);
+    expect(
+      holdTick.snapshots.some(
+        (item) =>
+          item.roomId === host.snapshot.roomId && item.status === 'playing',
+      ),
+    ).toBe(false);
+
+    // Guest accepts -> vote passes and updates checkpoint config immediately
+    const resolved = await lifecycle.castSettingsVote(
+      host.snapshot.roomId,
+      guest.playerId,
+      hostVote.voteId,
+      true,
+    );
+    expect(resolved.voteResolved?.outcome).toBe('passed');
+    expect(resolved.snapshot.config.subMode).toBe('flag');
+  });
 });

@@ -107,6 +107,16 @@ export const getRoomSettingsEntries = (
   ];
 };
 
+export const getRoomSettingsSummary = (
+  rawConfig: RoomConfiguration,
+): string => {
+  const entries = getRoomSettingsEntries(rawConfig);
+  const mode = entries[0]?.value ?? "";
+  const prompt = entries[1]?.value ?? "";
+  const challenge = entries[3]?.value ?? "";
+  return [mode, prompt, challenge].filter(Boolean).join(" · ");
+};
+
 export const getRoomSettingsDiff = (
   currentRaw: RoomConfiguration,
   proposedRaw: RoomConfiguration,

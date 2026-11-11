@@ -7,23 +7,44 @@ import { getRoomSettingsDiff } from "./roomSettingsDiff";
 interface RoomSettingsFormProps {
   initial: RoomConfiguration;
   mode?: "edit" | "propose";
+  canPropose?: boolean;
   submitting: boolean;
   onCancel: () => void;
   onSave: (configuration: RoomConfiguration) => Promise<void>;
+  onPropose?: (configuration: RoomConfiguration) => Promise<void>;
 }
 
 export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
   initial,
   mode = "edit",
+  canPropose = false,
   submitting,
   onCancel,
   onSave,
+  onPropose,
 }) => {
   const [config, setConfig] = useState(initial);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<"save" | "propose" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const diffs = getRoomSettingsDiff(initial, config);
   const isProposeMode = mode === "propose";
+
+  const submitWith = (
+    kind: "save" | "propose",
+    handler: (configuration: RoomConfiguration) => Promise<void>,
+  ) => {
+    setSaveError(null);
+    setSaving(kind);
+    void handler(config)
+      .catch((error: unknown) => {
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : "Could not save room settings.",
+        );
+      })
+      .finally(() => setSaving(null));
+  };
   useEffect(() => {
     if (!saveError) return;
     const timeout = window.setTimeout(() => setSaveError(null), 5000);
@@ -37,17 +58,7 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        setSaveError(null);
-        setSaving(true);
-        void onSave(config)
-          .catch((error: unknown) => {
-            setSaveError(
-              error instanceof Error
-                ? error.message
-                : "Could not save room settings.",
-            );
-          })
-          .finally(() => setSaving(false));
+        submitWith(isProposeMode ? "propose" : "save", onSave);
       }}
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
@@ -201,12 +212,14 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         />
       </label>
 
-      {isProposeMode && (
+      {(isProposeMode || diffs.length > 0) && (
         <div className="rounded-xl border border-sky-300/20 bg-sky-400/10 px-3.5 py-2.5 text-xs">
           {diffs.length > 0 ? (
             <>
               <p className="font-black uppercase tracking-wider text-sky-200">
-                Proposed changes ({diffs.length})
+                {isProposeMode
+                  ? `Proposed changes (${diffs.length})`
+                  : `Pending changes (${diffs.length})`}
               </p>
               <p className="mt-1 text-white/80">
                 {diffs.map((diff) => `${diff.label}: ${diff.to}`).join(" · ")}
@@ -226,7 +239,7 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         </p>
       )}
       </div>
-      <div className="shrink-0 flex justify-end gap-3 border-t border-white/10 bg-slate-900 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:py-4">
+      <div className="shrink-0 flex flex-wrap justify-end gap-2 border-t border-white/10 bg-slate-900 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:gap-3 md:py-4">
         <button
           className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/70 hover:text-white"
           onClick={onCancel}
@@ -234,18 +247,30 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         >
           Cancel
         </button>
+        {!isProposeMode && canPropose && onPropose && (
+          <button
+            className="rounded-lg border border-sky-300/40 bg-sky-400/15 px-4 py-2 text-sm font-black text-sky-200 transition hover:bg-sky-400/25 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={submitting || saving !== null || diffs.length === 0}
+            onClick={() => submitWith("propose", onPropose)}
+            type="button"
+          >
+            {saving === "propose" ? "Proposing…" : "Put to vote"}
+          </button>
+        )}
         <button
-          className="rounded-lg bg-sky-400 px-5 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
-          disabled={submitting || saving || (isProposeMode && diffs.length === 0)}
+          className="rounded-lg bg-sky-400 px-5 py-2 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={
+            submitting || saving !== null || (isProposeMode && diffs.length === 0)
+          }
           type="submit"
         >
-          {saving
-            ? isProposeMode
-              ? "Proposing…"
-              : "Saving…"
-            : isProposeMode
-              ? "Propose vote"
-              : "Save settings"}
+          {saving === "propose"
+            ? "Proposing…"
+            : saving === "save"
+              ? "Saving…"
+              : isProposeMode
+                ? "Propose vote"
+                : "Save settings"}
         </button>
       </div>
     </form>

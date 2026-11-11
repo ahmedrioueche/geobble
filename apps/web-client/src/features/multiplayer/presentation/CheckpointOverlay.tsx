@@ -14,7 +14,10 @@ import {
   type ReactionEmoji,
   type RoomSnapshot,
 } from "../contracts/multiplayerRoomProtocol";
-import { RoomSettingsPanel } from "./RoomSettingsPanel";
+import {
+  RoomQuickSettingsBar,
+  RoomSettingsPanel,
+} from "./RoomSettingsPanel";
 
 interface CheckpointOverlayProps {
   snapshot: RoomSnapshot;
@@ -23,7 +26,6 @@ interface CheckpointOverlayProps {
   connected: boolean;
   canProposeSettings?: boolean;
   hasActiveVote?: boolean;
-  settingsVoteSlot?: React.ReactNode;
   isAdvancingLeg: boolean;
   remainingMs: number;
   onStartNextLegNow: () => void;
@@ -50,7 +52,6 @@ export const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({
   connected,
   canProposeSettings = false,
   hasActiveVote = false,
-  settingsVoteSlot,
   isAdvancingLeg,
   remainingMs,
   onStartNextLegNow,
@@ -115,7 +116,14 @@ export const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({
       className="absolute inset-x-0 bottom-0 top-14 z-20 overflow-y-auto overflow-x-hidden bg-slate-950/95 backdrop-blur-xl md:inset-x-4 md:bottom-5 md:top-24 md:bg-transparent md:backdrop-blur-none"
     >
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-3 px-3 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:min-h-0 md:gap-4 md:p-0">
-        {settingsVoteSlot}
+        <RoomQuickSettingsBar
+          canPropose={canProposeSettings}
+          config={snapshot.config}
+          hasActiveVote={hasActiveVote}
+          isAdmin={isAdmin}
+          onOpenSettings={onOpenSettings}
+          pendingConfig={snapshot.pendingConfig}
+        />
         <div className="flex min-w-0 flex-col gap-3 md:grid md:min-h-0 md:grid-cols-[1.25fr_1fr] md:gap-4">
         <div className="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-slate-900/75 p-4 backdrop-blur-xl md:bg-slate-950/90 md:p-5">
           <div className="mb-3 flex flex-col gap-3 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">

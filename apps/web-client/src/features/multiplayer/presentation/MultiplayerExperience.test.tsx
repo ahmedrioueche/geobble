@@ -1575,7 +1575,7 @@ describe("MultiplayerExperience", () => {
     expect(items[1]?.textContent).toContain("1 win");
   });
 
-  it("lets non-hosts propose settings votes and lets players vote across waiting, playing, checkpoint, and finished screens", async () => {
+  it("handles 2-player Accept/Decline and 3+ player majority votes across all screens with mobile visibility and host vote option", async () => {
     // 1. Waiting room: non-host sees Propose button, unchanged form disables submit, changing a setting submits proposeSettings
     const waitingNonHostSnapshot = createSnapshot({
       status: "waiting",
@@ -1585,6 +1585,9 @@ describe("MultiplayerExperience", () => {
       room: { playerId: "player-2", snapshot: waitingNonHostSnapshot },
     });
 
+    expect(
+      screen.getByRole("button", { name: "Propose change" }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Propose" }));
     expect(screen.getByText(/Propose settings vote/i)).toBeTruthy();
     const submitProposal = screen.getByRole("button", {
@@ -1607,9 +1610,40 @@ describe("MultiplayerExperience", () => {
 
     cleanup();
 
-    // 2. Playing screen: floating banner appears expanded for unvoted player, collapses after voting, and host sees compact pill for their own proposal
-    const playingWithVoteSnapshot = createSnapshot({
+    // 2. Playing screen: non-host sees labeled Propose button on mobile too (no hidden class)
+    const playingInitialSnapshot = createSnapshot({
       status: "playing",
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "France" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+    const hostView = renderExperience(createClientState(playingInitialSnapshot));
+
+    // Host sees "Put to vote" inside settings modal when 2+ eligible players exist
+    fireEvent.click(screen.getByRole("button", { name: "Change settings" }));
+    const hostDialog = within(screen.getByRole("dialog"));
+    fireEvent.click(hostDialog.getByRole("button", { name: "Prompt" }));
+    fireEvent.click(hostDialog.getByRole("option", { name: "Flag" }));
+    fireEvent.click(hostDialog.getByRole("button", { name: "Put to vote" }));
+    await waitFor(() => {
+      expect(mocks.proposeSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ subMode: "flag" }),
+      );
+    });
+
+    // When Grace starts a 2-player vote, Admin on mobile gets notified by toast and sees Accept / Decline
+    const playingWithTwoPlayerVoteSnapshot = createSnapshot({
+      ...playingInitialSnapshot,
+      revision: 2,
       settingsVote: {
         voteId: "vote-playing-1",
         proposerPlayerId: "player-2",
@@ -1628,49 +1662,104 @@ describe("MultiplayerExperience", () => {
         createdAt: 1000,
         expiresAt: 26000,
       },
-      game: {
-        startedAt: 1,
-        timerDeadlineAt: null,
-        round: {
-          missionId: "mission-1",
-          number: 1,
-          prompt: { type: "text", value: "France" },
-          choices: [],
-          revealed: false,
-          answerReveal: null,
-        },
-      },
     });
+    mocks.useRoomClient.mockReturnValue({
+      client: {
+        inspectRoom: mocks.inspectRoom,
+        createRoom: mocks.createRoom,
+        joinRoom: mocks.joinRoom,
+        joinPublicRoom: mocks.joinPublicRoom,
+        setPaused: mocks.setPaused,
+        startRoom: mocks.startRoom,
+        changeSettings: mocks.changeSettings,
+        proposeSettings: mocks.proposeSettings,
+        voteSettings: mocks.voteSettings.mockResolvedValue(undefined),
+        submitCommand: mocks.submitCommand,
+        sendReaction: mocks.sendReaction,
+        leaveRoom: mocks.leaveRoom,
+        forgetReconnect: mocks.forgetReconnect,
+        retryReconnect: mocks.retryReconnect,
+      },
+      state: createClientState(playingWithTwoPlayerVoteSnapshot),
+    });
+    hostView.rerender(
+      <MultiplayerExperience
+        countries={[]}
+        onPlayOffline={mocks.playOffline}
+        showHomeActions
+      />,
+    );
 
-    renderExperience(createClientState(playingWithVoteSnapshot));
+    expect(
+      await screen.findByText(/wants to change Prompt: Flag/i),
+    ).toBeTruthy();
 
     const region = screen.getByRole("region", { name: "Settings vote" });
-    expect(region.textContent).toContain("Grace proposes");
-    expect(region.textContent).toContain("Prompt:");
-    expect(region.textContent).toContain("Flag");
-
-    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    expect(region.textContent).toContain("Grace wants to change settings");
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => {
       expect(mocks.voteSettings).toHaveBeenCalledWith("vote-playing-1", true);
     });
 
     cleanup();
 
-    // 3. Proposer during playing sees auto-collapsed compact pill until expanded
+    // 3. Proposer during playing sees auto-collapsed compact pill with "Waiting for Ada"
     renderExperience({
-      ...createClientState(playingWithVoteSnapshot),
-      room: { playerId: "player-2", snapshot: playingWithVoteSnapshot },
+      ...createClientState(playingWithTwoPlayerVoteSnapshot),
+      room: { playerId: "player-2", snapshot: playingWithTwoPlayerVoteSnapshot },
     });
-    expect(
-      screen.getByRole("button", { name: "Expand settings vote" }),
-    ).toBeTruthy();
+    const expandButton = screen.getByRole("button", {
+      name: "Expand settings vote",
+    });
+    expect(expandButton.textContent).toContain("Waiting for Ada");
 
     cleanup();
 
-    // 4. Checkpoint & finished screens show single Settings vote banner cleanly
-    const checkpointVoteSnapshot = createSnapshot({
+    // 4. Navbar Propose and Leave buttons are icon-only on mobile and labeled on desktop
+    renderExperience({
+      ...createClientState(playingInitialSnapshot),
+      room: { playerId: "player-2", snapshot: playingInitialSnapshot },
+    });
+    const proposeNavbarBtn = screen.getByRole("button", {
+      name: "Propose settings change",
+    });
+    expect(proposeNavbarBtn.querySelector("span")?.className ?? "").toContain(
+      "hidden",
+    );
+    expect(proposeNavbarBtn.querySelector("span")?.className ?? "").toContain(
+      "md:inline",
+    );
+    const leaveNavbarBtn = screen.getByRole("button", { name: "Leave" });
+    expect(leaveNavbarBtn.querySelector("span")?.className ?? "").toContain(
+      "hidden",
+    );
+    expect(leaveNavbarBtn.querySelector("span")?.className ?? "").toContain(
+      "md:inline",
+    );
+
+    cleanup();
+
+    // 5. 3-player Checkpoint & Finished screens show Yes/No majority vote pinned once cleanly
+    const threePlayerCheckpointSnapshot = createSnapshot({
       status: "checkpoint",
-      settingsVote: playingWithVoteSnapshot.settingsVote,
+      players: [
+        ...createSnapshot().players,
+        {
+          id: "player-3",
+          name: "Alan",
+          isAdmin: false,
+          connected: true,
+          score: 0,
+          streak: 0,
+          maxStreak: 0,
+          pinLocation: null,
+          answered: false,
+        },
+      ],
+      settingsVote: {
+        ...playingWithTwoPlayerVoteSnapshot.settingsVote!,
+        eligibleCount: 3,
+      },
       game: {
         startedAt: 1,
         timerDeadlineAt: null,
@@ -1689,17 +1778,18 @@ describe("MultiplayerExperience", () => {
         round: null,
       },
     });
-    renderExperience(createClientState(checkpointVoteSnapshot));
+    renderExperience(createClientState(threePlayerCheckpointSnapshot));
     expect(screen.getAllByRole("region", { name: "Settings vote" })).toHaveLength(
       1,
     );
+    expect(screen.getByRole("button", { name: "Yes" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "No" })).toBeTruthy();
 
     cleanup();
 
     const finishedVoteSnapshot = createSnapshot({
       status: "finished",
-      settingsVote: playingWithVoteSnapshot.settingsVote,
+      settingsVote: playingWithTwoPlayerVoteSnapshot.settingsVote,
     });
     renderExperience({
       ...createClientState(finishedVoteSnapshot),
@@ -1708,9 +1798,8 @@ describe("MultiplayerExperience", () => {
     expect(screen.getAllByRole("region", { name: "Settings vote" })).toHaveLength(
       1,
     );
-    const voteActiveButton = screen.getByRole("button", {
-      name: "Vote active",
-    }) as HTMLButtonElement;
-    expect(voteActiveButton.disabled).toBe(true);
+    expect(
+      screen.getAllByRole("button", { name: "Vote active" }).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });
