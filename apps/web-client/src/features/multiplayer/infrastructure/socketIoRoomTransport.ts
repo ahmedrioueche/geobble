@@ -22,6 +22,8 @@ const serverEventNames = [
   "room:command-accepted",
   "room:command-rejected",
   "room:settings-accepted",
+  "room:vote-acknowledged",
+  "room:settings-vote-resolved",
   "room:reaction",
   "room:left",
   "room:closed",
@@ -42,6 +44,10 @@ const normalizeEvent = (eventName: string, payload: unknown): unknown => {
       return { type: "command-rejected", payload };
     case "room:settings-accepted":
       return { type: "settings-accepted", payload };
+    case "room:vote-acknowledged":
+      return { type: "vote-acknowledged", payload };
+    case "room:settings-vote-resolved":
+      return { type: "settings-vote-resolved", payload };
     case "room:reaction":
       return { type: "reaction", payload };
     case "room:left":

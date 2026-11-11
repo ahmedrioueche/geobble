@@ -8,6 +8,7 @@ import type {
   RoomJoinedEvent,
   RoomReactionEvent,
   RoomServerEvent,
+  RoomSettingsVoteResolvedEvent,
   RoomSnapshot,
 } from "../contracts/multiplayerRoomProtocol";
 import {
@@ -58,6 +59,7 @@ export interface RoomClientState {
   lastAcknowledgedRevision: number | null;
   lastAnswerResult: boolean | null;
   settingsAccepted: { queued: boolean; revision: number } | null;
+  lastVoteResolved: RoomSettingsVoteResolvedEvent | null;
   lastReaction: RoomReactionEvent | null;
   error: string | null;
   reconnectAvailable: boolean;
@@ -97,6 +99,8 @@ export interface RoomClient {
   setPaused: (paused: boolean) => void;
   startRoom: () => void;
   changeSettings: (config: RoomConfiguration) => Promise<void>;
+  proposeSettings: (config: RoomConfiguration) => Promise<void>;
+  voteSettings: (voteId: string, approve: boolean) => Promise<void>;
   submitCommand: (command: RoomCommandInput) => Promise<number>;
   sendReaction: (emoji: ReactionEmoji) => void;
   leaveRoom: () => Promise<void>;
@@ -190,6 +194,7 @@ export const createRoomClient = (
     lastAcknowledgedRevision: null,
     lastAnswerResult: null,
     settingsAccepted: null,
+    lastVoteResolved: null,
     lastReaction: null,
     error: null,
     reconnectAvailable: false,
@@ -260,6 +265,7 @@ export const createRoomClient = (
         pendingCommandIds: [],
         lastAcknowledgedRevision: null,
         lastAnswerResult: null,
+        lastVoteResolved: null,
         reconnectAvailable: true,
         reconnectRequired: false,
         error: null,
@@ -380,6 +386,21 @@ export const createRoomClient = (
             revision: event.payload.revision,
           },
         });
+        return;
+      case "vote-acknowledged":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        {
+          const pending = pendingSettings.get(event.payload.requestId);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            pendingSettings.delete(event.payload.requestId);
+            pending.resolve();
+          }
+        }
+        return;
+      case "settings-vote-resolved":
+        if (state.room?.snapshot.roomId !== event.payload.roomId) return;
+        updateState({ lastVoteResolved: event.payload });
         return;
       case "reaction":
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
@@ -616,6 +637,7 @@ export const createRoomClient = (
       lastAcknowledgedRevision: null,
       lastAnswerResult: null,
       settingsAccepted: null,
+      lastVoteResolved: null,
       reconnectAvailable: false,
       reconnectRequired: false,
       error,
@@ -639,6 +661,37 @@ export const createRoomClient = (
       ...payload,
     });
     return room;
+  };
+
+  const sendSettingsRequest = (
+    eventName: string,
+    payload: Record<string, unknown>,
+    timeoutMessage: string,
+    sendErrorMessage: string,
+    extraState: Partial<RoomClientState> = {},
+  ) => {
+    const room = requireRoom();
+    const requestId = createId();
+    updateState({ error: null, ...extraState });
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingSettings.delete(requestId);
+        reject(new Error(timeoutMessage));
+      }, REQUEST_TIMEOUT_MS);
+      pendingSettings.set(requestId, { resolve, reject, timeout });
+      try {
+        transport.emit(eventName, { requestId, ...payload });
+      } catch (error) {
+        clearTimeout(timeout);
+        pendingSettings.delete(requestId);
+        reject(error instanceof Error ? error : new Error(sendErrorMessage));
+      }
+      if (state.room?.snapshot.roomId !== room.snapshot.roomId) {
+        clearTimeout(timeout);
+        pendingSettings.delete(requestId);
+        reject(new Error("The active room changed before the request was sent."));
+      }
+    });
   };
 
   return {
@@ -774,34 +827,28 @@ export const createRoomClient = (
     startRoom: () => {
       emitRequest("room:start", {});
     },
-    changeSettings: (config) => {
-      const room = requireRoom();
-      const requestId = createId();
-      updateState({ error: null, settingsAccepted: null });
-      return new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          pendingSettings.delete(requestId);
-          reject(new Error("The server did not confirm the settings change."));
-        }, REQUEST_TIMEOUT_MS);
-        pendingSettings.set(requestId, { resolve, reject, timeout });
-        try {
-          transport.emit("room:change-settings", { requestId, config });
-        } catch (error) {
-          clearTimeout(timeout);
-          pendingSettings.delete(requestId);
-          reject(
-            error instanceof Error
-              ? error
-              : new Error("Could not send the settings change."),
-          );
-        }
-        if (state.room?.snapshot.roomId !== room.snapshot.roomId) {
-          clearTimeout(timeout);
-          pendingSettings.delete(requestId);
-          reject(new Error("The active room changed before settings were sent."));
-        }
-      });
-    },
+    changeSettings: (config) =>
+      sendSettingsRequest(
+        "room:change-settings",
+        { config },
+        "The server did not confirm the settings change.",
+        "Could not send the settings change.",
+        { settingsAccepted: null },
+      ),
+    proposeSettings: (config) =>
+      sendSettingsRequest(
+        "room:propose-settings",
+        { config },
+        "The server did not confirm the settings vote proposal.",
+        "Could not send the settings proposal.",
+      ),
+    voteSettings: (voteId, approve) =>
+      sendSettingsRequest(
+        "room:vote-settings",
+        { voteId, approve },
+        "The server did not confirm your vote.",
+        "Could not send your vote.",
+      ),
     submitCommand: async (input) => {
       const room = requireRoom();
       const missionId = room.snapshot.game.round?.missionId;

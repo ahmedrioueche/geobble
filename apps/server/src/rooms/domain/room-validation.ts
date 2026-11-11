@@ -343,3 +343,21 @@ export const parseReactionEmoji = (value: unknown): ReactionEmoji => {
   }
   return value.emoji as ReactionEmoji;
 };
+
+export const parseVoteSettingsRequest = (
+  value: unknown,
+): { requestId: string; voteId: string; approve: boolean } => {
+  if (
+    !isRecord(value) ||
+    !isSafeIdentifier(value.requestId) ||
+    !isSafeIdentifier(value.voteId) ||
+    typeof value.approve !== 'boolean'
+  ) {
+    throw new RoomDomainError('INVALID_REQUEST');
+  }
+  return {
+    requestId: value.requestId,
+    voteId: value.voteId,
+    approve: value.approve,
+  };
+};

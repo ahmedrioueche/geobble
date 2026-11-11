@@ -15,7 +15,13 @@ export type RoomErrorCode =
   | 'DUPLICATE_COMMAND'
   | 'INVALID_COMMAND'
   | 'ROOM_EXPIRED'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'VOTE_ALREADY_ACTIVE'
+  | 'VOTE_NOT_FOUND'
+  | 'ALREADY_VOTED'
+  | 'VOTE_COOLDOWN'
+  | 'SETTINGS_UNCHANGED'
+  | 'NOT_ENOUGH_PLAYERS';
 
 const safeMessages: Record<RoomErrorCode, string> = {
   INVALID_REQUEST: 'The room request is invalid.',
@@ -36,6 +42,12 @@ const safeMessages: Record<RoomErrorCode, string> = {
   INVALID_COMMAND: 'That command is not valid for this round.',
   ROOM_EXPIRED: 'That room has expired.',
   RATE_LIMITED: 'Too many requests. Please wait and try again.',
+  VOTE_ALREADY_ACTIVE: 'A settings vote is already in progress.',
+  VOTE_NOT_FOUND: 'That settings vote is no longer active.',
+  ALREADY_VOTED: 'You have already voted on this proposal.',
+  VOTE_COOLDOWN: 'Please wait a moment before proposing another change.',
+  SETTINGS_UNCHANGED: 'Select at least one setting to change.',
+  NOT_ENOUGH_PLAYERS: 'At least 2 active players are needed for a settings vote.',
 };
 
 export class RoomDomainError extends Error {

@@ -14,6 +14,7 @@ import {
   type RoomPlayerRecord,
   type RoomReconnectRequest,
   type RoomRecord,
+  type RoomSettingsVoteResolvedEvent,
   type RoomSnapshot,
 } from './domain/room.types.js';
 import { RoomDomainError } from './domain/room-errors.js';
@@ -35,6 +36,13 @@ import {
   stampRoundTiming,
   syncRoomPauseState,
 } from './domain/room-rules.js';
+import {
+  applyValidatedRoomSettings,
+  areRoomConfigurationsEqual,
+  getVoteEligiblePlayerIds,
+  reconcileSettingsVote,
+  toSettingsVoteResolvedEvent,
+} from './domain/room-settings-vote.js';
 import {
   getLegDifficultyTier,
   getLegScoreMultiplier,
@@ -101,11 +109,25 @@ const createPlayer = (
   hiddenChoiceIds: [],
   hintForMissionId: null,
   hintText: null,
+  settingsVoteCooldownUntil: null,
 });
 
 export interface RoomSettingsResult {
   snapshot: RoomSnapshot;
   queued: boolean;
+  voteResolved?: RoomSettingsVoteResolvedEvent;
+}
+
+export interface RoomSettingsVoteProposalResult {
+  snapshot: RoomSnapshot;
+  voteId: string;
+  voteResolved?: RoomSettingsVoteResolvedEvent;
+}
+
+export interface RoomSettingsVoteCastResult {
+  snapshot: RoomSnapshot;
+  voteResolved?: RoomSettingsVoteResolvedEvent;
+  staleError?: boolean;
 }
 
 @Injectable()
@@ -147,6 +169,7 @@ export class RoomLifecycleService {
           adminPlayerId: host.playerId,
           config: roomConfig,
           pendingConfig: null,
+          settingsVote: null,
           players: [host],
           game: {
             startedAt: null,
@@ -428,6 +451,7 @@ export class RoomLifecycleService {
       );
       draft.status = 'playing';
       draft.pendingConfig = null;
+      draft.settingsVote = null;
       draft.lastActivityAt = now;
       draft.expiresAt = this.getExpiryDate(now);
       draft.players = draft.players.map((player) => ({
@@ -495,35 +519,165 @@ export class RoomLifecycleService {
       const admin = this.requireConnectedPlayer(draft, playerId);
       admin.lastActiveAt = now;
       draft.lastActivityAt = now;
-      if (
-        draft.status === 'waiting' ||
-        draft.status === 'finished' ||
-        draft.status === 'checkpoint'
-      ) {
-        draft.config = nextConfig;
-        draft.pendingConfig = null;
-        if (draft.status === 'checkpoint' && draft.game.checkpointSummary) {
-          draft.game.checkpointSummary.nextLegTier = getLegDifficultyTier(
-            nextConfig,
-            draft.game.checkpointSummary.nextLegNumber,
-          );
-        }
-        return false;
+
+      let voteResolved: RoomSettingsVoteResolvedEvent | undefined;
+      if (draft.settingsVote) {
+        const supersededVote = draft.settingsVote;
+        draft.settingsVote = null;
+        voteResolved = toSettingsVoteResolvedEvent(draft.roomId, {
+          outcome: 'superseded',
+          vote: supersededVote,
+          queued: false,
+        });
       }
-      if (draft.status !== 'playing') {
-        throw new RoomDomainError('ROOM_NOT_STARTABLE');
-      }
-      draft.pendingConfig = nextConfig;
-      return true;
+
+      const queued = applyValidatedRoomSettings(draft, nextConfig);
+      return { queued, voteResolved };
     });
 
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
-    return { snapshot: toRoomSnapshot(room), queued: result };
+    return {
+      snapshot: toRoomSnapshot(room),
+      queued: result.queued,
+      ...(result.voteResolved ? { voteResolved: result.voteResolved } : {}),
+    };
   }
 
-  async setPaused(roomId: string, playerId: string, paused: boolean) {
+  async proposeSettingsVote(
+    roomId: string,
+    playerId: string,
+    configuration: unknown,
+  ): Promise<RoomSettingsVoteProposalResult> {
+    const nextConfig = this.validateConfiguration(configuration);
     const now = Date.now();
-    const { room } = await this.mutations.update(roomId, (draft) => {
+    const voteDurationMs = this.config.getOrThrow('settingsVoteDurationMs');
+
+    const { room, result } = await this.mutations.update(roomId, (draft) => {
+      const player = this.requireConnectedPlayer(draft, playerId);
+      player.lastActiveAt = now;
+      draft.lastActivityAt = now;
+
+      const resolvedExisting = this.reconcileVoteEvent(draft, now);
+      if (draft.settingsVote) {
+        throw new RoomDomainError('VOTE_ALREADY_ACTIVE');
+      }
+      if (player.paused) {
+        throw new RoomDomainError(
+          'INVALID_COMMAND',
+          'Resume playing before proposing a settings vote.',
+        );
+      }
+      if (
+        typeof player.settingsVoteCooldownUntil === 'number' &&
+        now < player.settingsVoteCooldownUntil
+      ) {
+        throw new RoomDomainError('VOTE_COOLDOWN');
+      }
+
+      const eligibleIds = getVoteEligiblePlayerIds(draft);
+      if (eligibleIds.length < 2) {
+        throw new RoomDomainError('NOT_ENOUGH_PLAYERS');
+      }
+
+      const effectiveConfig = draft.pendingConfig ?? draft.config;
+      if (areRoomConfigurationsEqual(effectiveConfig, nextConfig)) {
+        throw new RoomDomainError('SETTINGS_UNCHANGED');
+      }
+
+      const voteId = randomUUID();
+      draft.settingsVote = {
+        voteId,
+        proposerPlayerId: playerId,
+        proposerName: player.name,
+        proposedConfig: nextConfig,
+        yesPlayerIds: [playerId],
+        noPlayerIds: [],
+        createdAt: now,
+        expiresAt: now + voteDurationMs,
+      };
+      return { voteId, resolvedExisting };
+    });
+
+    if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    return {
+      snapshot: toRoomSnapshot(room),
+      voteId: result.voteId,
+      ...(result.resolvedExisting
+        ? { voteResolved: result.resolvedExisting }
+        : {}),
+    };
+  }
+
+  async castSettingsVote(
+    roomId: string,
+    playerId: string,
+    voteId: string,
+    approve: boolean,
+  ): Promise<RoomSettingsVoteCastResult> {
+    const now = Date.now();
+    const { room, result } = await this.mutations.update(roomId, (draft) => {
+      const player = this.requireConnectedPlayer(draft, playerId);
+      player.lastActiveAt = now;
+      draft.lastActivityAt = now;
+
+      const resolvedBeforeCast = this.reconcileVoteEvent(draft, now);
+      const vote = draft.settingsVote;
+      if (!vote || vote.voteId !== voteId) {
+        if (resolvedBeforeCast) {
+          return { voteResolved: resolvedBeforeCast, staleError: true };
+        }
+        throw new RoomDomainError('VOTE_NOT_FOUND');
+      }
+      if (player.paused) {
+        throw new RoomDomainError(
+          'INVALID_COMMAND',
+          'Resume playing to vote on settings.',
+        );
+      }
+      if (
+        vote.yesPlayerIds.includes(playerId) ||
+        vote.noPlayerIds.includes(playerId)
+      ) {
+        throw new RoomDomainError('ALREADY_VOTED');
+      }
+
+      if (approve) {
+        vote.yesPlayerIds.push(playerId);
+      } else {
+        vote.noPlayerIds.push(playerId);
+      }
+
+      const voteResolved = this.reconcileVoteEvent(draft, now);
+      return { voteResolved, staleError: false };
+    });
+
+    if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
+    return {
+      snapshot: toRoomSnapshot(room),
+      ...(result.voteResolved ? { voteResolved: result.voteResolved } : {}),
+      ...(result.staleError ? { staleError: true } : {}),
+    };
+  }
+
+  async setPaused(
+    roomId: string,
+    playerId: string,
+    paused: boolean,
+  ): Promise<RoomSnapshot> {
+    const detailed = await this.setPausedDetailed(roomId, playerId, paused);
+    return detailed.snapshot;
+  }
+
+  async setPausedDetailed(
+    roomId: string,
+    playerId: string,
+    paused: boolean,
+  ): Promise<{
+    snapshot: RoomSnapshot;
+    voteResolved?: RoomSettingsVoteResolvedEvent;
+  }> {
+    const now = Date.now();
+    const { room, result } = await this.mutations.update(roomId, (draft) => {
       if (draft.status === 'checkpoint') {
         this.requireAdmin(draft, playerId);
         const admin = this.requireConnectedPlayer(draft, playerId);
@@ -547,7 +701,7 @@ export class RoomLifecycleService {
           draft.game.pausedCheckpointRemainingMs = null;
           draft.game.checkpointResumeAt = now + remaining;
         }
-        return;
+        return this.reconcileVoteEvent(draft, now);
       }
 
       if (draft.status !== 'playing') {
@@ -564,10 +718,11 @@ export class RoomLifecycleService {
       player.pausedAt = paused ? now : null;
 
       if (wasPaused === paused) {
-        return;
+        return this.reconcileVoteEvent(draft, now);
       }
 
       syncRoomPauseState(draft, now);
+      const voteResolved = this.reconcileVoteEvent(draft, now);
 
       if (paused && !draft.game.paused) {
         const round = draft.game.round;
@@ -586,9 +741,13 @@ export class RoomLifecycleService {
           );
         }
       }
+      return voteResolved;
     });
     if (!room) throw new RoomDomainError('ROOM_NOT_FOUND');
-    return toRoomSnapshot(room);
+    return {
+      snapshot: toRoomSnapshot(room),
+      ...(result ? { voteResolved: result } : {}),
+    };
   }
 
   async leaveRoom(roomId: string, playerId: string) {
@@ -606,6 +765,7 @@ export class RoomLifecycleService {
           draft.adminPlayerId = getNextAdminPlayerId(draft.players);
         }
         syncRoomPauseState(draft, now);
+        const voteResolved = this.reconcileVoteEvent(draft, now);
         if (
           draft.status === 'playing' &&
           !draft.game.paused &&
@@ -618,17 +778,21 @@ export class RoomLifecycleService {
             this.config.getOrThrow('roundAdvanceDelayMs'),
           );
         }
-        return previousAdminId === playerId;
+        return {
+          adminTransferred: previousAdminId === playerId,
+          voteResolved,
+        };
       },
     );
 
     if (!room) {
       this.logger.log(`Last player left room ${roomId}`);
-      return { snapshot: null, adminTransferred: result };
+      return { snapshot: null, adminTransferred: result.adminTransferred };
     }
     return {
       snapshot: toRoomSnapshot(room),
-      adminTransferred: result,
+      adminTransferred: result.adminTransferred,
+      ...(result.voteResolved ? { voteResolved: result.voteResolved } : {}),
     };
   }
 
@@ -636,9 +800,25 @@ export class RoomLifecycleService {
     roomId: string,
     playerId: string,
     reconnectToken?: string,
-  ) {
+  ): Promise<RoomSnapshot | null> {
+    const detailed = await this.markDisconnectedDetailed(
+      roomId,
+      playerId,
+      reconnectToken,
+    );
+    return detailed.snapshot;
+  }
+
+  async markDisconnectedDetailed(
+    roomId: string,
+    playerId: string,
+    reconnectToken?: string,
+  ): Promise<{
+    snapshot: RoomSnapshot | null;
+    voteResolved?: RoomSettingsVoteResolvedEvent;
+  }> {
     const now = Date.now();
-    const { room } = await this.mutations.update(roomId, (draft) => {
+    const { room, result } = await this.mutations.update(roomId, (draft) => {
       const player = draft.players.find((item) => item.playerId === playerId);
       if (
         !player ||
@@ -649,11 +829,12 @@ export class RoomLifecycleService {
             hashToken(reconnectToken),
           ))
       ) {
-        return;
+        return undefined;
       }
       player.connected = false;
       player.disconnectedAt = now;
       syncRoomPauseState(draft, now);
+      const voteResolved = this.reconcileVoteEvent(draft, now);
       if (
         draft.status === 'playing' &&
         !draft.game.paused &&
@@ -666,8 +847,26 @@ export class RoomLifecycleService {
           this.config.getOrThrow('roundAdvanceDelayMs'),
         );
       }
+      return voteResolved;
     });
-    return room ? toRoomSnapshot(room) : null;
+    return {
+      snapshot: room ? toRoomSnapshot(room) : null,
+      ...(result ? { voteResolved: result } : {}),
+    };
+  }
+
+  private reconcileVoteEvent(
+    room: RoomRecord,
+    now: number,
+  ): RoomSettingsVoteResolvedEvent | undefined {
+    const resolved = reconcileSettingsVote(
+      room,
+      now,
+      this.config.getOrThrow('settingsVoteCooldownMs'),
+    );
+    return resolved
+      ? toSettingsVoteResolvedEvent(room.roomId, resolved)
+      : undefined;
   }
 
   async getSnapshot(

@@ -5,6 +5,7 @@ import {
   type RoomSnapshot,
   type RoundResult,
 } from './room.types.js';
+import { toSettingsVoteSnapshot } from './room-settings-vote.js';
 
 export const toRoomSnapshot = (
   room: RoomRecord,
@@ -16,6 +17,8 @@ export const toRoomSnapshot = (
     (room.game.round?.answers ?? []).map((item) => [item.playerId, item]),
   );
 
+  const settingsVote = toSettingsVoteSnapshot(room);
+
   return {
     roomId: room.roomId,
     revision: room.revision,
@@ -24,6 +27,7 @@ export const toRoomSnapshot = (
     adminPlayerId: room.adminPlayerId,
     config: { ...room.config },
     pendingConfig: room.pendingConfig ? { ...room.pendingConfig } : null,
+    ...(settingsVote ? { settingsVote } : {}),
     players: room.players.map((player) => {
       const answered =
         missionId !== null && player.answeredMissionId === missionId;

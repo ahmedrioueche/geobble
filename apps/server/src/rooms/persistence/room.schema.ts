@@ -10,6 +10,7 @@ import type {
   RoomPlayerRecord,
   RoomRecord,
   RoomRoundRecord,
+  RoomSettingsVoteRecord,
   RoundAnswerRecord,
 } from '../domain/room.types.js';
 
@@ -130,6 +131,9 @@ class RoomPlayerEntity implements RoomPlayerRecord {
 
   @Prop({ type: String, default: null, select: false })
   hintText?: string | null;
+
+  @Prop({ type: Number, default: null })
+  settingsVoteCooldownUntil?: number | null;
 }
 
 const RoomPlayerSchema = SchemaFactory.createForClass(RoomPlayerEntity);
@@ -297,6 +301,37 @@ class RoomGameEntity implements RoomGameRecord {
 
 const RoomGameSchema = SchemaFactory.createForClass(RoomGameEntity);
 
+@Schema({ _id: false })
+class RoomSettingsVoteEntity implements RoomSettingsVoteRecord {
+  @Prop({ required: true })
+  voteId!: string;
+
+  @Prop({ required: true })
+  proposerPlayerId!: string;
+
+  @Prop({ required: true })
+  proposerName!: string;
+
+  @Prop({ type: RoomConfigurationSchema, required: true })
+  proposedConfig!: RoomConfiguration;
+
+  @Prop({ type: [String], default: [] })
+  yesPlayerIds!: string[];
+
+  @Prop({ type: [String], default: [] })
+  noPlayerIds!: string[];
+
+  @Prop({ required: true })
+  createdAt!: number;
+
+  @Prop({ required: true })
+  expiresAt!: number;
+}
+
+const RoomSettingsVoteSchema = SchemaFactory.createForClass(
+  RoomSettingsVoteEntity,
+);
+
 @Schema({ timestamps: true, versionKey: false })
 export class RoomEntity implements RoomRecord {
   @Prop({ required: true, unique: true, index: true, uppercase: true })
@@ -330,6 +365,9 @@ export class RoomEntity implements RoomRecord {
   @Prop({ type: RoomConfigurationSchema, default: null })
   pendingConfig!: RoomConfiguration | null;
 
+  @Prop({ type: RoomSettingsVoteSchema, default: null })
+  settingsVote?: RoomSettingsVoteRecord | null;
+
   @Prop({ type: [RoomPlayerSchema], default: [] })
   players!: RoomPlayerRecord[];
 
@@ -355,4 +393,5 @@ RoomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 RoomSchema.index({ status: 1, 'game.timerDeadlineAt': 1 });
 RoomSchema.index({ status: 1, 'game.advanceAt': 1 });
 RoomSchema.index({ status: 1, 'game.round.deadlineAt': 1 });
+RoomSchema.index({ 'settingsVote.expiresAt': 1 });
 RoomSchema.set('toObject', { flattenMaps: true });

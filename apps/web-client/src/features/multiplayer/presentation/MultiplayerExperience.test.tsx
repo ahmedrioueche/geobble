@@ -8,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import toast from "react-hot-toast";
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   joinPublicRoom: vi.fn(),
   leaveRoom: vi.fn(),
   changeSettings: vi.fn(),
+  proposeSettings: vi.fn(),
+  voteSettings: vi.fn(),
   forgetReconnect: vi.fn(),
   retryReconnect: vi.fn(),
 }));
@@ -89,6 +92,7 @@ const createClientState = (snapshot?: RoomSnapshot): RoomClientState => ({
   lastAcknowledgedRevision: null,
   lastAnswerResult: null,
   settingsAccepted: null,
+  lastVoteResolved: null,
   lastReaction: null,
   error: null,
   reconnectAvailable: false,
@@ -129,6 +133,8 @@ beforeEach(() => {
       setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
+      proposeSettings: mocks.proposeSettings.mockResolvedValue(undefined),
+      voteSettings: mocks.voteSettings.mockResolvedValue(undefined),
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
       sendReaction: mocks.sendReaction,
       leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
@@ -155,6 +161,8 @@ describe("MultiplayerExperience", () => {
         setPaused: mocks.setPaused,
         startRoom: mocks.startRoom,
         changeSettings: mocks.changeSettings,
+        proposeSettings: mocks.proposeSettings.mockResolvedValue(undefined),
+        voteSettings: mocks.voteSettings.mockResolvedValue(undefined),
         submitCommand: mocks.submitCommand.mockResolvedValue(1),
         sendReaction: mocks.sendReaction,
         leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
@@ -458,6 +466,8 @@ describe("MultiplayerExperience", () => {
       setPaused: mocks.setPaused,
       startRoom: mocks.startRoom,
       changeSettings: mocks.changeSettings,
+      proposeSettings: mocks.proposeSettings.mockResolvedValue(undefined),
+      voteSettings: mocks.voteSettings.mockResolvedValue(undefined),
       submitCommand: mocks.submitCommand.mockResolvedValue(1),
       sendReaction: mocks.sendReaction,
       leaveRoom: mocks.leaveRoom.mockResolvedValue(undefined),
@@ -1454,6 +1464,11 @@ describe("MultiplayerExperience", () => {
 
     renderExperience(createClientState(checkpointSnapshot));
 
+    const checkpointRegion = screen.getByLabelText("Checkpoint summary");
+    expect(checkpointRegion.className).toContain("inset-x-0");
+    expect(checkpointRegion.className).toContain("bottom-0");
+    expect(checkpointRegion.className).toContain("overflow-x-hidden");
+
     expect(
       screen.getByRole("heading", { name: "Grace takes Leg 2!" }),
     ).toBeTruthy();
@@ -1515,7 +1530,7 @@ describe("MultiplayerExperience", () => {
           connected: true,
           score: 75,
           legScore: 30,
-          checkpointsWon: 0,
+          checkpointsWon: 2,
           streak: 2,
           maxStreak: 2,
           pinLocation: null,
@@ -1548,10 +1563,154 @@ describe("MultiplayerExperience", () => {
     expect(screen.getByText("1.25x")).toBeTruthy();
     expect(screen.getByText("3 / 10")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Leg" }));
     const standingsAside = screen.getByLabelText("Player standings");
+    expect(standingsAside.className).toContain("md:w-80");
+
+    fireEvent.click(screen.getByRole("button", { name: "Leg" }));
     const items = standingsAside.querySelectorAll("li");
+    expect(items[0]?.className).toContain("text-sm");
     expect(items[0]?.textContent).toContain("Grace");
-    expect(items[0]?.textContent).toContain("30");
+    expect(items[0]?.textContent).toContain("2 wins");
+    expect(items[1]?.textContent).toContain("Ada");
+    expect(items[1]?.textContent).toContain("1 win");
+  });
+
+  it("lets non-hosts propose settings votes and lets players vote across waiting, playing, checkpoint, and finished screens", async () => {
+    // 1. Waiting room: non-host sees Propose button, unchanged form disables submit, changing a setting submits proposeSettings
+    const waitingNonHostSnapshot = createSnapshot({
+      status: "waiting",
+    });
+    renderExperience({
+      ...createClientState(waitingNonHostSnapshot),
+      room: { playerId: "player-2", snapshot: waitingNonHostSnapshot },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Propose" }));
+    expect(screen.getByText(/Propose settings vote/i)).toBeTruthy();
+    const submitProposal = screen.getByRole("button", {
+      name: "Propose vote",
+    }) as HTMLButtonElement;
+    expect(submitProposal.disabled).toBe(true);
+
+    // Change prompt to Flag via CustomSelect inside the modal
+    const dialog = within(screen.getByRole("dialog"));
+    fireEvent.click(dialog.getByRole("button", { name: "Prompt" }));
+    fireEvent.click(dialog.getByRole("option", { name: "Flag" }));
+    expect(submitProposal.disabled).toBe(false);
+    fireEvent.click(submitProposal);
+
+    await waitFor(() => {
+      expect(mocks.proposeSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ subMode: "flag" }),
+      );
+    });
+
+    cleanup();
+
+    // 2. Playing screen: floating banner appears expanded for unvoted player, collapses after voting, and host sees compact pill for their own proposal
+    const playingWithVoteSnapshot = createSnapshot({
+      status: "playing",
+      settingsVote: {
+        voteId: "vote-playing-1",
+        proposerPlayerId: "player-2",
+        proposerName: "Grace",
+        proposedConfig: {
+          mode: "identify",
+          pinDirection: "locate",
+          subMode: "flag",
+          challengeType: "world",
+          challengeValue: 0,
+        },
+        yesPlayerIds: ["player-2"],
+        noPlayerIds: [],
+        requiredYes: 2,
+        eligibleCount: 2,
+        createdAt: 1000,
+        expiresAt: 26000,
+      },
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-1",
+          number: 1,
+          prompt: { type: "text", value: "France" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+
+    renderExperience(createClientState(playingWithVoteSnapshot));
+
+    const region = screen.getByRole("region", { name: "Settings vote" });
+    expect(region.textContent).toContain("Grace proposes");
+    expect(region.textContent).toContain("Prompt:");
+    expect(region.textContent).toContain("Flag");
+
+    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    await waitFor(() => {
+      expect(mocks.voteSettings).toHaveBeenCalledWith("vote-playing-1", true);
+    });
+
+    cleanup();
+
+    // 3. Proposer during playing sees auto-collapsed compact pill until expanded
+    renderExperience({
+      ...createClientState(playingWithVoteSnapshot),
+      room: { playerId: "player-2", snapshot: playingWithVoteSnapshot },
+    });
+    expect(
+      screen.getByRole("button", { name: "Expand settings vote" }),
+    ).toBeTruthy();
+
+    cleanup();
+
+    // 4. Checkpoint & finished screens show single Settings vote banner cleanly
+    const checkpointVoteSnapshot = createSnapshot({
+      status: "checkpoint",
+      settingsVote: playingWithVoteSnapshot.settingsVote,
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        legNumber: 1,
+        checkpointResumeAt: 20_000,
+        checkpointSummary: {
+          legNumber: 1,
+          roundsInLeg: 2,
+          winnerIds: ["player-1"],
+          topLegScore: 20,
+          nextLegNumber: 2,
+          nextLegTier: "medium",
+          nextLegMultiplier: 1.25,
+          lapNumber: 1,
+        },
+        round: null,
+      },
+    });
+    renderExperience(createClientState(checkpointVoteSnapshot));
+    expect(screen.getAllByRole("region", { name: "Settings vote" })).toHaveLength(
+      1,
+    );
+    expect(screen.getByRole("button", { name: "No" })).toBeTruthy();
+
+    cleanup();
+
+    const finishedVoteSnapshot = createSnapshot({
+      status: "finished",
+      settingsVote: playingWithVoteSnapshot.settingsVote,
+    });
+    renderExperience({
+      ...createClientState(finishedVoteSnapshot),
+      room: { playerId: "player-2", snapshot: finishedVoteSnapshot },
+    });
+    expect(screen.getAllByRole("region", { name: "Settings vote" })).toHaveLength(
+      1,
+    );
+    const voteActiveButton = screen.getByRole("button", {
+      name: "Vote active",
+    }) as HTMLButtonElement;
+    expect(voteActiveButton.disabled).toBe(true);
   });
 });

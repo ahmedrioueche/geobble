@@ -17,6 +17,8 @@ export interface ServerConfiguration {
   spectatorPromptGraceMs: number;
   roundAdvanceDelayMs: number;
   checkpointDurationMs: number;
+  settingsVoteDurationMs: number;
+  settingsVoteCooldownMs: number;
   /** Per-round answer window in milliseconds. 0 disables the round timer. */
   roundTimeLimitMs: number;
   pointsPerCorrectAnswer: number;
@@ -145,6 +147,18 @@ export const validateEnvironment = (
     10_000,
     0,
   );
+  const settingsVoteDurationMs = readInteger(
+    env,
+    'SETTINGS_VOTE_DURATION_MS',
+    25_000,
+    3_000,
+  );
+  const settingsVoteCooldownMs = readInteger(
+    env,
+    'SETTINGS_VOTE_COOLDOWN_MS',
+    20_000,
+    0,
+  );
   const roundTimeLimitMs = readInteger(
     env,
     'ROUND_TIME_LIMIT_MS',
@@ -201,6 +215,8 @@ export const validateEnvironment = (
     spectatorPromptGraceMs,
     roundAdvanceDelayMs,
     checkpointDurationMs,
+    settingsVoteDurationMs,
+    settingsVoteCooldownMs,
     roundTimeLimitMs,
     pointsPerCorrectAnswer,
     streakBonusPoints,

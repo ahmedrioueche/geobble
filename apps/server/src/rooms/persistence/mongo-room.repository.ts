@@ -59,6 +59,7 @@ export class MongoRoomRepository implements RoomRepository {
             adminPlayerId: replacement.adminPlayerId,
             config: replacement.config,
             pendingConfig: replacement.pendingConfig,
+            settingsVote: replacement.settingsVote ?? null,
             players: replacement.players,
             game: replacement.game,
             lastActivityAt: replacement.lastActivityAt,
@@ -138,6 +139,17 @@ export class MongoRoomRepository implements RoomRepository {
         status: 'checkpoint',
         'game.checkpointPaused': { $ne: true },
         'game.checkpointResumeAt': { $ne: null, $lte: now },
+      })
+      .select(ROOM_PRIVATE_SELECT)
+      .lean<RoomRecord[]>()
+      .exec();
+  }
+
+  findDueSettingsVotes(now: number): Promise<RoomRecord[]> {
+    return this.roomModel
+      .find({
+        settingsVote: { $ne: null },
+        'settingsVote.expiresAt': { $lte: now },
       })
       .select(ROOM_PRIVATE_SELECT)
       .lean<RoomRecord[]>()

@@ -39,6 +39,7 @@ import {
 import { useRoomClient } from "../application/useRoomClient";
 import { RoomSettingsForm } from "./RoomSettingsForm";
 import { RoomSettingsPanel } from "./RoomSettingsPanel";
+import { SettingsVoteBanner } from "./SettingsVoteBanner";
 import { RoundRecapCard } from "./RoundRecapCard";
 import { PowerUpBar } from "./PowerUpBar";
 import { StartingGameOverlay } from "./StartingGameOverlay";
@@ -122,10 +123,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     target: boolean;
     revision: number;
   } | null>(null);
+  const [voteBannerPref, setVoteBannerPref] = useState<{
+    voteId: string;
+    collapsed: boolean;
+  } | null>(null);
   const [startingFromRevision, setStartingFromRevision] = useState<
     number | null
   >(null);
   const previousRoomSnapshot = useRef<RoomSnapshot | null>(null);
+  const lastResolvedVoteIdRef = useRef<string | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
   const reactionTimersRef = useRef<Set<number>>(new Set());
   const room = state.room;
@@ -136,8 +142,15 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   const isAdmin = self?.isAdmin ?? false;
   const connectedPlayersCount =
     snapshot?.players.filter((player) => player.connected).length ?? 0;
+  const eligibleVotePlayersCount =
+    snapshot?.players.filter((player) => player.connected && !player.paused)
+      .length ?? 0;
+  const activeSettingsVote = snapshot?.settingsVote ?? null;
   const hasAnswered = self?.answered ?? false;
   const isSelfPaused = Boolean(self?.paused);
+  const canProposeSettings =
+    !isAdmin && eligibleVotePlayersCount >= 2 && !isSelfPaused;
+  const canOpenSettingsModal = isAdmin || canProposeSettings;
   const isRoomPaused = Boolean(snapshot?.game.paused);
   const waitingForCommand = state.pendingCommandIds.length > 0;
   const isUpdatingPause =
@@ -261,16 +274,48 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
   }, [state.lastReaction]);
 
   useEffect(() => {
-    if (snapshot?.status !== "playing" && snapshot?.status !== "checkpoint") {
+    if (
+      snapshot?.status !== "playing" &&
+      snapshot?.status !== "checkpoint" &&
+      !snapshot?.settingsVote
+    ) {
       return;
     }
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [
     snapshot?.status,
+    snapshot?.settingsVote,
     snapshot?.game.timerDeadlineAt,
     snapshot?.game.checkpointResumeAt,
   ]);
+
+  useEffect(() => {
+    const resolved = state.lastVoteResolved;
+    if (!resolved) {
+      lastResolvedVoteIdRef.current = null;
+      return;
+    }
+    if (lastResolvedVoteIdRef.current === resolved.voteId) return;
+    lastResolvedVoteIdRef.current = resolved.voteId;
+
+    if (resolved.outcome === "passed") {
+      toast.success(
+        resolved.queued
+          ? "Vote passed — new settings apply next round"
+          : "Vote passed — settings updated",
+        { icon: "✅" },
+      );
+    } else if (resolved.outcome === "rejected") {
+      toast("Settings proposal did not pass", { icon: "🗳️" });
+    } else if (resolved.outcome === "expired") {
+      toast("Settings vote timed out", { icon: "⏱️" });
+    } else if (resolved.outcome === "superseded") {
+      toast("Host updated room settings directly", { icon: "⚙️" });
+    } else if (resolved.outcome === "cancelled") {
+      toast("Settings vote cancelled", { icon: "⚠️" });
+    }
+  }, [state.lastVoteResolved]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -614,8 +659,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
 
   const saveRoomSettings = async (configuration: RoomConfiguration) => {
     setActionError(null);
-    await client.changeSettings(configuration);
+    if (isAdmin) {
+      await client.changeSettings(configuration);
+    } else {
+      await client.proposeSettings(configuration);
+    }
     setShowSettings(false);
+  };
+
+  const castSettingsVote = async (voteId: string, approve: boolean) => {
+    setActionError(null);
+    await client.voteSettings(voteId, approve);
   };
 
   const copyRoomCode = async () => {
@@ -990,17 +1044,38 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </span>
                 </button>
               )}
-              {isAdmin && snapshot.status !== "waiting" && (
+              {(isAdmin || canProposeSettings) && snapshot.status !== "waiting" && (
                 <button
-                  aria-label="Change settings"
-                  className="flex items-center gap-1 rounded-lg border border-white/15 p-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 disabled:opacity-50 md:px-3 md:py-2 md:text-xs"
-                  disabled={state.status !== "connected"}
+                  aria-label={
+                    isAdmin
+                      ? "Change settings"
+                      : activeSettingsVote
+                        ? "Settings vote active"
+                        : "Propose settings change"
+                  }
+                  className="flex items-center gap-1 rounded-lg border border-white/15 p-1.5 text-[10px] font-black uppercase text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 md:px-3 md:py-2 md:text-xs"
+                  disabled={
+                    state.status !== "connected" ||
+                    (!isAdmin && Boolean(activeSettingsVote))
+                  }
                   onClick={() => setShowSettings(true)}
-                  title="Change settings"
+                  title={
+                    isAdmin
+                      ? "Change settings"
+                      : activeSettingsVote
+                        ? "Settings vote already active"
+                        : "Propose settings change"
+                  }
                   type="button"
                 >
                   <SlidersHorizontal aria-hidden="true" size={14} />
-                  <span className="hidden md:inline">Settings</span>
+                  <span className="hidden md:inline">
+                    {isAdmin
+                      ? "Settings"
+                      : activeSettingsVote
+                        ? "Vote active"
+                        : "Propose"}
+                  </span>
                 </button>
               )}
               <button
@@ -1029,7 +1104,22 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
           </header>
 
           {snapshot.status === "waiting" ? (
-            <div className="absolute inset-x-4 bottom-5 top-16 z-20 mx-auto grid max-w-5xl gap-4 overflow-y-auto md:top-24 md:grid-cols-[1fr_1.2fr]">
+            <div className="absolute inset-x-4 bottom-5 top-16 z-20 mx-auto max-w-5xl overflow-y-auto md:top-24">
+              {activeSettingsVote && selfPlayerId && (
+                <div className="mb-4">
+                  <SettingsVoteBanner
+                    connected={state.status === "connected"}
+                    currentConfig={snapshot.pendingConfig ?? snapshot.config}
+                    isSelfPaused={isSelfPaused}
+                    nowMs={now === 0 ? activeSettingsVote.createdAt : now}
+                    onVote={castSettingsVote}
+                    selfPlayerId={selfPlayerId}
+                    variant="inline"
+                    vote={activeSettingsVote}
+                  />
+                </div>
+              )}
+              <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/90 p-5 backdrop-blur-xl">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="font-black uppercase tracking-wider">
@@ -1127,9 +1217,12 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               </div>
               <div className="space-y-4">
                 <RoomSettingsPanel
+                  canPropose={canProposeSettings}
                   config={snapshot.config}
+                  hasActiveVote={Boolean(activeSettingsVote)}
                   isAdmin={isAdmin}
                   onEdit={() => setShowSettings(true)}
+                  onPropose={() => setShowSettings(true)}
                   pendingConfig={snapshot.pendingConfig}
                 />
                 <RoomInviteCard
@@ -1138,6 +1231,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   roomSecret={room.roomSecret}
                   visibility={snapshot.visibility}
                 />
+              </div>
               </div>
               {isStartingGame && (
                 <StartingGameOverlay
@@ -1148,7 +1242,9 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             </div>
           ) : snapshot.status === "checkpoint" ? (
             <CheckpointOverlay
+              canProposeSettings={canProposeSettings}
               connected={state.status === "connected"}
+              hasActiveVote={Boolean(activeSettingsVote)}
               isAdmin={isAdmin}
               isAdvancingLeg={isStartingGame}
               onLeave={() => void leave()}
@@ -1172,13 +1268,29 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
               }
               remainingMs={checkpointRemainingMs}
               selfPlayerId={selfPlayerId}
+              settingsVoteSlot={
+                activeSettingsVote && selfPlayerId ? (
+                  <SettingsVoteBanner
+                    connected={state.status === "connected"}
+                    currentConfig={snapshot.pendingConfig ?? snapshot.config}
+                    isSelfPaused={isSelfPaused}
+                    nowMs={now === 0 ? activeSettingsVote.createdAt : now}
+                    onVote={castSettingsVote}
+                    selfPlayerId={selfPlayerId}
+                    variant="inline"
+                    vote={activeSettingsVote}
+                  />
+                ) : undefined
+              }
               snapshot={snapshot}
             />
           ) : snapshot.status === "finished" ? (
             <>
               <MatchFinishedOverlay
+                canProposeSettings={canProposeSettings}
                 connected={state.status === "connected"}
                 connectedPlayersCount={connectedPlayersCount}
+                hasActiveVote={Boolean(activeSettingsVote)}
                 isAdmin={isAdmin}
                 isStartingRematch={isStartingGame}
                 onLeave={() => void leave()}
@@ -1196,6 +1308,20 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 }}
                 onSendReaction={sendReaction}
                 selfPlayerId={selfPlayerId}
+                settingsVoteSlot={
+                  activeSettingsVote && selfPlayerId ? (
+                    <SettingsVoteBanner
+                      connected={state.status === "connected"}
+                      currentConfig={snapshot.pendingConfig ?? snapshot.config}
+                      isSelfPaused={isSelfPaused}
+                      nowMs={now === 0 ? activeSettingsVote.createdAt : now}
+                      onVote={castSettingsVote}
+                      selfPlayerId={selfPlayerId}
+                      variant="inline"
+                      vote={activeSettingsVote}
+                    />
+                  ) : undefined
+                }
                 snapshot={snapshot}
               />
               {isStartingGame && (
@@ -1209,17 +1335,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             <>
               <aside
                 aria-label="Player standings"
-                className={`${showStandings ? "block" : "hidden"} absolute bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-3 z-10 max-h-[40vh] w-52 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl md:bottom-6 md:left-6 md:z-20 md:block md:max-h-[45vh] md:w-60 md:bg-slate-950/90`}
+                className={`${showStandings ? "block" : "hidden"} absolute bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-3 z-10 max-h-[45vh] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl md:bottom-6 md:left-6 md:z-20 md:block md:max-h-[50vh] md:w-80 md:bg-slate-950/90`}
               >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-sky-300">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-black uppercase tracking-widest text-sky-300">
                     Standings · Round {round?.number ?? 0}
                   </p>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {snapshot.game.legNumber !== undefined && (
-                      <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5 text-[9px] font-black uppercase">
+                      <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5 text-[11px] font-black uppercase">
                         <button
-                          className={`rounded-md px-1.5 py-0.5 transition ${
+                          className={`rounded-md px-2 py-1 transition ${
                             standingsScope === "tour"
                               ? "bg-sky-400 text-slate-950"
                               : "text-white/60 hover:text-white"
@@ -1230,7 +1356,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                           Tour
                         </button>
                         <button
-                          className={`rounded-md px-1.5 py-0.5 transition ${
+                          className={`rounded-md px-2 py-1 transition ${
                             standingsScope === "leg"
                               ? "bg-sky-400 text-slate-950"
                               : "text-white/60 hover:text-white"
@@ -1248,93 +1374,97 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                       onClick={() => setShowStandings(false)}
                       type="button"
                     >
-                      <X aria-hidden="true" size={14} />
+                      <X aria-hidden="true" size={16} />
                     </button>
                   </div>
                 </div>
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {[...snapshot.players]
                     .sort((first, second) =>
                       standingsScope === "leg"
-                        ? (second.legScore ?? 0) - (first.legScore ?? 0) ||
+                        ? (second.checkpointsWon ?? 0) -
+                            (first.checkpointsWon ?? 0) ||
                           second.score - first.score
                         : second.score - first.score,
                     )
-                    .map((player) => (
-                      <li
-                        className="flex items-center justify-between gap-2 text-xs"
-                        key={player.id}
-                      >
-                        <span
-                          className={`flex min-w-0 items-center gap-1.5 truncate font-bold ${
-                            player.paused ? "text-rose-400" : ""
-                          }`}
+                    .map((player) => {
+                      const legWins = player.checkpointsWon ?? 0;
+                      return (
+                        <li
+                          className="flex items-center justify-between gap-3 text-sm"
+                          key={player.id}
                         >
                           <span
-                            aria-label={
-                              player.paused
-                                ? `${player.name} AFK`
-                                : player.lockedOut
-                                  ? `${player.name} locked out`
-                                  : player.answered
-                                    ? `${player.name} answered`
-                                    : `${player.name} thinking`
-                            }
-                            className={`inline-block h-2 w-2 shrink-0 rounded-full transition ${
-                              player.paused
-                                ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.85)]"
-                                : player.lockedOut
-                                  ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]"
-                                  : player.answered
-                                    ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]"
-                                    : "bg-white/20"
+                            className={`flex min-w-0 items-center gap-2 truncate font-bold ${
+                              player.paused ? "text-rose-400" : ""
                             }`}
-                            title={
-                              player.paused
-                                ? "AFK / Unavailable for the moment"
-                                : player.lockedOut
-                                  ? "Locked out this round"
-                                  : player.answered
-                                    ? "Locked in"
-                                    : "Thinking…"
-                            }
-                          />
-                          <span className="truncate">
-                            {player.name}
-                            {player.id === room.playerId ? " (you)" : ""}
+                          >
+                            <span
+                              aria-label={
+                                player.paused
+                                  ? `${player.name} AFK`
+                                  : player.lockedOut
+                                    ? `${player.name} locked out`
+                                    : player.answered
+                                      ? `${player.name} answered`
+                                      : `${player.name} thinking`
+                              }
+                              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full transition ${
+                                player.paused
+                                  ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.85)]"
+                                  : player.lockedOut
+                                    ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]"
+                                    : player.answered
+                                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]"
+                                      : "bg-white/20"
+                              }`}
+                              title={
+                                player.paused
+                                  ? "AFK / Unavailable for the moment"
+                                  : player.lockedOut
+                                    ? "Locked out this round"
+                                    : player.answered
+                                      ? "Locked in"
+                                      : "Thinking…"
+                              }
+                            />
+                            <span className="truncate">
+                              {player.name}
+                              {player.id === room.playerId ? " (you)" : ""}
+                            </span>
+                            {player.paused && (
+                              <span
+                                className="shrink-0 rounded border border-rose-400/30 bg-rose-500/20 px-1.5 py-0.5 text-[11px] font-black uppercase text-rose-300"
+                                title="AFK / Unavailable for the moment"
+                              >
+                                AFK
+                              </span>
+                            )}
+                            {legWins > 0 && (
+                              <span
+                                className="shrink-0 rounded bg-amber-300/15 px-1.5 py-0.5 text-[11px] font-black text-amber-200"
+                                title={`${legWins} leg wins`}
+                              >
+                                👑{legWins}
+                              </span>
+                            )}
+                            {player.streak >= 2 && (
+                              <span
+                                className="shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-black text-amber-300"
+                                title={`${player.streak} streak`}
+                              >
+                                🔥{player.streak}
+                              </span>
+                            )}
                           </span>
-                          {player.paused && (
-                            <span
-                              className="shrink-0 rounded border border-rose-400/30 bg-rose-500/20 px-1 py-0.5 text-[9px] font-black uppercase text-rose-300"
-                              title="AFK / Unavailable for the moment"
-                            >
-                              AFK
-                            </span>
-                          )}
-                          {(player.checkpointsWon ?? 0) > 0 && (
-                            <span
-                              className="shrink-0 rounded bg-amber-300/15 px-1 py-0.5 text-[9px] font-black text-amber-200"
-                              title={`${player.checkpointsWon} leg wins`}
-                            >
-                              👑{player.checkpointsWon}
-                            </span>
-                          )}
-                          {player.streak >= 2 && (
-                            <span
-                              className="shrink-0 rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-black text-amber-300"
-                              title={`${player.streak} streak`}
-                            >
-                              🔥{player.streak}
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-mono font-black text-sky-200">
-                          {standingsScope === "leg"
-                            ? (player.legScore ?? 0)
-                            : player.score}
-                        </span>
-                      </li>
-                    ))}
+                          <span className="shrink-0 font-mono text-sm font-black text-sky-200">
+                            {standingsScope === "leg"
+                              ? `${legWins} ${legWins === 1 ? "win" : "wins"}`
+                              : player.score}
+                          </span>
+                        </li>
+                      );
+                    })}
                 </ul>
               </aside>
 
@@ -1575,6 +1705,39 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   />
                 )}
               </div>
+              {snapshot.status === "playing" &&
+                activeSettingsVote &&
+                selfPlayerId &&
+                (() => {
+                  const hasVoted =
+                    activeSettingsVote.yesPlayerIds.includes(selfPlayerId) ||
+                    activeSettingsVote.noPlayerIds.includes(selfPlayerId);
+                  const isCollapsed =
+                    voteBannerPref?.voteId === activeSettingsVote.voteId
+                      ? voteBannerPref.collapsed
+                      : hasVoted;
+                  return (
+                    <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-3 right-3 z-20 md:bottom-auto md:left-6 md:right-auto md:top-24 md:w-80">
+                      <SettingsVoteBanner
+                        collapsed={isCollapsed}
+                        connected={state.status === "connected"}
+                        currentConfig={snapshot.pendingConfig ?? snapshot.config}
+                        isSelfPaused={isSelfPaused}
+                        nowMs={now === 0 ? activeSettingsVote.createdAt : now}
+                        onToggleCollapse={() =>
+                          setVoteBannerPref({
+                            voteId: activeSettingsVote.voteId,
+                            collapsed: !isCollapsed,
+                          })
+                        }
+                        onVote={castSettingsVote}
+                        selfPlayerId={selfPlayerId}
+                        variant="floating"
+                        vote={activeSettingsVote}
+                      />
+                    </div>
+                  );
+                })()}
               {snapshot.status === "playing" && isRoomPaused && (
                 <MatchPausedOverlay
                   onResume={() => togglePause(false)}
@@ -1620,7 +1783,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
             </p>
           )}
 
-          {showSettings && isAdmin && (
+          {showSettings && canOpenSettingsModal && (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-md md:items-center md:p-4">
               <div
                 aria-labelledby="room-settings-modal-title"
@@ -1633,18 +1796,30 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     className="text-lg font-black uppercase"
                     id="room-settings-modal-title"
                   >
-                    {snapshot.status === "playing"
-                      ? "Next round settings"
-                      : "Room settings"}
+                    {!isAdmin
+                      ? "Propose settings vote"
+                      : snapshot.status === "playing"
+                        ? "Next round settings"
+                        : "Room settings"}
                   </h2>
+                  {!isAdmin && (
+                    <p className="mt-1 text-xs text-white/60">
+                      {snapshot.status === "playing"
+                        ? "Applies on the next round if the room votes yes."
+                        : "Applies immediately if the room votes yes."}
+                    </p>
+                  )}
                   {snapshot.pendingConfig && (
                     <p className="mt-2 text-xs text-amber-200">
-                      A settings change is already queued. Saving replaces it.
+                      {isAdmin
+                        ? "A settings change is already queued. Saving replaces it."
+                        : "A settings change is already queued. Passing a vote replaces it."}
                     </p>
                   )}
                 </div>
                 <RoomSettingsForm
                   initial={snapshot.pendingConfig ?? snapshot.config}
+                  mode={isAdmin ? "edit" : "propose"}
                   onCancel={() => setShowSettings(false)}
                   onSave={saveRoomSettings}
                   submitting={false}

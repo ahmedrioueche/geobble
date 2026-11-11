@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import type { RoomConfiguration } from "../contracts/multiplayerRoomProtocol";
 import CustomSelect from "../../../components/atoms/CustomSelect";
+import { getRoomSettingsDiff } from "./roomSettingsDiff";
 
 interface RoomSettingsFormProps {
   initial: RoomConfiguration;
+  mode?: "edit" | "propose";
   submitting: boolean;
   onCancel: () => void;
   onSave: (configuration: RoomConfiguration) => Promise<void>;
@@ -12,6 +14,7 @@ interface RoomSettingsFormProps {
 
 export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
   initial,
+  mode = "edit",
   submitting,
   onCancel,
   onSave,
@@ -19,6 +22,8 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
   const [config, setConfig] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const diffs = getRoomSettingsDiff(initial, config);
+  const isProposeMode = mode === "propose";
   useEffect(() => {
     if (!saveError) return;
     const timeout = window.setTimeout(() => setSaveError(null), 5000);
@@ -196,6 +201,25 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         />
       </label>
 
+      {isProposeMode && (
+        <div className="rounded-xl border border-sky-300/20 bg-sky-400/10 px-3.5 py-2.5 text-xs">
+          {diffs.length > 0 ? (
+            <>
+              <p className="font-black uppercase tracking-wider text-sky-200">
+                Proposed changes ({diffs.length})
+              </p>
+              <p className="mt-1 text-white/80">
+                {diffs.map((diff) => `${diff.label}: ${diff.to}`).join(" · ")}
+              </p>
+            </>
+          ) : (
+            <p className="font-semibold text-white/60">
+              Adjust at least one setting above to start a room vote.
+            </p>
+          )}
+        </div>
+      )}
+
       {saveError && (
         <p className="text-sm text-rose-300" role="alert">
           {saveError}
@@ -212,10 +236,16 @@ export const RoomSettingsForm: React.FC<RoomSettingsFormProps> = ({
         </button>
         <button
           className="rounded-lg bg-sky-400 px-5 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
-          disabled={submitting || saving}
+          disabled={submitting || saving || (isProposeMode && diffs.length === 0)}
           type="submit"
         >
-          {saving ? "Saving…" : "Save settings"}
+          {saving
+            ? isProposeMode
+              ? "Proposing…"
+              : "Saving…"
+            : isProposeMode
+              ? "Propose vote"
+              : "Save settings"}
         </button>
       </div>
     </form>

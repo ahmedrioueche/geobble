@@ -1,85 +1,30 @@
 import type React from "react";
 import type { RoomConfiguration } from "../contracts/multiplayerRoomProtocol";
+import { getRoomSettingsEntries } from "./roomSettingsDiff";
 
 interface RoomSettingsPanelProps {
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
   isAdmin: boolean;
+  canPropose?: boolean;
+  hasActiveVote?: boolean;
   onEdit: () => void;
+  onPropose?: () => void;
 }
-
-const getSettings = (config: RoomConfiguration) => [
-  {
-    label: "Mode",
-    value:
-      config.mode === "pin"
-        ? `Pin · ${config.pinDirection === "locate" ? "Locate country" : "Identify pin"}`
-        : config.mode === "reverse"
-          ? "Reverse"
-          : "Identify",
-  },
-  {
-    label: "Prompt",
-    value:
-      config.subMode === "flag"
-        ? "Flag"
-        : config.subMode === "capital"
-          ? "Capital"
-          : "Country name",
-  },
-  {
-    label: "Difficulty",
-    value:
-      !config.difficulty || config.difficulty === "progressive"
-        ? "Progressive"
-        : config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1),
-  },
-  {
-    label: "Challenge",
-    value:
-      config.challengeType === "world"
-        ? config.endless === false
-          ? "Whole world"
-          : "Whole world (endless)"
-        : config.challengeType === "count"
-          ? config.endless === false
-            ? `${config.challengeValue} rounds`
-            : `Checkpoint every ${config.challengeValue} rounds`
-          : config.endless === false
-            ? `${config.challengeValue} seconds`
-            : `Checkpoint every ${config.challengeValue}s`,
-  },
-  {
-    label: "Round timer",
-    value:
-      (config.roundTimeLimitSeconds ?? 20) === 0
-        ? "Off"
-        : `${config.roundTimeLimitSeconds ?? 20}s`,
-  },
-  {
-    label: "Scoring",
-    value: [
-      config.speedScoring === false ? "Flat" : "Speed bonus",
-      (config.wrongAnswerPenalty ?? 0) > 0
-        ? `-${config.wrongAnswerPenalty} on wrong`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  },
-];
 
 const SettingsList: React.FC<{ config: RoomConfiguration }> = ({ config }) => (
   <dl className="mt-5 space-y-4">
-    {getSettings(config).map(({ label, value }) => (
+    {getRoomSettingsEntries(config).map(({ label, value }) => (
       <div
         className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-0 last:pb-0"
         key={label}
       >
-        <dt className="text-xs font-bold uppercase tracking-wider text-white/45">
+        <dt className="shrink-0 text-xs font-bold uppercase tracking-wider text-white/45">
           {label}
         </dt>
-        <dd className="text-right text-sm font-bold text-white">{value}</dd>
+        <dd className="min-w-0 break-words text-right text-sm font-bold text-white">
+          {value}
+        </dd>
       </div>
     ))}
   </dl>
@@ -89,7 +34,10 @@ export const RoomSettingsPanel: React.FC<RoomSettingsPanelProps> = ({
   config,
   pendingConfig,
   isAdmin,
+  canPropose = false,
+  hasActiveVote = false,
   onEdit,
+  onPropose,
 }) => (
   <section
     aria-label="Room settings"
@@ -104,7 +52,7 @@ export const RoomSettingsPanel: React.FC<RoomSettingsPanelProps> = ({
           Visible to everyone in this room
         </p>
       </div>
-      {isAdmin && (
+      {isAdmin ? (
         <button
           className="rounded-lg border border-sky-300/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-200 transition hover:border-sky-300/60 hover:bg-sky-300/10"
           onClick={onEdit}
@@ -112,6 +60,18 @@ export const RoomSettingsPanel: React.FC<RoomSettingsPanelProps> = ({
         >
           Edit
         </button>
+      ) : (
+        canPropose &&
+        onPropose && (
+          <button
+            className="rounded-lg border border-sky-300/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-200 transition hover:border-sky-300/60 hover:bg-sky-300/10 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={hasActiveVote}
+            onClick={onPropose}
+            type="button"
+          >
+            {hasActiveVote ? "Vote active" : "Propose"}
+          </button>
+        )
       )}
     </div>
 

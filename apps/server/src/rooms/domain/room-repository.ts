@@ -18,6 +18,7 @@ export interface RoomRepository {
   findDueRoundDeadlines(now: number): Promise<RoomRecord[]>;
   findDuePauseDeadlines(now: number): Promise<RoomRecord[]>;
   findDueCheckpoints(now: number): Promise<RoomRecord[]>;
+  findDueSettingsVotes(now: number): Promise<RoomRecord[]>;
   findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]>;
   findRoomsWithConnectedPlayers(): Promise<RoomRecord[]>;
 }

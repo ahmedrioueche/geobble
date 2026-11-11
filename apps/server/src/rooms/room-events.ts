@@ -8,6 +8,7 @@ import type {
   RoomJoinRequest,
   RoomReactionEvent,
   RoomReconnectRequest,
+  RoomSettingsVoteResolvedEvent,
   RoomSnapshot,
 } from './domain/room.types.js';
 import type { RoomErrorCode } from './domain/room-errors.js';
@@ -21,6 +22,8 @@ export const ROOM_EVENTS = {
   pause: 'room:pause',
   start: 'room:start',
   changeSettings: 'room:change-settings',
+  proposeSettings: 'room:propose-settings',
+  voteSettings: 'room:vote-settings',
   command: 'room:command',
   reaction: 'room:reaction',
   leave: 'room:leave',
@@ -30,6 +33,8 @@ export const ROOM_EVENTS = {
   commandAccepted: 'room:command-accepted',
   commandRejected: 'room:command-rejected',
   settingsAccepted: 'room:settings-accepted',
+  voteAcknowledged: 'room:vote-acknowledged',
+  settingsVoteResolved: 'room:settings-vote-resolved',
   left: 'room:left',
   closed: 'room:closed',
   error: 'room:error',
@@ -58,6 +63,15 @@ export interface RoomClientEvents {
   'room:change-settings': (payload: {
     requestId: string;
     config: RoomConfiguration;
+  }) => void;
+  'room:propose-settings': (payload: {
+    requestId: string;
+    config: RoomConfiguration;
+  }) => void;
+  'room:vote-settings': (payload: {
+    requestId: string;
+    voteId: string;
+    approve: boolean;
   }) => void;
   'room:command': (payload: RoomCommand) => void;
   'room:reaction': (payload: { emoji: ReactionEmoji }) => void;
@@ -96,6 +110,12 @@ export interface RoomServerEvents {
     queued: boolean;
     revision: number;
   }) => void;
+  'room:vote-acknowledged': (payload: {
+    requestId: string;
+    roomId: string;
+    revision: number;
+  }) => void;
+  'room:settings-vote-resolved': (payload: RoomSettingsVoteResolvedEvent) => void;
   'room:left': (payload: { roomId: string; reason?: 'inactivity' }) => void;
   'room:closed': (payload: { roomId: string; reason?: 'inactivity' }) => void;
   'room:error': (payload: RoomRequestError) => void;

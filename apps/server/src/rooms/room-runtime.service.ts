@@ -8,7 +8,11 @@ import {
   ROOM_REPOSITORY,
   type RoomRepository,
 } from './domain/room-repository.js';
-import type { RoomRecord, RoomSnapshot } from './domain/room.types.js';
+import type {
+  RoomRecord,
+  RoomSettingsVoteResolvedEvent,
+  RoomSnapshot,
+} from './domain/room.types.js';
 import type { RoomMutationResult } from './room-mutation.service.js';
 import {
   applyNextLegRound,
@@ -20,6 +24,10 @@ import {
   stampRoundTiming,
   syncRoomPauseState,
 } from './domain/room-rules.js';
+import {
+  reconcileSettingsVote,
+  toSettingsVoteResolvedEvent,
+} from './domain/room-settings-vote.js';
 import { toRoomSnapshot } from './domain/room-snapshot.js';
 import { RoomMutationService } from './room-mutation.service.js';
 
@@ -39,6 +47,7 @@ export interface RoomRuntimeUpdate {
   removedRoomIds: string[];
   closedRooms?: ClosedRoomNotice[];
   kickedPlayers?: KickedPlayerNotice[];
+  resolvedVotes?: RoomSettingsVoteResolvedEvent[];
 }
 
 @Injectable()
@@ -74,23 +83,32 @@ export class RoomRuntimeService implements OnModuleInit {
     const removedRoomIds: string[] = [];
     const closedRooms: ClosedRoomNotice[] = [];
     const kickedPlayers: KickedPlayerNotice[] = [];
+    const resolvedVotes: RoomSettingsVoteResolvedEvent[] = [];
 
     await this.removeExpiredRooms(now, removedRoomIds);
-    await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds);
+    await this.expireDisconnectedPlayers(now, snapshots, removedRoomIds, resolvedVotes);
     await this.resumeExpiredPauses(now, snapshots);
     await this.advanceDueCheckpoints(now, snapshots);
     await this.finishExpiredMatches(now, snapshots);
     await this.revealTimedOutRounds(now, snapshots);
     await this.advanceCompletedRounds(now, snapshots);
+    await this.resolveExpiredSettingsVotes(now, snapshots, resolvedVotes);
     await this.processInactivity(
       now,
       snapshots,
       removedRoomIds,
       closedRooms,
       kickedPlayers,
+      resolvedVotes,
     );
 
-    return { snapshots, removedRoomIds, closedRooms, kickedPlayers };
+    return {
+      snapshots,
+      removedRoomIds,
+      closedRooms,
+      kickedPlayers,
+      resolvedVotes,
+    };
   }
 
   private async processInactivity(
@@ -99,6 +117,7 @@ export class RoomRuntimeService implements OnModuleInit {
     removedRoomIds: string[],
     closedRooms: ClosedRoomNotice[],
     kickedPlayers: KickedPlayerNotice[],
+    resolvedVotes: RoomSettingsVoteResolvedEvent[],
   ): Promise<void> {
     const activeRooms = await this.repository.findRoomsWithConnectedPlayers();
     const waitingLimitMs = this.config.getOrThrow('roomWaitingInactivityMs');
@@ -235,8 +254,20 @@ export class RoomRuntimeService implements OnModuleInit {
           }
         }
 
+        let resolvedVoteInRoom: RoomSettingsVoteResolvedEvent | null = null;
         if (changed) {
           syncRoomPauseState(draft, now);
+          const voteResolved = reconcileSettingsVote(
+            draft,
+            now,
+            this.config.getOrThrow('settingsVoteCooldownMs'),
+          );
+          if (voteResolved) {
+            resolvedVoteInRoom = toSettingsVoteResolvedEvent(
+              draft.roomId,
+              voteResolved,
+            );
+          }
           if (
             draft.status === 'playing' &&
             !draft.game.paused &&
@@ -251,7 +282,7 @@ export class RoomRuntimeService implements OnModuleInit {
           }
         }
 
-        return changed;
+        return { changed, resolvedVoteInRoom };
       });
 
       for (const playerId of kickedInRoom) {
@@ -272,7 +303,11 @@ export class RoomRuntimeService implements OnModuleInit {
         continue;
       }
 
-      if (mutation.result) {
+      if (mutation.result.resolvedVoteInRoom) {
+        resolvedVotes.push(mutation.result.resolvedVoteInRoom);
+      }
+
+      if (mutation.result.changed) {
         upsertSnapshot(toRoomSnapshot(mutation.room));
       }
     }
@@ -373,8 +408,10 @@ export class RoomRuntimeService implements OnModuleInit {
     now: number,
     snapshots: RoomSnapshot[],
     removedRoomIds: string[],
+    resolvedVotes: RoomSettingsVoteResolvedEvent[],
   ): Promise<void> {
     const gracePeriod = this.config.getOrThrow('reconnectGraceMs');
+    const cooldownMs = this.config.getOrThrow('settingsVoteCooldownMs');
     const rooms = await this.repository.findExpiredDisconnects(
       now - gracePeriod,
     );
@@ -396,16 +433,19 @@ export class RoomRuntimeService implements OnModuleInit {
         }
 
         syncRoomPauseState(draft, now);
+        const resolved = reconcileSettingsVote(draft, now, cooldownMs);
 
-        if (
+        const shouldCompleteRound =
           draft.status === 'playing' &&
           !draft.game.paused &&
           draft.game.advanceAt === null &&
-          areConnectedPlayersDone(draft)
-        ) {
-          return true;
-        }
-        return false;
+          areConnectedPlayersDone(draft);
+        return {
+          shouldCompleteRound,
+          voteResolved: resolved
+            ? toSettingsVoteResolvedEvent(draft.roomId, resolved)
+            : null,
+        };
       });
       if (!mutation) continue;
       const { room, result } = mutation;
@@ -415,13 +455,38 @@ export class RoomRuntimeService implements OnModuleInit {
         continue;
       }
 
-      if (result) {
+      if (result.voteResolved) {
+        resolvedVotes.push(result.voteResolved);
+      }
+
+      if (result.shouldCompleteRound) {
         await this.completeRoomRound(room.roomId, now);
         const refreshed = await this.mutations.get(room.roomId);
         snapshots.push(toRoomSnapshot(refreshed));
       } else {
         snapshots.push(toRoomSnapshot(room));
       }
+    }
+  }
+
+  private async resolveExpiredSettingsVotes(
+    now: number,
+    snapshots: RoomSnapshot[],
+    resolvedVotes: RoomSettingsVoteResolvedEvent[],
+  ): Promise<void> {
+    const due = await this.repository.findDueSettingsVotes(now);
+    if (due.length === 0) return;
+    const cooldownMs = this.config.getOrThrow('settingsVoteCooldownMs');
+
+    for (const candidate of due) {
+      const mutation = await this.mutateSafely(candidate.roomId, (draft) => {
+        const resolved = reconcileSettingsVote(draft, now, cooldownMs);
+        if (!resolved) return null;
+        return toSettingsVoteResolvedEvent(draft.roomId, resolved);
+      });
+      if (!mutation?.room || !mutation.result) continue;
+      snapshots.push(toRoomSnapshot(mutation.room));
+      resolvedVotes.push(mutation.result);
     }
   }
 

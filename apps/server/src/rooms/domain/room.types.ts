@@ -43,7 +43,7 @@ export const DEFAULT_ROOM_CONFIGURATION: RoomConfiguration = {
   pinDirection: 'locate',
   subMode: 'name',
   challengeType: 'count',
-  challengeValue: 10,
+  challengeValue: 2,
   endless: true,
   difficulty: 'progressive',
   roundTimeLimitSeconds: 20,
@@ -77,6 +77,7 @@ export interface RoomPlayerRecord {
   hiddenChoiceIds?: string[];
   hintForMissionId?: string | null;
   hintText?: string | null;
+  settingsVoteCooldownUntil?: number | null;
 }
 
 export interface PublicPrompt {
@@ -176,6 +177,39 @@ export interface RoomGameRecord {
   usedCountryCodes: string[];
 }
 
+export type SettingsVoteOutcome =
+  | 'passed'
+  | 'rejected'
+  | 'expired'
+  | 'superseded'
+  | 'cancelled';
+
+export interface RoomSettingsVoteRecord {
+  voteId: string;
+  proposerPlayerId: string;
+  proposerName: string;
+  proposedConfig: RoomConfiguration;
+  yesPlayerIds: string[];
+  noPlayerIds: string[];
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface RoomSettingsVoteSnapshot extends RoomSettingsVoteRecord {
+  requiredYes: number;
+  eligibleCount: number;
+}
+
+export interface RoomSettingsVoteResolvedEvent {
+  roomId: string;
+  voteId: string;
+  outcome: SettingsVoteOutcome;
+  proposerPlayerId: string;
+  proposerName: string;
+  proposedConfig: RoomConfiguration;
+  queued: boolean;
+}
+
 export interface RoomRecord {
   roomId: string;
   revision: number;
@@ -186,6 +220,7 @@ export interface RoomRecord {
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
+  settingsVote?: RoomSettingsVoteRecord | null;
   players: RoomPlayerRecord[];
   game: RoomGameRecord;
   lastActivityAt?: number;
@@ -223,6 +258,7 @@ export interface RoomSnapshot {
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
+  settingsVote?: RoomSettingsVoteSnapshot | null;
   players: RoomPlayerSnapshot[];
   game: {
     startedAt: number | null;

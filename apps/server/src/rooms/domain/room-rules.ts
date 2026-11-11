@@ -216,9 +216,6 @@ export const enterRoomCheckpoint = (
     if (winnerIds.includes(player.playerId)) {
       player.checkpointsWon = (player.checkpointsWon ?? 0) + 1;
     }
-    player.paused = false;
-    player.pausedAt = null;
-    player.spectatorPromptDeadlineAt = null;
   }
 
   const nextLegNumber = legNumber + 1;
@@ -253,11 +250,6 @@ export const applyNextLegRound = (
   room.lastActivityAt = now;
   room.players = room.players.map((player) => ({
     ...player,
-    paused: false,
-    pausedAt: null,
-    lastActiveAt: now,
-    missedRoundsCount: 0,
-    spectatorPromptDeadlineAt: null,
     legScore: 0,
     pinLocation: null,
     answeredMissionId: null,

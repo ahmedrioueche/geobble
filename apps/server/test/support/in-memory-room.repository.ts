@@ -112,6 +112,15 @@ export class InMemoryRoomRepository implements RoomRepository {
       .map((room) => structuredClone(room));
   }
 
+  async findDueSettingsVotes(now: number): Promise<RoomRecord[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.settingsVote != null && room.settingsVote.expiresAt <= now,
+      )
+      .map((room) => structuredClone(room));
+  }
+
   async findExpiredDisconnects(cutoffAt: number): Promise<RoomRecord[]> {
     return [...this.rooms.values()]
       .filter((room) =>

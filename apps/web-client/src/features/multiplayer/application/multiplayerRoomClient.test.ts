@@ -852,4 +852,87 @@ describe("createRoomClient", () => {
       visibility: "public",
     });
   });
+
+  it("sends settings vote proposals and ballots and tracks resolved votes", async () => {
+    const transport = new FakeRoomTransport();
+    const storage = new FakeStorage();
+    let seq = 0;
+    const client = createRoomClient(transport, storage, () => `req-${++seq}`);
+
+    const joinPromise = client.joinRoom("ROOM2345", "Grace");
+    await vi.waitFor(() =>
+      expect(transport.events.some((event) => event.eventName === "room:join")).toBe(
+        true,
+      ),
+    );
+
+    const snapshot = createSnapshot();
+    transport.receive({
+      type: "joined",
+      payload: {
+        requestId: "req-1",
+        playerId: "player-2",
+        reconnectToken: "tok-grace",
+        nextCommandId: 1,
+        snapshot,
+      },
+    });
+    await joinPromise;
+
+    const proposedConfig = { ...snapshot.config, subMode: "flag" as const };
+    const proposePromise = client.proposeSettings(proposedConfig);
+    expect(transport.events.at(-1)).toEqual({
+      eventName: "room:propose-settings",
+      payload: { requestId: "req-2", config: proposedConfig },
+    });
+    transport.receive({
+      type: "vote-acknowledged",
+      payload: { requestId: "req-2", roomId: "ROOM2345", revision: 2 },
+    });
+    await expect(proposePromise).resolves.toBeUndefined();
+
+    const votePromise = client.voteSettings("vote-1", true);
+    expect(transport.events.at(-1)).toEqual({
+      eventName: "room:vote-settings",
+      payload: { requestId: "req-3", voteId: "vote-1", approve: true },
+    });
+    transport.receive({
+      type: "vote-acknowledged",
+      payload: { requestId: "req-3", roomId: "ROOM2345", revision: 3 },
+    });
+    await expect(votePromise).resolves.toBeUndefined();
+
+    expect(
+      isRoomServerEvent({
+        type: "settings-vote-resolved",
+        payload: {
+          roomId: "ROOM2345",
+          voteId: "vote-1",
+          outcome: "passed",
+          proposerPlayerId: "player-2",
+          proposerName: "Grace",
+          proposedConfig,
+          queued: false,
+        },
+      }),
+    ).toBe(true);
+
+    transport.receive({
+      type: "settings-vote-resolved",
+      payload: {
+        roomId: "ROOM2345",
+        voteId: "vote-1",
+        outcome: "passed",
+        proposerPlayerId: "player-2",
+        proposerName: "Grace",
+        proposedConfig,
+        queued: false,
+      },
+    });
+
+    expect(client.getState().lastVoteResolved).toMatchObject({
+      voteId: "vote-1",
+      outcome: "passed",
+    });
+  });
 });

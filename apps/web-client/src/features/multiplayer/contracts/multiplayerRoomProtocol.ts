@@ -41,6 +41,36 @@ export interface RoomConfiguration {
   wrongAnswerPenalty?: number;
 }
 
+export type SettingsVoteOutcome =
+  | "passed"
+  | "rejected"
+  | "expired"
+  | "superseded"
+  | "cancelled";
+
+export interface RoomSettingsVote {
+  voteId: string;
+  proposerPlayerId: string;
+  proposerName: string;
+  proposedConfig: RoomConfiguration;
+  yesPlayerIds: string[];
+  noPlayerIds: string[];
+  requiredYes: number;
+  eligibleCount: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface RoomSettingsVoteResolvedEvent {
+  roomId: string;
+  voteId: string;
+  outcome: SettingsVoteOutcome;
+  proposerPlayerId: string;
+  proposerName: string;
+  proposedConfig: RoomConfiguration;
+  queued: boolean;
+}
+
 export interface CheckpointSummary {
   legNumber: number;
   roundsInLeg: number;
@@ -116,6 +146,7 @@ export interface RoomSnapshot {
   adminPlayerId: string;
   config: RoomConfiguration;
   pendingConfig: RoomConfiguration | null;
+  settingsVote?: RoomSettingsVote | null;
   players: RoomPlayer[];
   game: {
     startedAt: number | null;
@@ -209,7 +240,13 @@ export type RoomErrorCode =
   | "DUPLICATE_COMMAND"
   | "INVALID_COMMAND"
   | "ROOM_EXPIRED"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "VOTE_ALREADY_ACTIVE"
+  | "VOTE_NOT_FOUND"
+  | "ALREADY_VOTED"
+  | "VOTE_COOLDOWN"
+  | "SETTINGS_UNCHANGED"
+  | "NOT_ENOUGH_PLAYERS";
 
 export type RoomServerEvent =
   | { type: "joined"; payload: RoomJoinedEvent }
@@ -242,6 +279,15 @@ export type RoomServerEvent =
       revision: number;
     };
   }
+  | {
+    type: "vote-acknowledged";
+    payload: {
+      requestId: string;
+      roomId: string;
+      revision: number;
+    };
+  }
+  | { type: "settings-vote-resolved"; payload: RoomSettingsVoteResolvedEvent }
   | { type: "left"; payload: { roomId: string; reason?: "inactivity" } }
   | { type: "closed"; payload: { roomId: string; reason?: "inactivity" } }
   | { type: "reaction"; payload: RoomReactionEvent }
@@ -282,6 +328,12 @@ const isRoomErrorCode = (value: unknown): value is RoomErrorCode =>
     "INVALID_COMMAND",
     "ROOM_EXPIRED",
     "RATE_LIMITED",
+    "VOTE_ALREADY_ACTIVE",
+    "VOTE_NOT_FOUND",
+    "ALREADY_VOTED",
+    "VOTE_COOLDOWN",
+    "SETTINGS_UNCHANGED",
+    "NOT_ENOUGH_PLAYERS",
   ].includes(String(value));
 
 const isNullableInteger = (value: unknown): value is number | null =>
@@ -421,6 +473,26 @@ const isCheckpointSummary = (value: unknown): value is CheckpointSummary =>
   isNumber(value.nextLegMultiplier) &&
   isInteger(value.lapNumber);
 
+const isSettingsVote = (value: unknown): value is RoomSettingsVote =>
+  isRecord(value) &&
+  isString(value.voteId) &&
+  isString(value.proposerPlayerId) &&
+  isString(value.proposerName) &&
+  isConfiguration(value.proposedConfig) &&
+  Array.isArray(value.yesPlayerIds) &&
+  value.yesPlayerIds.every(isString) &&
+  Array.isArray(value.noPlayerIds) &&
+  value.noPlayerIds.every(isString) &&
+  isInteger(value.requiredYes) &&
+  isInteger(value.eligibleCount) &&
+  isInteger(value.createdAt) &&
+  isInteger(value.expiresAt);
+
+const isSettingsVoteOutcome = (value: unknown): value is SettingsVoteOutcome =>
+  ["passed", "rejected", "expired", "superseded", "cancelled"].includes(
+    String(value),
+  );
+
 export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isRecord(value) &&
   isString(value.roomId) &&
@@ -430,6 +502,9 @@ export const isRoomSnapshot = (value: unknown): value is RoomSnapshot =>
   isString(value.adminPlayerId) &&
   isConfiguration(value.config) &&
   (value.pendingConfig === null || isConfiguration(value.pendingConfig)) &&
+  (value.settingsVote === undefined ||
+    value.settingsVote === null ||
+    isSettingsVote(value.settingsVote)) &&
   Array.isArray(value.players) &&
   value.players.every(isPlayer) &&
   isRecord(value.game) &&
@@ -503,6 +578,22 @@ export const isRoomServerEvent = (value: unknown): value is RoomServerEvent => {
         isString(payload.roomId) &&
         typeof payload.queued === "boolean" &&
         isInteger(payload.revision)
+      );
+    case "vote-acknowledged":
+      return (
+        isString(payload.requestId) &&
+        isString(payload.roomId) &&
+        isInteger(payload.revision)
+      );
+    case "settings-vote-resolved":
+      return (
+        isString(payload.roomId) &&
+        isString(payload.voteId) &&
+        isSettingsVoteOutcome(payload.outcome) &&
+        isString(payload.proposerPlayerId) &&
+        isString(payload.proposerName) &&
+        isConfiguration(payload.proposedConfig) &&
+        typeof payload.queued === "boolean"
       );
     case "left":
     case "closed":

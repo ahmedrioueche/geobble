@@ -28,6 +28,7 @@ import {
   parseReactionEmoji,
   parseReconnectRequest,
   parseRoomCommand,
+  parseVoteSettingsRequest,
 } from './domain/room-validation.js';
 import { RoomGameplayService } from './room-gameplay.service.js';
 import { RoomLifecycleService } from './room-lifecycle.service.js';
@@ -269,12 +270,17 @@ export class RoomGateway
       if (!identity || !this.isPauseRequest(value)) {
         throw new RoomDomainError('INVALID_REQUEST');
       }
-      const snapshot = await this.lifecycle.setPaused(
+      const result = await this.lifecycle.setPausedDetailed(
         identity.roomId,
         identity.playerId,
         value.paused,
       );
-      this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, snapshot);
+      this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, result.snapshot);
+      if (result.voteResolved) {
+        this.namespace
+          .to(identity.roomId)
+          .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+      }
     });
   }
 
@@ -313,10 +319,82 @@ export class RoomGateway
       this.namespace
         .to(identity.roomId)
         .emit(ROOM_EVENTS.updated, result.snapshot);
+      if (result.voteResolved) {
+        this.namespace
+          .to(identity.roomId)
+          .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+      }
       client.emit(ROOM_EVENTS.settingsAccepted, {
         requestId,
         roomId: identity.roomId,
         queued: result.queued,
+        revision: result.snapshot.revision,
+      });
+    });
+  }
+
+  @SubscribeMessage(ROOM_EVENTS.proposeSettings)
+  async proposeSettings(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const identity = client.data.roomIdentity;
+    const requestId = getRequestId(value);
+    await this.handleRequest(client, requestId, async () => {
+      if (!identity || !requestId || !this.isSettingsRequest(value)) {
+        throw new RoomDomainError('INVALID_REQUEST');
+      }
+      const result = await this.lifecycle.proposeSettingsVote(
+        identity.roomId,
+        identity.playerId,
+        value.config,
+      );
+      if (result.voteResolved) {
+        this.namespace
+          .to(identity.roomId)
+          .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+      }
+      this.namespace
+        .to(identity.roomId)
+        .emit(ROOM_EVENTS.updated, result.snapshot);
+      client.emit(ROOM_EVENTS.voteAcknowledged, {
+        requestId,
+        roomId: identity.roomId,
+        revision: result.snapshot.revision,
+      });
+    });
+  }
+
+  @SubscribeMessage(ROOM_EVENTS.voteSettings)
+  async voteSettings(
+    @ConnectedSocket() client: RoomSocket,
+    @MessageBody() value: unknown,
+  ): Promise<void> {
+    const identity = client.data.roomIdentity;
+    const requestId = getRequestId(value);
+    await this.handleRequest(client, requestId, async () => {
+      if (!identity) throw new RoomDomainError('NOT_CONNECTED');
+      const request = parseVoteSettingsRequest(value);
+      const result = await this.lifecycle.castSettingsVote(
+        identity.roomId,
+        identity.playerId,
+        request.voteId,
+        request.approve,
+      );
+      if (result.voteResolved) {
+        this.namespace
+          .to(identity.roomId)
+          .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+      }
+      this.namespace
+        .to(identity.roomId)
+        .emit(ROOM_EVENTS.updated, result.snapshot);
+      if (result.staleError) {
+        throw new RoomDomainError('VOTE_NOT_FOUND');
+      }
+      client.emit(ROOM_EVENTS.voteAcknowledged, {
+        requestId: request.requestId,
+        roomId: identity.roomId,
         revision: result.snapshot.revision,
       });
     });
@@ -429,6 +507,11 @@ export class RoomGateway
         this.namespace
           .to(identity.roomId)
           .emit(ROOM_EVENTS.updated, result.snapshot);
+        if (result.voteResolved) {
+          this.namespace
+            .to(identity.roomId)
+            .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+        }
       } else {
         this.namespace.to(identity.roomId).emit(ROOM_EVENTS.closed, {
           roomId: identity.roomId,
@@ -462,13 +545,20 @@ export class RoomGateway
 
   private async markDisconnected(identity: RoomSocketIdentity): Promise<void> {
     try {
-      const snapshot = await this.lifecycle.markDisconnected(
+      const result = await this.lifecycle.markDisconnectedDetailed(
         identity.roomId,
         identity.playerId,
         identity.reconnectToken,
       );
-      if (snapshot) {
-        this.namespace.to(identity.roomId).emit(ROOM_EVENTS.updated, snapshot);
+      if (result.snapshot) {
+        this.namespace
+          .to(identity.roomId)
+          .emit(ROOM_EVENTS.updated, result.snapshot);
+        if (result.voteResolved) {
+          this.namespace
+            .to(identity.roomId)
+            .emit(ROOM_EVENTS.settingsVoteResolved, result.voteResolved);
+        }
       }
     } catch (error) {
       this.logUnexpectedError('disconnect handling', error);
@@ -494,6 +584,11 @@ export class RoomGateway
         this.namespace
           .to(snapshot.roomId)
           .emit(ROOM_EVENTS.updated, snapshot);
+      }
+      for (const resolvedVote of result.resolvedVotes ?? []) {
+        this.namespace
+          .to(resolvedVote.roomId)
+          .emit(ROOM_EVENTS.settingsVoteResolved, resolvedVote);
       }
       const closedReasonByRoom = new Map(
         (result.closedRooms ?? []).map((item) => [item.roomId, item.reason]),

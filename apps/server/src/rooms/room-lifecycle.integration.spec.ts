@@ -76,6 +76,8 @@ const createConfig = (
     spectatorPromptGraceMs: 30_000,
     roundAdvanceDelayMs: 0,
     checkpointDurationMs: 10_000,
+    settingsVoteDurationMs: 25_000,
+    settingsVoteCooldownMs: 20_000,
     roundTimeLimitMs: 0,
     pointsPerCorrectAnswer: 10,
     streakBonusPoints: 5,
@@ -947,6 +949,14 @@ describe('room lifecycle and competitive gameplay', () => {
     const host = await lifecycle.createRoom({
       requestId: 'request-create-inactivity',
       playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'world',
+        challengeValue: 0,
+        roundTimeLimitSeconds: 20,
+      },
     });
     const guest = await lifecycle.joinRoom({
       requestId: 'request-join-inactivity',
@@ -1521,5 +1531,162 @@ describe('room lifecycle and competitive gameplay', () => {
     expect(leg2.status).toBe('playing');
     expect(leg2.game.legNumber).toBe(2);
     expect(leg2.game.timerDeadlineAt).toEqual(expect.any(Number));
+  });
+
+  it('runs majority settings votes across waiting and playing states without AFK stalls', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(apiCountries), { status: 200 }),
+      ),
+    );
+    const config = createConfig({
+      settingsVoteDurationMs: 10_000,
+      settingsVoteCooldownMs: 15_000,
+    });
+    const repository = new InMemoryRoomRepository();
+    const mutations = new RoomMutationService(repository, config);
+    const countries = new CountryCatalogService(config);
+    const engine = new GameEngineService();
+    const lifecycle = new RoomLifecycleService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+    const runtime = new RoomRuntimeService(
+      repository,
+      mutations,
+      countries,
+      engine,
+      config,
+    );
+
+    const host = await lifecycle.createRoom({
+      requestId: 'vote-create',
+      playerName: 'Ada',
+      config: {
+        mode: 'identify',
+        pinDirection: 'locate',
+        subMode: 'name',
+        challengeType: 'count',
+        challengeValue: 5,
+      },
+    });
+    const guest1 = await lifecycle.joinRoom({
+      requestId: 'vote-join-1',
+      roomId: host.snapshot.roomId,
+      playerName: 'Grace',
+      secret: host.roomSecret,
+    });
+    const guest2 = await lifecycle.joinRoom({
+      requestId: 'vote-join-2',
+      roomId: host.snapshot.roomId,
+      playerName: 'Alan',
+      secret: host.roomSecret,
+    });
+
+    // Reject unchanged configuration
+    await expect(
+      lifecycle.proposeSettingsVote(
+        host.snapshot.roomId,
+        guest1.playerId,
+        host.snapshot.config,
+      ),
+    ).rejects.toThrow('Select at least one setting to change.');
+
+    // Guest proposes flag submode in waiting room
+    const proposed = await lifecycle.proposeSettingsVote(
+      host.snapshot.roomId,
+      guest1.playerId,
+      { ...host.snapshot.config, subMode: 'flag' },
+    );
+    expect(proposed.snapshot.settingsVote).toMatchObject({
+      voteId: proposed.voteId,
+      proposerPlayerId: guest1.playerId,
+      yesPlayerIds: [guest1.playerId],
+      noPlayerIds: [],
+      requiredYes: 2,
+      eligibleCount: 3,
+    });
+
+    // Duplicate vote rejected
+    await expect(
+      lifecycle.castSettingsVote(
+        host.snapshot.roomId,
+        guest1.playerId,
+        proposed.voteId,
+        true,
+      ),
+    ).rejects.toThrow('You have already voted on this proposal.');
+
+    // Concurrent second proposal rejected
+    await expect(
+      lifecycle.proposeSettingsVote(
+        host.snapshot.roomId,
+        guest2.playerId,
+        { ...host.snapshot.config, challengeValue: 8 },
+      ),
+    ).rejects.toThrow('A settings vote is already in progress.');
+
+    // Second yes passes immediately (2 of 3) and applies in waiting room
+    const passed = await lifecycle.castSettingsVote(
+      host.snapshot.roomId,
+      host.playerId,
+      proposed.voteId,
+      true,
+    );
+    expect(passed.voteResolved?.outcome).toBe('passed');
+    expect(passed.voteResolved?.queued).toBe(false);
+    expect(passed.snapshot.settingsVote).toBeUndefined();
+    expect(passed.snapshot.config.subMode).toBe('flag');
+
+    // Start match and test mid-game vote + runtime expiry + cooldown
+    await lifecycle.startRoom(host.snapshot.roomId, host.playerId);
+    const inGameProposal = await lifecycle.proposeSettingsVote(
+      host.snapshot.roomId,
+      guest2.playerId,
+      { ...passed.snapshot.config, subMode: 'capital' },
+    );
+    expect(inGameProposal.snapshot.settingsVote?.voteId).toBe(
+      inGameProposal.voteId,
+    );
+
+    const expireAt = inGameProposal.snapshot.settingsVote!.expiresAt;
+    const expiredTick = await runtime.tick(expireAt + 1);
+    expect(expiredTick.resolvedVotes).toEqual([
+      expect.objectContaining({
+        roomId: host.snapshot.roomId,
+        voteId: inGameProposal.voteId,
+        outcome: 'expired',
+      }),
+    ]);
+
+    // Cooldown prevents immediate re-proposal by Alan
+    await expect(
+      lifecycle.proposeSettingsVote(
+        host.snapshot.roomId,
+        guest2.playerId,
+        { ...passed.snapshot.config, subMode: 'name' },
+      ),
+    ).rejects.toThrow('Please wait a moment before proposing another change.');
+
+    // Grace proposes, Host goes AFK -> quorum shrinks to 2 -> Alan's yes passes & queues pendingConfig
+    const playingVote = await lifecycle.proposeSettingsVote(
+      host.snapshot.roomId,
+      guest1.playerId,
+      { ...passed.snapshot.config, subMode: 'capital' },
+    );
+    await lifecycle.setPaused(host.snapshot.roomId, host.playerId, true);
+    const resolvedByActive = await lifecycle.castSettingsVote(
+      host.snapshot.roomId,
+      guest2.playerId,
+      playingVote.voteId,
+      true,
+    );
+    expect(resolvedByActive.voteResolved?.outcome).toBe('passed');
+    expect(resolvedByActive.voteResolved?.queued).toBe(true);
+    expect(resolvedByActive.snapshot.pendingConfig?.subMode).toBe('capital');
   });
 });
