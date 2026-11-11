@@ -95,7 +95,11 @@ export const toRoomSnapshot = (
               ? { difficultyTier: room.game.round.difficultyTier }
               : {}),
             prompt: {
-              ...room.game.round.prompt,
+              type: room.game.round.prompt.type,
+              value: room.game.round.prompt.value,
+              ...(room.game.round.prompt.flagCode
+                ? { flagCode: room.game.round.prompt.flagCode }
+                : {}),
               ...(room.game.round.prompt.mapAnchor
                 ? {
                     mapAnchor: [
@@ -105,9 +109,10 @@ export const toRoomSnapshot = (
                   }
                 : {}),
             },
-            choices: room.game.round.choices.map(({ id, label }) => ({
+            choices: room.game.round.choices.map(({ id, label, flagCode }) => ({
               id,
               label,
+              ...(flagCode ? { flagCode } : {}),
             })),
             revealed: room.game.round.revealed,
             answerReveal: room.game.round.answerReveal

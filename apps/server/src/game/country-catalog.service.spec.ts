@@ -1,8 +1,11 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServerConfiguration } from '../config/server-configuration.js';
 import { CountryCatalogService } from './country-catalog.service.js';
+import { WORLD_MAP_NUMERIC_IDS } from './world-map-countries.js';
 
 const createConfig = (
   restCountriesApiUrl = 'https://countries.example.test/all',
@@ -323,5 +326,65 @@ describe('CountryCatalogService', () => {
         mapAnchor: [2, 46],
       },
     ]);
+  });
+
+  it('excludes territories without map geometry and accepts unpadded numeric codes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              objects: [
+                {
+                  names: { common: 'Afghanistan' },
+                  codes: { alpha_2: 'AF', alpha_3: 'AFG', numeric: 4 },
+                  capitals: [{ name: 'Kabul', primary: true, coordinates: { lat: 34.5, lng: 69.2 } }],
+                },
+                {
+                  names: { common: 'Bouvet Island' },
+                  codes: { alpha_2: 'BV', alpha_3: 'BVT', numeric: '074' },
+                  capitals: [],
+                },
+                {
+                  names: { common: 'Réunion' },
+                  codes: { alpha_2: 'RE', alpha_3: 'REU', ccn3: '638' },
+                  capitals: [{ name: 'Saint-Denis' }],
+                },
+                {
+                  names: { common: 'Kosovo' },
+                  codes: { alpha_2: 'XK', alpha_3: 'UNK' },
+                  capitals: [{ name: 'Pristina' }],
+                },
+              ],
+              meta: { limit: 25, offset: 0, more: false },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const countries = await new CountryCatalogService(createConfig()).getCountries();
+    expect(countries.map((country) => country.cca3)).toEqual(['AFG']);
+  });
+
+  it('keeps WORLD_MAP_NUMERIC_IDS synced with web-client world.json when available', () => {
+    const worldJsonPath = resolve(
+      process.cwd(),
+      '../web-client/public/data/world.json',
+    );
+    if (!existsSync(worldJsonPath)) return;
+
+    const topology = JSON.parse(readFileSync(worldJsonPath, 'utf8')) as {
+      objects: { countries: { geometries: Array<{ id?: string | number }> } };
+    };
+    const fileIds = new Set(
+      topology.objects.countries.geometries
+        .map((geometry) => geometry.id?.toString())
+        .filter((id): id is string => id !== undefined),
+    );
+
+    expect([...WORLD_MAP_NUMERIC_IDS].sort()).toEqual([...fileIds].sort());
   });
 });

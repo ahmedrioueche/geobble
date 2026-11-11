@@ -83,9 +83,10 @@ export interface RoomRound {
   prompt: {
     type: "text" | "flag" | "instruction";
     value: string;
+    flagCode?: string;
     mapAnchor?: [number, number];
   };
-  choices: Array<{ id: string; label: string }>;
+  choices: Array<{ id: string; label: string; flagCode?: string }>;
   revealed: boolean;
   answerReveal: { countryCode: string; countryName: string } | null;
   startedAt?: number | null;
@@ -356,13 +357,15 @@ const isRound = (value: unknown): value is RoomRound =>
   isRecord(value.prompt) &&
   ["text", "flag", "instruction"].includes(String(value.prompt.type)) &&
   isString(value.prompt.value) &&
+  (value.prompt.flagCode === undefined || isString(value.prompt.flagCode)) &&
   (value.prompt.mapAnchor === undefined || isCoordinate(value.prompt.mapAnchor)) &&
   Array.isArray(value.choices) &&
   value.choices.every(
     (choice) =>
       isRecord(choice) &&
       isString(choice.id) &&
-      isString(choice.label),
+      isString(choice.label) &&
+      (choice.flagCode === undefined || isString(choice.flagCode)),
   ) &&
   typeof value.revealed === "boolean" &&
   (value.answerReveal === null ||

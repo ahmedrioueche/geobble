@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import React from "react";
+import { FlagImage } from "../../../components/atoms/FlagImage";
 import type { CountryData } from "../../../data/country-data";
 
 interface CountryPopupProps {
@@ -23,12 +24,14 @@ export const CountryPopup: React.FC<CountryPopupProps> = ({
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500/50 via-sky-400/20 to-sky-500/50 opacity-50"></div>
 
       {/* Header: Flag, Name, ISO */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <img
-            src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
+          <FlagImage
+            code={country.cca2}
+            size="md"
             alt={country.name}
-            className="h-5 w-auto rounded shadow-sm border border-white/5"
+            fallback={<span className="text-2xl leading-none">{country.flag}</span>}
+            className="h-9 sm:h-10 w-auto rounded-md shadow-md border border-white/15"
           />
           <span className="text-[10px] font-black text-white/30 uppercase tracking-tight">
             ISO-{country.cca3}

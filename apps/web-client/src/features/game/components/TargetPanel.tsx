@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import React from "react";
+import { FlagImage } from "../../../components/atoms/FlagImage";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
 import { useMapUiStore } from "../../../store/useMapUiStore";
@@ -90,10 +91,12 @@ export const TargetPanel: React.FC<TargetPanelProps> = ({
               IDENTIFY PIN
             </span>
           ) : subMode === "flag" ? (
-            <img
-              src={`https://flagcdn.com/w160/${country.cca2.toLowerCase()}.png`}
+            <FlagImage
+              code={country.cca2}
+              size="md"
               alt="Target"
-              className="h-5 md:h-10 w-auto rounded md:rounded-md shadow-sm border border-white/5"
+              fallback={<span className="text-2xl leading-none">{country.flag}</span>}
+              className="h-9 sm:h-10 md:h-11 w-auto rounded-md shadow-md border border-white/15"
             />
           ) : (
             <span className="text-sm md:text-xl font-black text-white uppercase tracking-tight">

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import React, { useEffect, useState } from "react";
+import { FlagImage } from "../../../components/atoms/FlagImage";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore } from "../../../store/useGameStore";
 import { useGameUiStore } from "../../../store/useGameUiStore";
@@ -125,10 +126,12 @@ export const TargetSplash: React.FC<TargetSplashProps> = ({
             className="flex flex-col items-center justify-center text-center max-w-[92vw] md:max-w-4xl transform-gpu"
           >
             {subMode === "flag" ? (
-              <img
-                src={`https://flagcdn.com/w320/${currentCountry.cca2.toLowerCase()}.png`}
+              <FlagImage
+                code={currentCountry.cca2}
+                size="lg"
                 alt={currentCountry.name}
                 decoding="async"
+                fallback={<span>{currentCountry.flag}</span>}
                 className="h-20 sm:h-28 md:h-36 w-auto max-w-[75vw] max-h-[35vh] object-contain rounded-xl shadow-[0_12px_36px_rgba(0,0,0,0.85)] border-2 border-white/30"
               />
             ) : subMode === "capital" ? (

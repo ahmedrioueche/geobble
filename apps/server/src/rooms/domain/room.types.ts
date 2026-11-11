@@ -78,12 +78,14 @@ export interface RoomPlayerRecord {
 export interface PublicPrompt {
   type: 'text' | 'flag' | 'instruction';
   value: string;
+  flagCode?: string;
   mapAnchor?: [number, number];
 }
 
 export interface RoomChoiceRecord {
   id: string;
   label: string;
+  flagCode?: string;
   countryCode: string;
 }
 
@@ -206,7 +208,7 @@ export interface RoomSnapshot {
       number: number;
       difficultyTier?: DifficultyTier;
       prompt: PublicPrompt;
-      choices: Array<Pick<RoomChoiceRecord, 'id' | 'label'>>;
+      choices: Array<Pick<RoomChoiceRecord, 'id' | 'label' | 'flagCode'>>;
       revealed: boolean;
       answerReveal: { countryCode: string; countryName: string } | null;
       startedAt: number | null;

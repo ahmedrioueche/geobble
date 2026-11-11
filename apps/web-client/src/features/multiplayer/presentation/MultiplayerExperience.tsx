@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import type { CountryData } from "../../../data/country-data";
+import { FlagImage } from "../../../components/atoms/FlagImage";
 import { RoomEntryPage } from "./RoomEntryPage";
 import { RoomLinkJoinCard } from "./RoomLinkJoinCard";
 import {
@@ -1226,11 +1227,29 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="min-w-0 text-sm font-bold uppercase leading-snug md:text-base">
-                    {isRoomPaused && !round?.revealed
-                      ? "Match paused — prompt hidden"
-                      : (round?.prompt.value ?? "Waiting for the next round")}
-                  </p>
+                  {isRoomPaused && !round?.revealed ? (
+                    <p className="min-w-0 text-sm font-bold uppercase leading-snug md:text-base">
+                      Match paused — prompt hidden
+                    </p>
+                  ) : round?.prompt.type === "flag" ? (
+                    <div className="flex min-w-0 items-center gap-3">
+                      <FlagImage
+                        alt="Target flag"
+                        className="h-12 md:h-14 w-auto rounded-lg border border-white/15 shadow-md"
+                        code={round.prompt.flagCode}
+                        fallback={
+                          <span className="text-3xl leading-none" role="img">
+                            {round.prompt.value}
+                          </span>
+                        }
+                        size="md"
+                      />
+                    </div>
+                  ) : (
+                    <p className="min-w-0 text-sm font-bold uppercase leading-snug md:text-base">
+                      {round?.prompt.value ?? "Waiting for the next round"}
+                    </p>
+                  )}
                   {isAdmin && !round?.revealed && (
                     <button
                       className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase text-white/85 transition hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
@@ -1382,7 +1401,17 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                           onClick={() => submitChoice(choice.id)}
                           type="button"
                         >
-                          {choice.label}
+                          {snapshot.config.subMode === "flag" && choice.flagCode ? (
+                            <FlagImage
+                              alt="Flag choice"
+                              className="mx-auto h-9 md:h-10 w-auto rounded-md border border-white/15 shadow-sm"
+                              code={choice.flagCode}
+                              fallback={<span className="text-2xl leading-none">{choice.label}</span>}
+                              size="sm"
+                            />
+                          ) : (
+                            choice.label
+                          )}
                         </button>
                       ))}
                   </div>

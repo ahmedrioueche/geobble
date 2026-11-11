@@ -143,6 +143,23 @@ describe("multiplayer room protocol", () => {
     expect(
       isRoomServerEvent({
         type: "updated",
+        snapshot: {
+          ...snapshot,
+          config: { ...snapshot.config, subMode: "flag" },
+          game: {
+            ...snapshot.game,
+            round: {
+              ...snapshot.game.round!,
+              prompt: { type: "flag", value: "🇨🇦", flagCode: "ca" },
+              choices: [{ id: "choice-1", label: "🇨🇦", flagCode: "ca" }],
+            },
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isRoomServerEvent({
+        type: "updated",
         snapshot: { ...snapshot, revision: -1 },
       }),
     ).toBe(false);

@@ -1169,4 +1169,89 @@ describe("MultiplayerExperience", () => {
       screen.getByRole("button", { name: "Join public room" }),
     ).toBeTruthy();
   });
+
+  it("renders flag images for flag prompts and falls back to emoji if loading fails", () => {
+    const snapshot = createSnapshot({
+      status: "playing",
+      config: {
+        mode: "identify",
+        pinDirection: "locate",
+        subMode: "flag",
+        challengeType: "world",
+        challengeValue: 0,
+      },
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-flag-1",
+          number: 1,
+          prompt: { type: "flag", value: "🇨🇦", flagCode: "ca" },
+          choices: [],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+
+    renderExperience(createClientState(snapshot));
+
+    const flagImg = screen.getByRole("img", { name: "Target flag" });
+    expect(flagImg.getAttribute("src")).toBe("https://flagcdn.com/w160/ca.png");
+
+    fireEvent.error(flagImg);
+    expect(screen.getByText("🇨🇦")).toBeTruthy();
+  });
+
+  it("renders flag images for reverse flag choices and submits the selected choice", async () => {
+    mocks.submitCommand.mockResolvedValue(1);
+    const snapshot = createSnapshot({
+      status: "playing",
+      config: {
+        mode: "reverse",
+        pinDirection: "locate",
+        subMode: "flag",
+        challengeType: "count",
+        challengeValue: 5,
+      },
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-flag-2",
+          number: 1,
+          prompt: {
+            type: "instruction",
+            value: "Identify the highlighted country",
+          },
+          choices: [
+            { id: "choice-ca", label: "🇨🇦", flagCode: "ca" },
+            { id: "choice-fr", label: "🇫🇷", flagCode: "fr" },
+          ],
+          revealed: false,
+          answerReveal: null,
+        },
+      },
+    });
+
+    renderExperience(createClientState(snapshot));
+
+    const choiceImages = screen.getAllByRole("img", { name: "Flag choice" });
+    expect(choiceImages).toHaveLength(2);
+    expect(choiceImages[0]?.getAttribute("src")).toBe(
+      "https://flagcdn.com/w80/ca.png",
+    );
+    expect(choiceImages[1]?.getAttribute("src")).toBe(
+      "https://flagcdn.com/w80/fr.png",
+    );
+
+    fireEvent.click(choiceImages[1]!);
+    await waitFor(() =>
+      expect(mocks.submitCommand).toHaveBeenCalledWith({
+        type: "answer",
+        answerCountryCode: null,
+        choiceId: "choice-fr",
+      }),
+    );
+  });
 });

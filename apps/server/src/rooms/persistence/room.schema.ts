@@ -132,6 +132,9 @@ class PublicPromptEntity implements PublicPrompt {
   @Prop({ required: true, maxlength: 256 })
   value!: string;
 
+  @Prop({ type: String, default: undefined })
+  flagCode?: string;
+
   @Prop({ type: [Number], default: undefined })
   mapAnchor?: [number, number];
 }
@@ -145,6 +148,9 @@ class RoomChoiceEntity implements RoomChoiceRecord {
 
   @Prop({ required: true, maxlength: 128 })
   label!: string;
+
+  @Prop({ type: String, default: undefined })
+  flagCode?: string;
 
   @Prop({ required: true, minlength: 3, maxlength: 3, select: false })
   countryCode!: string;

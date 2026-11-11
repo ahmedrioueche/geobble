@@ -105,7 +105,12 @@ export class GameEngineService {
     }
 
     if (config.subMode === 'flag') {
-      return { type: 'flag', value: country.flag };
+      const flagCode = country.cca2.trim().toLowerCase();
+      return {
+        type: 'flag',
+        value: country.flag || 'Flag',
+        ...(flagCode ? { flagCode } : {}),
+      };
     }
     if (config.subMode === 'capital') {
       return {
@@ -174,11 +179,16 @@ export class GameEngineService {
     }
 
     return selected
-      .map((country) => ({
-        id: randomUUID(),
-        label: this.getChoiceLabel(country, subMode),
-        countryCode: country.cca3,
-      }))
+      .map((country) => {
+        const flagCode =
+          subMode === 'flag' ? country.cca2.trim().toLowerCase() : '';
+        return {
+          id: randomUUID(),
+          label: this.getChoiceLabel(country, subMode),
+          ...(flagCode ? { flagCode } : {}),
+          countryCode: country.cca3,
+        };
+      })
       .sort((first, second) => first.label.localeCompare(second.label));
   }
 

@@ -104,4 +104,41 @@ describe('room snapshots', () => {
       'Region: Americas · Starts with "C"',
     );
   });
+
+  it('preserves public flagCode on flag prompts and choices while stripping countryCode', () => {
+    const flagRoom: RoomRecord = {
+      ...room,
+      config: { ...room.config, subMode: 'flag' },
+      game: {
+        ...room.game,
+        round: {
+          ...room.game.round!,
+          prompt: {
+            type: 'flag',
+            value: '🇨🇦',
+            flagCode: 'ca',
+          },
+          choices: [
+            {
+              id: 'choice-1',
+              label: '🇨🇦',
+              flagCode: 'ca',
+              countryCode: 'CAN',
+            },
+          ],
+        },
+      },
+    };
+
+    const snapshot = toRoomSnapshot(flagRoom);
+    expect(snapshot.game.round?.prompt).toEqual({
+      type: 'flag',
+      value: '🇨🇦',
+      flagCode: 'ca',
+    });
+    expect(snapshot.game.round?.choices).toEqual([
+      { id: 'choice-1', label: '🇨🇦', flagCode: 'ca' },
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain('"countryCode"');
+  });
 });

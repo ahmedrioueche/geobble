@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ServerConfiguration } from '../config/server-configuration.js';
+import { isMapAvailableCountry } from './world-map-countries.js';
 
 export interface CountryRecord {
   name: string;
@@ -21,6 +22,7 @@ interface CountryApiRecord {
     alpha_2?: string;
     alpha_3?: string;
     numeric?: string | number;
+    ccn3?: string | number;
   };
   cca2?: string;
   cca3?: string;
@@ -160,7 +162,7 @@ const toCountryRecord = (country: CountryApiRecord): CountryRecord => {
     name: readString(names?.common ?? countryName?.common).trim(),
     cca2: readString(codes?.alpha_2 ?? country.cca2).toUpperCase(),
     cca3: readString(codes?.alpha_3 ?? country.cca3).toUpperCase(),
-    numericCode: readCode(codes?.numeric ?? country.ccn3),
+    numericCode: readCode(codes?.numeric ?? codes?.ccn3 ?? country.ccn3),
     capitals: readCapitals(capitals),
     region: readString(country.region),
     subregion: readString(country.subregion),
@@ -283,7 +285,12 @@ export class CountryCatalogService {
 
       const countries = countryPayload
         .map(toCountryRecord)
-        .filter((country) => country.name && /^[A-Z]{3}$/.test(country.cca3));
+        .filter(
+          (country) =>
+            Boolean(country.name) &&
+            /^[A-Z]{3}$/.test(country.cca3) &&
+            isMapAvailableCountry(country),
+        );
 
       if (countries.length === 0) {
         this.logger.error('Country catalog response contained no usable countries');

@@ -170,5 +170,57 @@ describe('GameEngineService country difficulty & progression', () => {
       expect(['DEU', 'CHE', 'AUT', 'BEL', 'LUX']).toContain(code);
     }
   });
+
+  it('attaches lowercase flagCode on flag prompts and flag choices only in flag subMode', () => {
+    const identifyFlag = engine.createRound(
+      {
+        ...DEFAULT_ROOM_CONFIGURATION,
+        mode: 'identify',
+        subMode: 'flag',
+        difficulty: 'easy',
+      },
+      SAMPLE_COUNTRIES,
+      [],
+      1,
+      4,
+    );
+    expect(identifyFlag?.round.prompt.type).toBe('flag');
+    expect(identifyFlag?.round.prompt.flagCode).toBe(
+      identifyFlag?.round.targetCountryCode.slice(0, 2).toLowerCase(),
+    );
+
+    const reverseFlag = engine.createRound(
+      {
+        ...DEFAULT_ROOM_CONFIGURATION,
+        mode: 'reverse',
+        subMode: 'flag',
+        difficulty: 'easy',
+      },
+      SAMPLE_COUNTRIES,
+      [],
+      1,
+      4,
+    );
+    expect(reverseFlag?.round.choices).toHaveLength(4);
+    for (const choice of reverseFlag?.round.choices ?? []) {
+      expect(choice.flagCode).toBe(choice.countryCode.slice(0, 2).toLowerCase());
+    }
+
+    const reverseName = engine.createRound(
+      {
+        ...DEFAULT_ROOM_CONFIGURATION,
+        mode: 'reverse',
+        subMode: 'name',
+        difficulty: 'easy',
+      },
+      SAMPLE_COUNTRIES,
+      [],
+      1,
+      4,
+    );
+    for (const choice of reverseName?.round.choices ?? []) {
+      expect(choice.flagCode).toBeUndefined();
+    }
+  });
 });
 

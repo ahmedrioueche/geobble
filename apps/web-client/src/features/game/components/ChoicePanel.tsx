@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import React from "react";
 import { Button } from "../../../components/atoms/Button";
+import { FlagImage } from "../../../components/atoms/FlagImage";
 import type { CountryData } from "../../../data/country-data";
 import { useGameStore, type SubMode } from "../../../store/useGameStore";
 import { useGameUiStore } from "../../../store/useGameUiStore";
@@ -100,10 +101,12 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               }`}
             >
               {activeSubMode === "flag" && country ? (
-                <img
-                  src={`https://flagcdn.com/w80/${country.cca2.toLowerCase()}.png`}
+                <FlagImage
+                  code={country.cca2}
+                  size="md"
                   alt="Choice"
-                  className={`h-6 md:h-8 w-auto rounded shadow-sm border ${
+                  fallback={<span className="text-2xl leading-none">{country.flag}</span>}
+                  className={`h-8 md:h-9 w-auto rounded-md shadow-sm border ${
                     (feedback === 'correct' || revealed) && isCorrect ? 'border-white scale-110' : 'border-white/20'
                   }`}
                 />
