@@ -180,13 +180,34 @@ describe("MultiplayerExperience", () => {
     );
   };
 
-  it("creates a private room from the room entry page", async () => {
+  it("creates a public room by default from the room entry page", async () => {
     renderExperience();
 
     fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
     fireEvent.change(screen.getByLabelText("Player name"), {
       target: { value: "Ada" },
     });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create public room" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.createRoom).toHaveBeenCalledWith(
+        "Ada",
+        undefined,
+        "public",
+      ),
+    );
+  });
+
+  it("can switch visibility and create a private room", async () => {
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+    fireEvent.change(screen.getByLabelText("Player name"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^private$/i }));
     fireEvent.click(
       screen.getByRole("button", { name: "Create private room" }),
     );
@@ -198,6 +219,40 @@ describe("MultiplayerExperience", () => {
         "private",
       ),
     );
+  });
+
+  it("selects cards on click/tap and highlights the corresponding action button", () => {
+    renderExperience();
+
+    fireEvent.click(screen.getByRole("button", { name: "Multiplayer" }));
+
+    const joinPublicBtn = screen.getByRole("button", { name: "Join public game" });
+    const createRoomBtn = screen.getByRole("button", { name: "Create public room" });
+    const joinCodeBtn = screen.getByRole("button", { name: "Join room" });
+
+    // Initially, create room card is active
+    expect(createRoomBtn.className).toContain("text-slate-950");
+    expect(joinPublicBtn.className).toContain("bg-slate-800/80");
+
+    // Click "Join a public game" card
+    const joinPublicCard = screen.getByText("Join a public game").closest("article")!;
+    fireEvent.click(joinPublicCard);
+
+    // Join public game is now selected and highlighted
+    expect(joinPublicBtn.className).toContain("text-slate-950");
+    expect(createRoomBtn.className).toContain("bg-slate-800/80");
+    expect(joinPublicCard.getAttribute("aria-selected")).toBe("true");
+
+    // Simulating mouseleave or touch move does NOT revert to create
+    fireEvent.mouseLeave(joinPublicCard);
+    expect(joinPublicBtn.className).toContain("text-slate-950");
+
+    // Click "Join with a code" card
+    const joinCodeCard = screen.getByText("Join with a code").closest("article")!;
+    fireEvent.click(joinCodeCard);
+    expect(joinCodeBtn.className).toContain("text-slate-950");
+    expect(joinPublicBtn.className).toContain("bg-slate-800/80");
+    expect(joinCodeCard.getAttribute("aria-selected")).toBe("true");
   });
 
   it("saves the player name and pre-fills it when multiplayer is opened again", () => {
@@ -269,14 +324,14 @@ describe("MultiplayerExperience", () => {
       target: { value: "Ada" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Create private room" }),
+      screen.getByRole("button", { name: "Create public room" }),
     );
 
     await waitFor(() =>
       expect(mocks.createRoom).toHaveBeenCalledWith(
         "Ada",
         undefined,
-        "private",
+        "public",
       ),
     );
   });

@@ -295,7 +295,7 @@ export const RoomInviteCard: React.FC<RoomShareProps> = ({
   const nativeShareAvailable = supportsNativeShare();
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-5 text-left backdrop-blur-xl">
+    <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 text-left backdrop-blur-xl sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-black uppercase tracking-wider text-white">
           Invite friends
@@ -332,7 +332,7 @@ export const RoomInviteCard: React.FC<RoomShareProps> = ({
               {showSecret ? roomSecret : "•".repeat(roomSecret.length)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               aria-label={showSecret ? "Hide lobby room secret" : "Show lobby room secret"}
               className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
@@ -346,7 +346,7 @@ export const RoomInviteCard: React.FC<RoomShareProps> = ({
               )}
             </button>
             <button
-              className="inline-flex items-center gap-1 rounded-lg border border-amber-300/30 bg-amber-300/15 px-2.5 py-1.5 text-[11px] font-black uppercase text-amber-100 transition hover:bg-amber-300/25"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300/30 bg-amber-300/15 px-2.5 py-1.5 text-[11px] font-black uppercase text-amber-100 transition hover:bg-amber-300/25"
               onClick={() => void copyText(roomSecret, "Room secret copied")}
               type="button"
             >
@@ -359,7 +359,7 @@ export const RoomInviteCard: React.FC<RoomShareProps> = ({
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-black uppercase text-white/85 transition hover:bg-white/10"
+          className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-black uppercase text-white/85 transition hover:bg-white/10"
           onClick={onCopyCode}
           type="button"
         >
@@ -368,7 +368,7 @@ export const RoomInviteCard: React.FC<RoomShareProps> = ({
         </button>
         {visibility === "private" && roomSecret && (
           <button
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-black uppercase text-white/85 transition hover:bg-white/10"
+            className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-black uppercase text-white/85 transition hover:bg-white/10"
             onClick={() =>
               void copyText(
                 buildRoomInviteMessage(roomId, shareUrl, roomSecret),

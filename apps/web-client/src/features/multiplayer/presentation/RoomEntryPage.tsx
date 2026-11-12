@@ -33,7 +33,7 @@ const ActionButton: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & { highlighted: boolean }
 > = ({ children, className = "", highlighted, ...props }) => (
   <button
-    className={`flex min-h-14 items-center justify-center rounded-xl border-2 px-5 text-sm font-black uppercase tracking-wide transition disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-800 disabled:from-slate-800 disabled:via-slate-800 disabled:to-slate-800 disabled:text-white/35 disabled:shadow-none disabled:hover:border-white/10 disabled:hover:from-slate-800 disabled:hover:via-slate-800 disabled:hover:to-slate-800 ${
+    className={`flex min-h-14 items-center justify-center rounded-xl border-2 px-5 text-sm font-black uppercase tracking-wide transition disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-800 disabled:from-slate-800 disabled:via-slate-800 disabled:to-slate-800 disabled:text-white/35 disabled:shadow-none disabled:hover:border-white/10 disabled:hover:from-slate-800 disabled:hover:via-slate-800 disabled:hover:to-slate-800 disabled:pointer-events-none md:disabled:pointer-events-auto ${
       highlighted
         ? "border-white/30 bg-gradient-to-r from-sky-400 via-sky-500 to-blue-600 text-slate-950 shadow-[0_0_32px_rgba(56,189,248,0.3)] hover:from-sky-300 hover:to-blue-500"
         : "border-white/20 bg-slate-800/80 text-white/70 hover:border-white/30 hover:bg-gradient-to-r hover:from-sky-400 hover:via-sky-500 hover:to-blue-600 hover:text-slate-950 hover:shadow-[0_0_32px_rgba(56,189,248,0.3)]"
@@ -54,7 +54,7 @@ const VisibilityToggle: React.FC<{
       Room visibility
     </legend>
     <div className="grid grid-cols-2 gap-3">
-      {(["private", "public"] as const).map((visibility) => (
+      {(["public", "private"] as const).map((visibility) => (
         <button
           aria-pressed={value === visibility}
           className={`min-h-12 rounded-xl border px-4 text-sm font-bold capitalize transition disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-white/40 ${
@@ -98,9 +98,9 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
   const canStart = Boolean(playerName.trim()) && !busy;
   const [activeCard, setActiveCard] = useState<RoomAction>("create");
   const cardProps = (card: RoomAction) => ({
+    onClick: () => setActiveCard(card),
     onFocusCapture: () => setActiveCard(card),
     onMouseEnter: () => setActiveCard(card),
-    onMouseLeave: () => setActiveCard("create"),
   });
   const isActive = (card: RoomAction) => activeCard === card;
 
@@ -160,10 +160,11 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
         <div className="grid gap-5 lg:grid-cols-3">
           <article
             {...cardProps("matchmake")}
-            className={`flex flex-col rounded-2xl border-2 p-6 transition-all md:p-7 ${
+            aria-selected={isActive("matchmake")}
+            className={`flex cursor-pointer flex-col rounded-2xl border-2 p-6 transition-all md:p-7 ${
               isActive("matchmake")
-                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.15)]"
-                : "border-white/20 bg-slate-900/80"
+                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.2)] ring-1 ring-[var(--color-accent)]/50"
+                : "border-white/20 bg-slate-900/80 hover:border-white/35"
             }`}
           >
             <div className="mb-6">
@@ -184,10 +185,11 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
 
           <article
             {...cardProps("create")}
-            className={`rounded-2xl border-2 p-6 transition-all md:p-7 ${
+            aria-selected={isActive("create")}
+            className={`cursor-pointer rounded-2xl border-2 p-6 transition-all md:p-7 ${
               isActive("create")
-                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.15)]"
-                : "border-white/20 bg-slate-900/80"
+                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.2)] ring-1 ring-[var(--color-accent)]/50"
+                : "border-white/20 bg-slate-900/80 hover:border-white/35"
             }`}
           >
             <div className="mb-6">
@@ -229,10 +231,11 @@ export const RoomEntryPage: React.FC<RoomEntryPageProps> = ({
 
           <article
             {...cardProps("join")}
-            className={`rounded-2xl border-2 p-6 transition-all md:p-7 ${
+            aria-selected={isActive("join")}
+            className={`cursor-pointer rounded-2xl border-2 p-6 transition-all md:p-7 ${
               isActive("join")
-                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.15)]"
-                : "border-white/20 bg-slate-900/80"
+                ? "border-[var(--color-accent)] bg-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.2)] ring-1 ring-[var(--color-accent)]/50"
+                : "border-white/20 bg-slate-900/80 hover:border-white/35"
             }`}
           >
             <div className="mb-6">

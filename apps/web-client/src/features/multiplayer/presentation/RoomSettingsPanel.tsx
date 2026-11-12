@@ -97,7 +97,7 @@ export const RoomSettingsPanel: React.FC<RoomSettingsPanelProps> = ({
 }) => (
   <section
     aria-label="Room settings"
-    className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-left backdrop-blur-xl"
+    className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-left backdrop-blur-xl sm:p-6"
   >
     <div className="flex items-start justify-between gap-4">
       <div>
