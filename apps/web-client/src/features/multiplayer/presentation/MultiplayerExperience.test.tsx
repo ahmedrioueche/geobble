@@ -1304,6 +1304,7 @@ describe("MultiplayerExperience", () => {
 
     const choiceImages = screen.getAllByRole("img", { name: "Flag choice" });
     expect(choiceImages).toHaveLength(2);
+    expect(choiceImages[0]?.closest(".grid")?.className).toContain("grid-cols-2");
     expect(choiceImages[0]?.getAttribute("src")).toBe(
       "https://flagcdn.com/w80/ca.png",
     );
@@ -1319,6 +1320,57 @@ describe("MultiplayerExperience", () => {
         choiceId: "choice-fr",
       }),
     );
+  });
+
+  it("animates reveal for multiplayer flag choices by keeping only the correct flag and country name", () => {
+    const revealedSnapshot = createSnapshot({
+      status: "playing",
+      config: {
+        mode: "reverse",
+        pinDirection: "locate",
+        subMode: "flag",
+        challengeType: "count",
+        challengeValue: 5,
+      },
+      game: {
+        startedAt: 1,
+        timerDeadlineAt: null,
+        round: {
+          missionId: "mission-flag-revealed",
+          number: 1,
+          prompt: {
+            type: "instruction",
+            value: "Identify the highlighted country",
+          },
+          choices: [
+            { id: "choice-ca", label: "🇨🇦", flagCode: "ca" },
+            { id: "choice-fr", label: "🇫🇷", flagCode: "fr" },
+          ],
+          revealed: true,
+          answerReveal: {
+            countryCode: "FRA",
+            countryName: "France",
+          },
+          result: {
+            fastestPlayerId: null,
+            players: [],
+          },
+        },
+      },
+    });
+
+    renderExperience(createClientState(revealedSnapshot));
+
+    // Only 1 choice button remains (France)
+    const choiceImages = screen.getAllByRole("img", { name: "Flag choice" });
+    expect(choiceImages).toHaveLength(1);
+    expect(choiceImages[0]?.getAttribute("src")).toBe(
+      "https://flagcdn.com/w80/fr.png",
+    );
+
+    // Displays the country name and Correct Answer in the opened card
+    expect(screen.getByText("France")).toBeTruthy();
+    expect(screen.getByText("Correct Answer")).toBeTruthy();
   });
 
   it("renders final standings on match end and lets the host edit settings or start a rematch", async () => {

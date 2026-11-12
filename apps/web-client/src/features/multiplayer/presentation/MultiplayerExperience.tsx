@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  Check,
   Loader2,
   LogOut,
   Pause,
@@ -194,6 +196,29 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
     snapshot?.config.mode === "reverse" ||
     (snapshot?.config.mode === "pin" &&
       snapshot.config.pinDirection === "identify");
+
+  const isCorrectChoice = (choice: {
+    id: string;
+    label: string;
+    flagCode?: string;
+  }) => {
+    if (!round?.answerReveal) return false;
+    const revealCode = round.answerReveal.countryCode.trim().toLowerCase();
+    const revealName = round.answerReveal.countryName.trim().toLowerCase();
+    if (choice.flagCode) {
+      const target = countries.find(
+        (c) =>
+          c.cca3.toLowerCase() === revealCode ||
+          c.cca2.toLowerCase() === revealCode ||
+          c.name.toLowerCase() === revealName,
+      );
+      if (target) {
+        return choice.flagCode.toLowerCase() === target.cca2.toLowerCase();
+      }
+      return choice.flagCode.toLowerCase() === revealCode.slice(0, 2);
+    }
+    return choice.label.trim().toLowerCase() === revealName;
+  };
 
   useEffect(() => {
     writeBrowserStorageItem(PLAYER_NAME_STORAGE_KEY, playerName);
@@ -1680,6 +1705,7 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                 {round?.revealed &&
                   round.answerReveal &&
                   (isChoiceMode || snapshot.config.subMode !== "name") &&
+                  !(isChoiceMode && snapshot.config.subMode === "flag") &&
                   round.prompt.value.trim().toLowerCase() !==
                     round.answerReveal.countryName.trim().toLowerCase() && (
                     <p className="mt-2 text-xs font-black uppercase text-emerald-300">
@@ -1712,40 +1738,130 @@ export const MultiplayerExperience: React.FC<MultiplayerExperienceProps> = ({
                     .
                   </p>
                 )}
-                {isChoiceMode && round && !round.revealed && !isRoomPaused && (
-                  <div className="mt-3 grid gap-2">
-                    {round.choices
-                      .filter(
-                        (choice) => !self?.hiddenChoiceIds?.includes(choice.id),
-                      )
-                      .map((choice) => (
-                        <button
-                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-left text-xs font-black uppercase hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
-                          disabled={
-                            hasAnswered ||
-                            waitingForCommand ||
-                            isSelfPaused ||
-                            isRoomPaused
-                          }
-                          key={choice.id}
-                          onClick={() => submitChoice(choice.id)}
-                          type="button"
-                        >
-                          {snapshot.config.subMode === "flag" && choice.flagCode ? (
-                            <FlagImage
-                              alt="Flag choice"
-                              className="mx-auto h-9 md:h-10 w-auto rounded-md border border-white/15 shadow-sm"
-                              code={choice.flagCode}
-                              fallback={<span className="text-2xl leading-none">{choice.label}</span>}
-                              size="sm"
-                            />
-                          ) : (
-                            choice.label
-                          )}
-                        </button>
-                      ))}
-                  </div>
-                )}
+                {isChoiceMode &&
+                  round &&
+                  !isRoomPaused &&
+                  (!round.revealed || snapshot.config.subMode === "flag") && (
+                    <div
+                      className={
+                        snapshot.config.subMode === "flag"
+                          ? "mt-3 grid grid-cols-2 gap-2"
+                          : "mt-3 grid gap-2"
+                      }
+                    >
+                      <AnimatePresence mode="popLayout">
+                        {round.choices
+                          .filter(
+                            (choice) =>
+                              !self?.hiddenChoiceIds?.includes(choice.id),
+                          )
+                          .map((choice) => {
+                            const isCorrect = isCorrectChoice(choice);
+                            if (
+                              round.revealed &&
+                              snapshot.config.subMode === "flag" &&
+                              !isCorrect
+                            ) {
+                              return null;
+                            }
+                            return (
+                              <motion.button
+                                animate={{ opacity: 1, scale: 1 }}
+                                className={`rounded-xl border transition-all ${
+                                  round.revealed &&
+                                  snapshot.config.subMode === "flag" &&
+                                  isCorrect
+                                    ? "col-span-2 flex min-h-16 items-center justify-between border-emerald-400 bg-gradient-to-r from-emerald-500/35 via-emerald-500/20 to-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_30px_rgba(16,185,129,0.35)] ring-1 ring-emerald-400/50"
+                                    : snapshot.config.subMode === "flag"
+                                      ? "flex h-14 items-center justify-center border-white/15 bg-white/5 p-2 hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40 md:h-16"
+                                      : "border-white/15 bg-white/5 px-3 py-3 text-left text-xs font-black uppercase hover:border-sky-300/50 hover:bg-sky-300/10 disabled:opacity-40"
+                                }`}
+                                disabled={
+                                  round.revealed ||
+                                  hasAnswered ||
+                                  waitingForCommand ||
+                                  isSelfPaused ||
+                                  isRoomPaused
+                                }
+                                exit={{
+                                  filter: "blur(6px)",
+                                  opacity: 0,
+                                  scale: 0.65,
+                                  transition: {
+                                    duration: 0.28,
+                                    ease: "easeIn",
+                                  },
+                                }}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                key={choice.id}
+                                layout
+                                onClick={() =>
+                                  !round.revealed && submitChoice(choice.id)
+                                }
+                                transition={{
+                                  duration: 0.25,
+                                  layout: {
+                                    duration: 0.38,
+                                    ease: [0.16, 1, 0.3, 1],
+                                  },
+                                }}
+                                type="button"
+                              >
+                                {snapshot.config.subMode === "flag" &&
+                                choice.flagCode ? (
+                                  round.revealed && isCorrect ? (
+                                    <div className="flex w-full items-center justify-between">
+                                      <div className="flex min-w-0 items-center gap-3">
+                                        <FlagImage
+                                          alt="Flag choice"
+                                          className="h-9 w-auto shrink-0 rounded-md border-2 border-white shadow-md md:h-10"
+                                          code={choice.flagCode}
+                                          fallback={
+                                            <span className="text-2xl leading-none">
+                                              {choice.label}
+                                            </span>
+                                          }
+                                          size="sm"
+                                        />
+                                        <div className="flex min-w-0 flex-1 flex-col items-start text-left">
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                                            Correct Answer
+                                          </span>
+                                          <span className="truncate text-sm font-black text-white md:text-base">
+                                            {round.answerReveal?.countryName ||
+                                              choice.label}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow-md">
+                                        <Check
+                                          aria-hidden="true"
+                                          className="h-4 w-4 stroke-[3]"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <FlagImage
+                                      alt="Flag choice"
+                                      className="mx-auto h-8 w-auto rounded-md border border-white/15 shadow-sm md:h-9"
+                                      code={choice.flagCode}
+                                      fallback={
+                                        <span className="text-2xl leading-none">
+                                          {choice.label}
+                                        </span>
+                                      }
+                                      size="sm"
+                                    />
+                                  )
+                                ) : (
+                                  choice.label
+                                )}
+                              </motion.button>
+                            );
+                          })}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 {round && !round.revealed && self?.powerUps && !isRoomPaused && (
                   <PowerUpBar
                     disabled={
