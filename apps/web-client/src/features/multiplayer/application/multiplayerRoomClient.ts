@@ -1,148 +1,33 @@
 import type {
-  ReactionEmoji,
   RoomCommand,
-  RoomCommandInput,
-  RoomConfiguration,
   RoomErrorCode,
   RoomInspectResult,
   RoomJoinedEvent,
-  RoomReactionEvent,
   RoomServerEvent,
-  RoomSettingsVoteResolvedEvent,
-  RoomSnapshot,
 } from "../contracts/multiplayerRoomProtocol";
 import {
   SocketIoRoomTransport,
   type RoomTransportListener,
   type RoomTransportStatus,
 } from "../infrastructure/socketIoRoomTransport";
-
 import { createGameSessionId } from "../../game/domain/gameSession";
+import {
+  type ActiveRoom,
+  REQUEST_TIMEOUT_MS,
+  type RoomClient,
+  type RoomClientState,
+  type RoomCredentialStorage,
+  RoomRequestFailure,
+  type RoomTransport,
+  type StoredRoomCredentials,
+  TERMINAL_RECONNECT_ERROR_CODES,
+} from "./roomClient/roomClientTypes";
+import { getBrowserStorage } from "./roomClient/roomCredentialStorage";
+import { PendingRequestRegistry } from "./roomClient/pendingRequestRegistry";
 
-const CREDENTIALS_KEY = "geobble.multiplayer.reconnect";
-const REQUEST_TIMEOUT_MS = 12_000;
-const TERMINAL_RECONNECT_ERROR_CODES: RoomErrorCode[] = [
-  "NOT_AUTHORIZED",
-  "ROOM_NOT_FOUND",
-  "ROOM_EXPIRED",
-];
-
-interface StoredRoomCredentials {
-  roomId: string;
-  playerId: string;
-  reconnectToken: string;
-}
-
-export class RoomRequestFailure extends Error {
-  readonly code?: RoomErrorCode;
-
-  constructor(
-    message: string,
-    code?: RoomErrorCode,
-  ) {
-    super(message);
-    this.name = "RoomRequestFailure";
-    this.code = code;
-  }
-}
-
-export interface ActiveRoom {
-  playerId: string;
-  snapshot: RoomSnapshot;
-  roomSecret?: string;
-}
-
-export interface RoomClientState {
-  status: "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
-  room: ActiveRoom | null;
-  pendingCommandIds: number[];
-  lastAcknowledgedRevision: number | null;
-  lastAnswerResult: boolean | null;
-  settingsAccepted: { queued: boolean; revision: number } | null;
-  lastVoteResolved: RoomSettingsVoteResolvedEvent | null;
-  lastReaction: RoomReactionEvent | null;
-  error: string | null;
-  reconnectAvailable: boolean;
-  reconnectRequired: boolean;
-}
-
-export interface RoomTransport {
-  connect: (listener: RoomTransportListener) => Promise<void>;
-  emit: (eventName: string, payload: unknown) => void;
-  disconnect: () => void;
-}
-
-export interface RoomCredentialStorage {
-  read: () => StoredRoomCredentials | null;
-  write: (credentials: StoredRoomCredentials) => void;
-  clear: () => void;
-}
-
-export interface RoomClient {
-  getState: () => RoomClientState;
-  subscribe: (listener: (state: RoomClientState) => void) => () => void;
-  resume: () => Promise<void>;
-  retryReconnect: () => Promise<void>;
-  inspectRoom: (roomId: string) => Promise<RoomInspectResult>;
-  createRoom: (
-    playerName: string,
-    config?: RoomConfiguration,
-    visibility?: "public" | "private",
-    secret?: string,
-  ) => Promise<void>;
-  joinRoom: (
-    roomId: string,
-    playerName: string,
-    secret?: string,
-  ) => Promise<void>;
-  joinPublicRoom: (playerName: string) => Promise<void>;
-  setPaused: (paused: boolean) => void;
-  startRoom: () => void;
-  changeSettings: (config: RoomConfiguration) => Promise<void>;
-  proposeSettings: (config: RoomConfiguration) => Promise<void>;
-  voteSettings: (voteId: string, approve: boolean) => Promise<void>;
-  submitCommand: (command: RoomCommandInput) => Promise<number>;
-  sendReaction: (emoji: ReactionEmoji) => void;
-  leaveRoom: () => Promise<void>;
-  forgetReconnect: () => void;
-  disconnect: () => void;
-}
-
-const getBrowserStorage = (): RoomCredentialStorage => ({
-  read: () => {
-    if (typeof window === "undefined") return null;
-    const raw = window.localStorage.getItem(CREDENTIALS_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("roomId" in parsed) ||
-      typeof parsed.roomId !== "string" ||
-      !("playerId" in parsed) ||
-      typeof parsed.playerId !== "string" ||
-      !("reconnectToken" in parsed) ||
-      typeof parsed.reconnectToken !== "string"
-    ) {
-      window.localStorage.removeItem(CREDENTIALS_KEY);
-      return null;
-    }
-    return {
-      roomId: parsed.roomId,
-      playerId: parsed.playerId,
-      reconnectToken: parsed.reconnectToken,
-    };
-  },
-  write: (credentials) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
-  },
-  clear: () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(CREDENTIALS_KEY);
-    }
-  },
-});
+export * from "./roomClient/roomClientTypes";
+export * from "./roomClient/roomCredentialStorage";
+export * from "./roomClient/pendingRequestRegistry";
 
 const makeRequestId = (): string => createGameSessionId();
 
@@ -152,30 +37,10 @@ export const createRoomClient = (
   createId: () => string = makeRequestId,
 ): RoomClient => {
   const listeners = new Set<(state: RoomClientState) => void>();
-  const pendingJoins = new Map<
-    string,
-    {
-      resolve: (event: RoomJoinedEvent) => void;
-      reject: (error: Error) => void;
-      timeout: ReturnType<typeof setTimeout>;
-    }
-  >();
-  const pendingInspects = new Map<
-    string,
-    {
-      resolve: (result: RoomInspectResult) => void;
-      reject: (error: Error) => void;
-      timeout: ReturnType<typeof setTimeout>;
-    }
-  >();
-  const pendingSettings = new Map<
-    string,
-    {
-      resolve: () => void;
-      reject: (error: Error) => void;
-      timeout: ReturnType<typeof setTimeout>;
-    }
-  >();
+  const pendingJoins = new PendingRequestRegistry<RoomJoinedEvent>();
+  const pendingInspects = new PendingRequestRegistry<RoomInspectResult>();
+  const pendingSettings = new PendingRequestRegistry<void>();
+
   let credentials: StoredRoomCredentials | null = null;
   let nextCommandId = 1;
   let transportConnected = false;
@@ -187,6 +52,7 @@ export const createRoomClient = (
   let leaving:
     | { roomId: string; resolve: () => void; timeout: ReturnType<typeof setTimeout> }
     | null = null;
+
   let state: RoomClientState = {
     status: "disconnected",
     room: null,
@@ -225,27 +91,19 @@ export const createRoomClient = (
     message: string,
     code?: RoomErrorCode,
   ) => {
+    const error = new RoomRequestFailure(message, code);
     if (requestId) {
-      const pending = pendingJoins.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        pendingJoins.delete(requestId);
-        pending.reject(new RoomRequestFailure(message, code));
-      }
+      pendingJoins.reject(requestId, error);
       return;
     }
-    for (const pending of pendingJoins.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(new RoomRequestFailure(message, code));
-    }
-    pendingJoins.clear();
+    pendingJoins.rejectAll(error);
   };
 
   const acceptJoinedRoom = (event: RoomJoinedEvent) => {
     const pending = pendingJoins.get(event.requestId);
     if (!pending) return;
-    clearTimeout(pending.timeout);
     pendingJoins.delete(event.requestId);
+
     credentials = {
       roomId: event.snapshot.roomId,
       playerId: event.playerId,
@@ -325,14 +183,9 @@ export const createRoomClient = (
       case "joined":
         acceptJoinedRoom(event.payload);
         return;
-      case "inspected": {
-        const pending = pendingInspects.get(event.payload.requestId);
-        if (!pending) return;
-        clearTimeout(pending.timeout);
-        pendingInspects.delete(event.payload.requestId);
-        pending.resolve(event.payload);
+      case "inspected":
+        pendingInspects.resolve(event.payload.requestId, event.payload);
         return;
-      }
       case "updated":
         if (
           !state.room ||
@@ -372,14 +225,7 @@ export const createRoomClient = (
         return;
       case "settings-accepted":
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
-        {
-          const pending = pendingSettings.get(event.payload.requestId);
-          if (pending) {
-            clearTimeout(pending.timeout);
-            pendingSettings.delete(event.payload.requestId);
-            pending.resolve();
-          }
-        }
+        pendingSettings.resolve(event.payload.requestId);
         updateState({
           settingsAccepted: {
             queued: event.payload.queued,
@@ -389,14 +235,7 @@ export const createRoomClient = (
         return;
       case "vote-acknowledged":
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
-        {
-          const pending = pendingSettings.get(event.payload.requestId);
-          if (pending) {
-            clearTimeout(pending.timeout);
-            pendingSettings.delete(event.payload.requestId);
-            pending.resolve();
-          }
-        }
+        pendingSettings.resolve(event.payload.requestId);
         return;
       case "settings-vote-resolved":
         if (state.room?.snapshot.roomId !== event.payload.roomId) return;
@@ -413,11 +252,9 @@ export const createRoomClient = (
           event.payload.code,
         );
         if (event.payload.requestId) {
-          const pendingInspect = pendingInspects.get(event.payload.requestId);
-          if (pendingInspect) {
-            clearTimeout(pendingInspect.timeout);
-            pendingInspects.delete(event.payload.requestId);
-            pendingInspect.reject(
+          if (pendingInspects.has(event.payload.requestId)) {
+            pendingInspects.reject(
+              event.payload.requestId,
               new RoomRequestFailure(
                 event.payload.message,
                 event.payload.code,
@@ -425,11 +262,11 @@ export const createRoomClient = (
             );
             return;
           }
-          const pending = pendingSettings.get(event.payload.requestId);
-          if (pending) {
-            clearTimeout(pending.timeout);
-            pendingSettings.delete(event.payload.requestId);
-            pending.reject(new Error(event.payload.message));
+          if (pendingSettings.has(event.payload.requestId)) {
+            pendingSettings.reject(
+              event.payload.requestId,
+              new Error(event.payload.message),
+            );
           }
         }
         if (event.payload.requestId !== null) {
@@ -573,25 +410,22 @@ export const createRoomClient = (
     requestId: string,
     eventName: string,
     payload: unknown,
-  ): Promise<RoomJoinedEvent> =>
-    new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        pendingJoins.delete(requestId);
-        reject(new Error("The room server did not respond in time."));
-      }, REQUEST_TIMEOUT_MS);
-      pendingJoins.set(requestId, { resolve, reject, timeout });
-      try {
-        transport.emit(eventName, payload);
-      } catch (error) {
-        clearTimeout(timeout);
-        pendingJoins.delete(requestId);
-        reject(
-          error instanceof Error
-            ? error
-            : new Error("Could not send the room request."),
-        );
-      }
-    });
+  ): Promise<RoomJoinedEvent> => {
+    const promise = pendingJoins.create(
+      requestId,
+      REQUEST_TIMEOUT_MS,
+      () => new Error("The room server did not respond in time."),
+    );
+    try {
+      transport.emit(eventName, payload);
+    } catch (error) {
+      pendingJoins.delete(requestId);
+      throw error instanceof Error
+        ? error
+        : new Error("Could not send the room request.");
+    }
+    return promise;
+  };
 
   const clearSavedReconnect = () => {
     if (!credentials) return;
@@ -624,11 +458,7 @@ export const createRoomClient = (
         "Your saved room session is no longer valid, but its saved details could not be cleared.";
     }
 
-    for (const [requestId, pending] of pendingSettings) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error("The saved room session is no longer valid."));
-      pendingSettings.delete(requestId);
-    }
+    pendingSettings.rejectAll(new Error("The saved room session is no longer valid."));
 
     updateState({
       status: transportConnected ? "connected" : "disconnected",
@@ -673,25 +503,22 @@ export const createRoomClient = (
     const room = requireRoom();
     const requestId = createId();
     updateState({ error: null, ...extraState });
-    return new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        pendingSettings.delete(requestId);
-        reject(new Error(timeoutMessage));
-      }, REQUEST_TIMEOUT_MS);
-      pendingSettings.set(requestId, { resolve, reject, timeout });
-      try {
-        transport.emit(eventName, { requestId, ...payload });
-      } catch (error) {
-        clearTimeout(timeout);
-        pendingSettings.delete(requestId);
-        reject(error instanceof Error ? error : new Error(sendErrorMessage));
-      }
-      if (state.room?.snapshot.roomId !== room.snapshot.roomId) {
-        clearTimeout(timeout);
-        pendingSettings.delete(requestId);
-        reject(new Error("The active room changed before the request was sent."));
-      }
-    });
+    const promise = pendingSettings.create(
+      requestId,
+      REQUEST_TIMEOUT_MS,
+      () => new Error(timeoutMessage),
+    );
+    try {
+      transport.emit(eventName, { requestId, ...payload });
+    } catch (error) {
+      pendingSettings.delete(requestId);
+      throw error instanceof Error ? error : new Error(sendErrorMessage);
+    }
+    if (state.room?.snapshot.roomId !== room.snapshot.roomId) {
+      pendingSettings.delete(requestId);
+      throw new Error("The active room changed before the request was sent.");
+    }
+    return promise;
   };
 
   return {
@@ -723,27 +550,23 @@ export const createRoomClient = (
     inspectRoom: async (roomId) => {
       await connectTransport();
       const requestId = createId();
-      return new Promise<RoomInspectResult>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          pendingInspects.delete(requestId);
-          reject(new Error("The room server did not respond in time."));
-        }, REQUEST_TIMEOUT_MS);
-        pendingInspects.set(requestId, { resolve, reject, timeout });
-        try {
-          transport.emit("room:inspect", {
-            requestId,
-            roomId: roomId.trim().toUpperCase(),
-          });
-        } catch (error) {
-          clearTimeout(timeout);
-          pendingInspects.delete(requestId);
-          reject(
-            error instanceof Error
-              ? error
-              : new Error("Could not inspect the room."),
-          );
-        }
-      });
+      const promise = pendingInspects.create(
+        requestId,
+        REQUEST_TIMEOUT_MS,
+        () => new Error("The room server did not respond in time."),
+      );
+      try {
+        transport.emit("room:inspect", {
+          requestId,
+          roomId: roomId.trim().toUpperCase(),
+        });
+      } catch (error) {
+        pendingInspects.delete(requestId);
+        throw error instanceof Error
+          ? error
+          : new Error("Could not inspect the room.");
+      }
+      return promise;
     },
     createRoom: async (
       playerName,
@@ -930,21 +753,9 @@ export const createRoomClient = (
       reconnecting = false;
       reconnectRequestId = null;
       transportReconnecting = false;
-      for (const [requestId, pending] of pendingJoins) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error("Room connection was closed."));
-        pendingJoins.delete(requestId);
-      }
-      for (const [requestId, pending] of pendingInspects) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error("Room connection was closed."));
-        pendingInspects.delete(requestId);
-      }
-      for (const [requestId, pending] of pendingSettings) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error("Room connection was closed."));
-        pendingSettings.delete(requestId);
-      }
+      pendingJoins.rejectAll(new Error("Room connection was closed."));
+      pendingInspects.rejectAll(new Error("Room connection was closed."));
+      pendingSettings.rejectAll(new Error("Room connection was closed."));
       if (leaving) {
         clearTimeout(leaving.timeout);
         leaving.resolve();
